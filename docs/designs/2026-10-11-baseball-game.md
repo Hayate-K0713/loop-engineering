@@ -726,7 +726,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
     - `index.ts` は `BaseballGamePage` のみ export。
   - 完了条件: lint・typecheck 通過。`ui/` から `../model` を import していない。各コンポーネントが60行以内。対応表でステップ11に割り当てた testid(`back-home`・`batting-view`)を描いている。
 
-- [ ] **ステップ12: ルーティングの結線**(直列)
+- [x] **ステップ12: ルーティングの結線**(直列)
   - 依存: ステップ11。担当ファイル: `routes/AppRoutes.tsx`、`routes/use-hash-route.ts`(新規)、`src/main.tsx`、`src/App.tsx`
   - やること: `useHashRoute`(`useSyncExternalStore` で `hashchange` を購読し `resolveRoute` の結果を返す)、`AppRoutes`(`"baseball"` なら `BaseballGamePage`、それ以外は `App`)。`main.tsx` は `<App />` を `<AppRoutes />` に差し替えるだけ(StrictMode 維持)。`App.tsx` には `<a href="#/baseball" data-testid="open-baseball">` を1つ追加するのみ(見出し・既存 testid・既存ロジックは不変)。
   - 完了条件: lint・typecheck・`npm run build` 通過。`npm run dev:frontend` で `/` は従来画面、`/#/baseball` はタイトル画面が表示される。既存 `home.spec.ts` が無改変で通る。
@@ -920,6 +920,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - `usePitchFlight({ flight, arriveAfterMs, timeScale, ballRadius, onArrive, ballRef })` → `{ getElapsedMs }`(設計に `ballRadius` を追加。`BattingView` は `geometry.ballRadius` を渡し、`ballRef` を `useRef<SVGCircleElement>(null)` で作って `StrikeZoneSvg` と共有)。
   - `useBattingControls({ enabled, swingReady, cursorRadii, getElapsedMs, onSwing })` → `{ svgRef, cursorRef, swingKind, setSwingKind, currentRadii, swingNow, pointerHandlers }`。`enabled` は `showCursor`。`StrikeZoneSvg` に `svgRef`/`cursorRef`/`cursorRadii={currentRadii}`/`{...pointerHandlers}`、`SwingControls` に `swingKind`/`onSelectSwingKind={setSwingKind}`/`onSwing={swingNow}`/`ready={swingReady}` を渡す。
   - カーソル楕円の再マウント時は `useLayoutEffect([enabled])` で ref の位置を再適用。矢印キーは `enabled` 中のみ `preventDefault`、Space/Enter は `swingReady` 中のみ。`window` の blur で押下キー状態をクリア。
+- ステップ12: ブラウザ確認済み(`/` 従来画面、`#/baseball` 遷移・戻る、先攻/後攻での試合進行、フィールド図の打球表示、`?seed=42&innings=1&fast=1` で結果画面到達(away 1 / home 3)、本番ビルドでは起動パラメータが無視される、コンソールエラー0)。e2e 実行時はクラウド環境の Playwright ブラウザ不一致に注意([[playwright-browser-revision-mismatch]])。
 - ステップ7: チーム id は `luminous`(ユーザー側)/`nobles`(CPU側)。`PLAYER_TEAM`/`CPU_TEAM`/`getTeam` を export。
 
 ## 壁打ち(grilling)記録
