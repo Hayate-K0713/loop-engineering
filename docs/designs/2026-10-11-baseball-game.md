@@ -711,7 +711,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - やること: 本書「試合進行」のとおり実装。`createInitialState` は `lastInPlay = null`。`toGameView` は `fieldMarker`/`fieldDiagram`(`batted-landing`・`LANDING_PARAMS`)と `geometry`(`PITCH_PARAMS`)、`pitchSpeedLabel` を組み立てる(state を変更しない)。`reduce` は action ごとにハンドラへ委譲し、無効な組み合わせは同一参照を返す。CPU の判断には `getDifficulty(config.difficulty)` で引いた `DifficultyParams` を渡し、`deliverPitch` には加算後の `pitchSeq` を渡す。`simulate.ts`(`SimulationResult` を返す)で CPU 同士の試合を回し、`balance.test.ts` のしきい値(テスト戦略)を満たすよう数値を調整する。しきい値を緩める場合は理由を報告する。
   - 完了条件: `cd sample-app/frontend && npx vitest run` が全て成功(`balance.test.ts` を含む)。
 
-- [ ] **ステップ10: `hooks/`**(直列)
+- [x] **ステップ10: `hooks/`**(直列)
   - 依存: ステップ9。担当ファイル: `hooks/{useGame,useCpuTurn,useAnimationFrame,usePitchFlight,usePointerInput,useKeyboardInput,useBattingControls,useLaunchParams,useLatest}.ts`、`hooks/random-seed.ts`
   - やること: 本書「hooks 設計」のとおり実装する。全ての effect に cleanup(rAF の cancel、`clearTimeout`、リスナ解除)を付け、「二重実行を防ぐ ref ガード」で StrictMode を回避しない。判定ロジック・JSX を書かない。コールバックは `useLatest` 経由で最新値を参照する。`useBattingControls` はスイング種別の state(`swingKind`)と `currentRadii` も返す。Space/Enter は `swingReady` のときだけスイングして `preventDefault` する(それ以外は何もしない)。`useLaunchParams` は `import.meta.env.DEV` が真のときのみ `location.search` を読み、偽(本番ビルド)では `parseLaunchParams("")` 相当の既定値を返す。
   - 完了条件: lint・typecheck 通過。`hooks/` から `Math.random`・`Date` が使われていない(時刻は `performance.now()` のみ)。`npm run build` 後の本番ビルドで起動パラメータが無視されることを、ステップ12完了後の手動確認で検証できる実装になっている。
@@ -915,6 +915,11 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 - ステップ9: `createInitialState`・`reduce`・`toGameView`・`simulateGame`(既定 `maxActions` 10,000)を実装。補助として `currentBatter(state)`/`currentPitcher(state)` を `state.ts` から export。`lastEvent` は `log` 末尾(空なら「プレイボール」)、`orderLabel` は「N番」、`headline` は人間視点で「あなたの勝ち!」「あなたの負け…」「引き分け」。`state.log` は上限なし、`view.log` で直近50件。
   - バランス実測(ふつう・9回制・CPU同士・シード1〜100): 半イニング平均得点 0.583、K率 23.2%、BB率 5.0%、打率 .295、HR率 2.15%、併殺 109、引き分け 0%、先攻勝率 54.0%(全しきい値内、しきい値は緩めていない)。難易度別(9回制・100シード、CPU打者の成績): かんたん K 38.9%・打率 .209・0.26点、ふつう 23.2%・.295・0.58点、むずかしい 8.7%・.391・1.07点。
   - 懸念: `strongFrom` を上げたため、人間の雑なスイングでは強い打球が出にくい。実プレイ確認が必要(/test の手動確認)。
+- ステップ10(ステップ11の前提):
+  - `useGame(config, seed)` → `{ view, throwPitch, swing, cpuPitch, pitchArrived }`(操作関数は参照安定)。`useCpuTurn({ cpuPitchPending, turnKey, cpuWaitMs, onCpuPitch })`。`useLaunchParams()` → `{ seed, innings, fast, speed }`(本番ビルドでは既定値)。`?seed=` を最初の1試合だけに適用するのは `BaseballGamePage` の責務。`createRandomSeed()` は `hooks/random-seed.ts`。
+  - `usePitchFlight({ flight, arriveAfterMs, timeScale, ballRadius, onArrive, ballRef })` → `{ getElapsedMs }`(設計に `ballRadius` を追加。`BattingView` は `geometry.ballRadius` を渡し、`ballRef` を `useRef<SVGCircleElement>(null)` で作って `StrikeZoneSvg` と共有)。
+  - `useBattingControls({ enabled, swingReady, cursorRadii, getElapsedMs, onSwing })` → `{ svgRef, cursorRef, swingKind, setSwingKind, currentRadii, swingNow, pointerHandlers }`。`enabled` は `showCursor`。`StrikeZoneSvg` に `svgRef`/`cursorRef`/`cursorRadii={currentRadii}`/`{...pointerHandlers}`、`SwingControls` に `swingKind`/`onSelectSwingKind={setSwingKind}`/`onSwing={swingNow}`/`ready={swingReady}` を渡す。
+  - カーソル楕円の再マウント時は `useLayoutEffect([enabled])` で ref の位置を再適用。矢印キーは `enabled` 中のみ `preventDefault`、Space/Enter は `swingReady` 中のみ。`window` の blur で押下キー状態をクリア。
 - ステップ7: チーム id は `luminous`(ユーザー側)/`nobles`(CPU側)。`PLAYER_TEAM`/`CPU_TEAM`/`getTeam` を export。
 
 ## 壁打ち(grilling)記録
