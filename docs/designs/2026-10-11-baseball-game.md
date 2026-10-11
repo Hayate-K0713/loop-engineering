@@ -716,7 +716,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - やること: 本書「hooks 設計」のとおり実装する。全ての effect に cleanup(rAF の cancel、`clearTimeout`、リスナ解除)を付け、「二重実行を防ぐ ref ガード」で StrictMode を回避しない。判定ロジック・JSX を書かない。コールバックは `useLatest` 経由で最新値を参照する。`useBattingControls` はスイング種別の state(`swingKind`)と `currentRadii` も返す。Space/Enter は `swingReady` のときだけスイングして `preventDefault` する(それ以外は何もしない)。`useLaunchParams` は `import.meta.env.DEV` が真のときのみ `location.search` を読み、偽(本番ビルド)では `parseLaunchParams("")` 相当の既定値を返す。
   - 完了条件: lint・typecheck 通過。`hooks/` から `Math.random`・`Date` が使われていない(時刻は `performance.now()` のみ)。`npm run build` 後の本番ビルドで起動パラメータが無視されることを、ステップ12完了後の手動確認で検証できる実装になっている。
 
-- [ ] **ステップ11: `ui/` の結線コンポーネントと公開口**(直列)
+- [x] **ステップ11: `ui/` の結線コンポーネントと公開口**(直列)
   - 依存: ステップ4, 10。担当ファイル: `ui/{BaseballGamePage,GameScreen,GameLayout,BattingView}.tsx`、`ui/baseball-field.css`、`features/baseball/index.ts`(60行を超える場合に分割用の新規ファイルを `ui/` に追加するのは可。ステップ4のファイルは変更しない)
   - やること: 本書「UI 設計」の「コンポーネント構成とステップ境界」「主要な props」のとおり結線する。
     - `BaseballGamePage`: session 管理、`useLaunchParams`、`baseball.css`・`baseball-field.css` の import、`<h1>ブラウザ野球</h1>`、`back-home`。
