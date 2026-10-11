@@ -1,10 +1,10 @@
 # 設計: ブラウザ野球(1試合モード・CPU対戦)の追加
 
 - 日付: 2026-10-11
-- ステータス: レビュー待ち
+- ステータス: 承認済み
 - 対応する調査ドキュメント: [docs/investigations/2026-10-11-baseball-game.md](../investigations/2026-10-11-baseball-game.md)(観点別: [game-mechanics](../investigations/_parts/baseball-game/game-mechanics.md) / [tech-architecture](../investigations/_parts/baseball-game/tech-architecture.md))
-- 承認者: (承認ゲート通過時に記入)
-- 承認日: (承認ゲート通過時に記入)
+- 承認者: ユーザー(hyt.wbes)
+- 承認日: 2026-10-11
 
 ## 目的・スコープ
 
@@ -872,7 +872,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 
 | 日時 | 判断 | コメント |
 | --- | --- | --- |
-|  | 承認 / 修正依頼 / 差し戻し |  |
+| 2026-10-11 | 承認 | 設計レビュー2ラウンド(最終PASS、未解決MAJORなし)を提示のうえ承認。スキル化候補なし。作業ブランチはセッション指定の `claude/quirky-wright-b4lkpi`(規約の `feature/baseball-game` の代わり)である旨を提示済み |
 
 ## ステップ1 試し打ち結果(実装時に記入)
 
