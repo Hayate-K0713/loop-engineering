@@ -26,6 +26,7 @@
 - [sample-app-lint-random-and-index-access](entries/sample-app-lint-random-and-index-access.md) — sample-appのlintでは`Math.random()`・変数添字`arr[i]`・`// TODO`がerror。シード付きPRNG注入と`.at()`/`Map`/`for...of`で書く
 - [vitest-include-picks-playwright-specs](entries/vitest-include-picks-playwright-specs.md) — Vitestの既定`include`はPlaywrightの`e2e/*.spec.ts`も拾う。frontendに追加する際は`include`を限定する
 - [playwright-browser-revision-mismatch](entries/playwright-browser-revision-mismatch.md) — クラウド環境の /opt/pw-browsers と @playwright/test 1.62 のブラウザrevisionが不一致。symlink+PLAYWRIGHT_BROWSERS_PATH で回避(install はしない)
+- [visual-scope-must-be-shown-at-gate1](entries/visual-scope-must-be-shown-at-gate1.md) — 「〇〇みたいな」要望や見た目が価値の中心の機能では、描画・演出をスコープ外にする判断をゲート1でモック等により見える形で確認する
 
 ## glossary(プロジェクト固有の用語集)
 
