@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>調査から実装まで — loop-basic 運用パイプライン</title>
+<style>
+  :root {
+    --paper: #f2f3f6;
+    --paper-raised: #ffffff;
+    --ink: #171a23;
+    --ink-soft: #4c5266;
+    --ink-faint: #7d8299;
+    --line: #dde0e9;
+    --line-strong: #b7bcd0;
+    --accent: #3452d9;
+    --accent-soft: #e7eafc;
+    --accent-ink: #22359e;
+    --gate: #b3790f;
+    --gate-soft: #f6ebd6;
+    --gate-ink: #7a5209;
+    --merge: #1f8f5f;
+    --merge-soft: #e3f4ea;
+    --merge-ink: #146341;
+    --danger: #c14b3f;
+    --danger-soft: #f8e6e2;
+    --danger-ink: #8a3327;
+    --shadow: 0 1px 2px rgba(23, 26, 35, 0.05), 0 10px 26px rgba(23, 26, 35, 0.06);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0f1116;
+      --paper-raised: #171a22;
+      --ink: #e8eaf1;
+      --ink-soft: #aab0c4;
+      --ink-faint: #767c93;
+      --line: #262a37;
+      --line-strong: #363c4e;
+      --accent: #8b9bff;
+      --accent-soft: #1c2140;
+      --accent-ink: #c3ccff;
+      --gate: #e2ac54;
+      --gate-soft: #302411;
+      --gate-ink: #f2cd90;
+      --merge: #52d495;
+      --merge-soft: #12301f;
+      --merge-ink: #9be8bf;
+      --danger: #e2887c;
+      --danger-soft: #33201b;
+      --danger-ink: #f2b3a6;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 26px rgba(0, 0, 0, 0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0f1116; --paper-raised: #171a22; --ink: #e8eaf1; --ink-soft: #aab0c4;
+    --ink-faint: #767c93; --line: #262a37; --line-strong: #363c4e; --accent: #8b9bff;
+    --accent-soft: #1c2140; --accent-ink: #c3ccff; --gate: #e2ac54; --gate-soft: #302411;
+    --gate-ink: #f2cd90; --merge: #52d495; --merge-soft: #12301f; --merge-ink: #9be8bf;
+    --danger: #e2887c; --danger-soft: #33201b; --danger-ink: #f2b3a6;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 26px rgba(0, 0, 0, 0.4);
+  }
+  :root[data-theme="light"] {
+    --paper: #f2f3f6; --paper-raised: #ffffff; --ink: #171a23; --ink-soft: #4c5266;
+    --ink-faint: #7d8299; --line: #dde0e9; --line-strong: #b7bcd0; --accent: #3452d9;
+    --accent-soft: #e7eafc; --accent-ink: #22359e; --gate: #b3790f; --gate-soft: #f6ebd6;
+    --gate-ink: #7a5209; --merge: #1f8f5f; --merge-soft: #e3f4ea; --merge-ink: #146341;
+    --danger: #c14b3f; --danger-soft: #f8e6e2; --danger-ink: #8a3327;
+    --shadow: 0 1px 2px rgba(23, 26, 35, 0.05), 0 10px 26px rgba(23, 26, 35, 0.06);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic Medium", "Yu Gothic", "Noto Sans JP", "Segoe UI", sans-serif;
+    line-height: 1.8;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+
+  header.page-head { margin-bottom: 3.6rem; }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 0.55em;
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 0.72rem; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 1.1rem;
+  }
+  .eyebrow::before { content: ""; width: 1.6em; height: 1px; background: var(--accent); display: inline-block; }
+
+  h1 {
+    font-size: clamp(1.7rem, 3.8vw, 2.5rem);
+    font-weight: 800; letter-spacing: 0.005em;
+    margin: 0 0 1rem; text-wrap: balance;
+  }
+
+  .lede { color: var(--ink-soft); font-size: 1.02rem; max-width: 62ch; margin: 0; }
+
+  section { margin-bottom: 3.6rem; }
+
+  .section-head {
+    display: flex; align-items: baseline; gap: 0.9rem;
+    margin-bottom: 1.4rem; padding-bottom: 0.7rem; border-bottom: 1px solid var(--line);
+  }
+  .section-head .idx { font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--ink-faint); letter-spacing: 0.04em; }
+  .section-head h2 { font-size: 1.12rem; font-weight: 700; margin: 0; }
+  .section-note { font-size: 0.9rem; color: var(--ink-soft); margin: -0.6rem 0 1.3rem; max-width: 68ch; }
+
+  /* ---------- entry branches ---------- */
+  .branches {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+    background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  }
+  .branch { background: var(--paper-raised); padding: 1.1rem 1.2rem 1.3rem; }
+  .branch .tag {
+    font-family: ui-monospace, monospace; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink-faint); display: block; margin-bottom: 0.5rem;
+  }
+  .branch .cond { font-weight: 700; font-size: 0.94rem; margin-bottom: 0.45rem; }
+  .branch .result { font-size: 0.87rem; color: var(--ink-soft); }
+  .branch.emph .result { color: var(--accent-ink); font-weight: 600; }
+  @media (max-width: 720px) { .branches { grid-template-columns: 1fr; } }
+
+  /* ---------- pipeline schematic ---------- */
+  .pipeline { position: relative; padding-left: 2.6rem; }
+  .pipeline::before {
+    content: ""; position: absolute; left: 0.85rem; top: 0.6rem; bottom: 0.6rem;
+    width: 2px; background: linear-gradient(to bottom, var(--accent) 0%, var(--merge) 100%);
+  }
+  .stage { position: relative; margin-bottom: 1.15rem; }
+  .stage:last-child { margin-bottom: 0; }
+  .node {
+    position: absolute; left: -2.6rem; top: 1.05rem; width: 1.7rem; height: 1.7rem;
+    display: flex; align-items: center; justify-content: center; background: var(--paper);
+  }
+  .node .dot {
+    width: 0.85rem; height: 0.85rem; border-radius: 50%; background: var(--accent);
+    border: 2px solid var(--paper); box-shadow: 0 0 0 2px var(--accent);
+  }
+  .stage.gate .node .dot { border-radius: 3px; transform: rotate(45deg); background: var(--gate); box-shadow: 0 0 0 2px var(--gate); }
+  .stage.merge .node .dot { background: var(--merge); box-shadow: 0 0 0 2px var(--merge); }
+  .stage.review .node .dot { background: var(--paper-raised); box-shadow: 0 0 0 2px var(--accent), inset 0 0 0 1px var(--accent); }
+
+  .card { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.25rem; box-shadow: var(--shadow); }
+  .stage.gate .card { border-color: color-mix(in srgb, var(--gate) 45%, var(--line)); background: var(--gate-soft); }
+  .stage.merge .card { border-color: color-mix(in srgb, var(--merge) 45%, var(--line)); background: var(--merge-soft); }
+  .stage.review .card { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+  .card .row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
+  .card .stage-no { font-family: ui-monospace, monospace; font-size: 0.72rem; color: var(--ink-faint); letter-spacing: 0.04em; }
+  .stage.gate .card .stage-no { color: var(--gate-ink); }
+  .stage.merge .card .stage-no { color: var(--merge-ink); }
+  .stage.review .card .stage-no { color: var(--accent-ink); }
+  .card h3 { margin: 0; font-size: 1rem; font-weight: 700; }
+  .card p { margin: 0.3rem 0 0; font-size: 0.89rem; color: var(--ink-soft); }
+
+  .skilltags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.65rem; }
+  .skilltag {
+    font-family: ui-monospace, monospace; font-size: 0.72rem; padding: 0.18rem 0.55rem; border-radius: 5px;
+    background: var(--accent-soft); color: var(--accent-ink); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .stage.gate .skilltag { background: color-mix(in srgb, var(--gate) 16%, var(--paper-raised)); color: var(--gate-ink); border-color: color-mix(in srgb, var(--gate) 40%, transparent); }
+  .stage.merge .skilltag { background: color-mix(in srgb, var(--merge) 16%, var(--paper-raised)); color: var(--merge-ink); border-color: color-mix(in srgb, var(--merge) 40%, transparent); }
+
+  .badge {
+    display: inline-block; font-family: ui-monospace, monospace; font-size: 0.65rem; letter-spacing: 0.08em;
+    text-transform: uppercase; border-radius: 4px; padding: 0.08rem 0.4rem; margin-bottom: 0.4rem;
+  }
+  .badge.gate { color: var(--gate-ink); background: color-mix(in srgb, var(--gate) 18%, var(--paper-raised)); border: 1px solid color-mix(in srgb, var(--gate) 45%, transparent); }
+  .badge.merge { color: var(--merge-ink); background: color-mix(in srgb, var(--merge) 18%, var(--paper-raised)); border: 1px solid color-mix(in srgb, var(--merge) 45%, transparent); }
+  .badge.scope { color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 16%, var(--paper-raised)); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+  .badge.review { color: var(--accent-ink); background: transparent; border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent); }
+
+  .refs { display: flex; flex-wrap: wrap; gap: 0.35rem 0.6rem; margin-top: 0.7rem; padding-top: 0.55rem; border-top: 1px dashed var(--line-strong); }
+  .ref { font-family: ui-monospace, "SF Mono", monospace; font-size: 0.71rem; color: var(--ink-faint); display: inline-flex; align-items: center; gap: 0.32em; }
+  .ref::before { content: "§"; color: var(--accent); font-weight: 700; }
+  .stage.gate .ref::before { color: var(--gate); }
+  .stage.merge .ref::before { color: var(--merge); }
+  .ref.file::before { content: "⌗"; }
+  td .refs, .branch .refs { border-top-color: var(--line); }
+
+  /* ---------- worktree scope box ---------- */
+  .worktree-scope {
+    position: relative;
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+    border-radius: 14px;
+    padding: 1.3rem 1.2rem 1.1rem;
+    margin: 0 0 1.15rem 0;
+  }
+  .worktree-scope .scope-meta {
+    font-size: 0.82rem; color: var(--accent-ink); margin: 0.15rem 0 1rem;
+    font-family: ui-monospace, monospace;
+  }
+  .worktree-scope .pipeline { padding-left: 2.5rem; }
+  .worktree-scope .pipeline::before { background: var(--accent); }
+  .worktree-scope .stage:last-child { margin-bottom: 0.2rem; }
+  .worktree-scope .card { background: var(--paper-raised); }
+  .scope-exit {
+    font-size: 0.82rem; color: var(--ink-soft); margin: 1rem 0 0;
+    padding-top: 0.8rem; border-top: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+  }
+  .scope-exit strong { color: var(--ink); }
+
+  .branch-note {
+    display: flex; gap: 0.7rem; align-items: flex-start;
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem 0.95rem; margin-top: 0.9rem; font-size: 0.85rem; color: var(--ink-soft);
+  }
+  .branch-note .mark { font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--ink-faint); flex-shrink: 0; padding-top: 0.15rem; }
+
+  /* ---------- task board (implement stage) ---------- */
+  .task-board { margin-top: 0.75rem; display: grid; gap: 0.4rem; }
+  .task-wave { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .task-wave .wave-label {
+    font-family: ui-monospace, monospace; font-size: 0.66rem; letter-spacing: 0.04em; color: var(--ink-faint);
+    min-width: 4.6rem; flex-shrink: 0;
+  }
+  .task-chip {
+    font-family: ui-monospace, monospace; font-size: 0.71rem; padding: 0.2rem 0.55rem; border-radius: 6px;
+    background: var(--accent-soft); color: var(--accent-ink); border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+  .task-chip.blocked { background: transparent; border-style: dashed; color: var(--ink-faint); border-color: var(--line-strong); }
+  .task-board .example-label { font-size: 0.74rem; color: var(--ink-faint); margin: 0.1rem 0 0.15rem; }
+
+  .role-split {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line);
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 0.85rem;
+  }
+  .role-split > div { background: var(--paper-raised); padding: 0.7rem 0.85rem; }
+  .role-split .who { font-family: ui-monospace, monospace; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); display: block; margin-bottom: 0.3rem; }
+  .role-split .do { font-size: 0.83rem; color: var(--ink-soft); }
+  .role-split .do strong { color: var(--ink); }
+  @media (max-width: 560px) { .role-split { grid-template-columns: 1fr; } }
+
+  /* ---------- tables ---------- */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.87rem; background: var(--paper-raised); min-width: 540px; }
+  th, td { text-align: left; padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-faint); background: var(--accent-soft); font-weight: 700; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: ui-monospace, monospace; font-size: 0.81rem; }
+  tr.row-approve td:first-child { color: var(--merge-ink); font-weight: 700; }
+  tr.row-hold td:first-child { color: var(--gate-ink); font-weight: 700; }
+
+  /* ---------- memory category cards ---------- */
+  .memcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.85rem; }
+  .memcard { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 10px; padding: 0.95rem 1.05rem; }
+  .memcard .kind { font-family: ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.05em; color: var(--accent-ink); text-transform: uppercase; display: block; margin-bottom: 0.4rem; }
+  .memcard p { margin: 0; font-size: 0.85rem; color: var(--ink-soft); }
+
+  /* ---------- fan-out steps ---------- */
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; counter-reset: step; }
+  .steps li { counter-increment: step; position: relative; padding-left: 2.2rem; font-size: 0.9rem; color: var(--ink-soft); }
+  .steps li::before {
+    content: counter(step); position: absolute; left: 0; top: 0.05rem;
+    width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);
+    font-family: ui-monospace, monospace; font-size: 0.75rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .steps li strong { color: var(--ink); }
+
+  /* ---------- callouts ---------- */
+  .principle {
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line));
+    background: var(--danger-soft); border-radius: 10px; padding: 1.1rem 1.3rem;
+    display: flex; gap: 1rem; align-items: flex-start;
+  }
+  .principle .mark { font-family: ui-monospace, monospace; font-weight: 700; color: var(--danger); font-size: 0.83rem; flex-shrink: 0; padding-top: 0.1rem; }
+  .principle p { margin: 0; font-size: 0.91rem; color: var(--ink); }
+  .principle strong { color: var(--danger-ink); }
+  .principle .mono-ref { display: block; margin-top: 0.4rem; font-size: 0.78rem; color: var(--danger-ink); opacity: 0.85; }
+
+  .limits {
+    border: 1px solid color-mix(in srgb, var(--gate) 40%, var(--line));
+    background: var(--gate-soft); border-radius: 10px; padding: 1rem 1.3rem;
+    margin-top: 1rem; font-size: 0.87rem; color: var(--ink);
+  }
+  .limits .mark { font-family: ui-monospace, monospace; font-weight: 700; color: var(--gate-ink); font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; display: block; margin-bottom: 0.5rem; }
+  .limits ul { margin: 0; padding-left: 1.1rem; }
+  .limits li { margin-bottom: 0.35rem; }
+  .limits li:last-child { margin-bottom: 0; }
+
+  footer { margin-top: 3.4rem; padding-top: 1.2rem; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--ink-faint); }
+  footer p.label { margin: 0 0 0.6rem; }
+
+  @media (prefers-reduced-motion: no-preference) { .card { transition: box-shadow 0.15s ease; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="page-head">
+    <div class="eyebrow">loop-basic · CLAUDE.md 運用フロー</div>
+    <h1>調査から実装まで — 自律開発エージェントのパイプライン</h1>
+    <p class="lede">
+      1トピックについて <code class="mono">/investigate</code> から <code class="mono">/test</code> までを自律的に進めながら、
+      <strong>設計直後</strong>と<strong>テスト直後</strong>の2箇所だけで人間の承認を待つ。設計・実装の完了直後にはそれぞれ
+      別のサブエージェントによる自動レビュー(最大2ラウンド)も挟まる。<strong>調査開始の時点で</strong>トピックごとに隔離された
+      git worktree(既定ブランチ <code class="mono">main</code>、指定があれば別ブランチ)に入り、設計・実装・テストまで同じワークツリーを使い続けるため、
+      他セッションと衝突しない。実装フェーズでは<strong>メインエージェントは自分でコードを書かず</strong>タスク分割と並列dispatchに徹する。
+      実装対象は <code class="mono">sample-app/</code>(NestJS + Vite/React、TypeScript)— 静的解析・テストの方針を実地で検証するための最小構成。
+      frontend/backend間のAPI契約は <code class="mono">shared</code> パッケージの型を唯一の情報源にし、backend境界はDTO(class-validator)で検証する。
+    </p>
+  </header>
+
+  <section aria-labelledby="s-branch">
+    <div class="section-head"><span class="idx">00</span><h2 id="s-branch">起点の選び方</h2></div>
+    <div class="branches">
+      <div class="branch">
+        <span class="tag">個別実行</span>
+        <div class="cond">フェーズを1つだけ進めたい</div>
+        <div class="result"><code class="mono">/investigate</code> <code class="mono">/design</code> <code class="mono">/implement</code> <code class="mono">/test</code> を単体で呼ぶ</div>
+      </div>
+      <div class="branch emph">
+        <span class="tag">通し実行</span>
+        <div class="cond">トピックを最初から最後まで任せたい</div>
+        <div class="result"><code class="mono">/cycle &lt;topic&gt;</code> で2つのゲートを含め自動で進む</div>
+        <div class="refs"><span class="ref file">.claude/commands/cycle.md</span></div>
+      </div>
+      <div class="branch">
+        <span class="tag">再開</span>
+        <div class="cond">既存トピックの作業を続ける</div>
+        <div class="result"><code class="mono">EnterWorktree(path)</code> で既存ワークツリーに戻り継続</div>
+        <div class="refs"><span class="ref">test.md:8–13</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-main">
+    <div class="section-head"><span class="idx">01</span><h2 id="s-main">パイプライン全体 — トピック専用ワークツリー内</h2></div>
+    <p class="section-note">
+      複数セッションが同じリポジトリを同時に修正する前提のため、<strong>調査開始の時点でトピック専用のgit worktreeに入り</strong>、設計・実装・テストまで同じワークツリーを使い続ける
+      (以前は調査・設計だけベースブランチ直書きだったが、複数セッションが別topicを同時に調査すると <code class="mono">docs/memory/MEMORY.md</code> 等の共有ファイルが競合しうるため統一した)。
+      破線の丸ノードは人間を介さない自動レビュー、ひし形は人間確認ゲート。
+    </p>
+
+    <div class="worktree-scope">
+      <span class="badge scope">git worktree で分離(調査開始時に作成)</span>
+      <div class="scope-meta">git worktree add -b &lt;topic-slug&gt; .claude/worktrees/&lt;topic-slug&gt; &lt;base-branch&gt; → EnterWorktree(path: ...) · ベースブランチ側の共有ディレクトリのチェックアウト状態には触れない</div>
+
+      <div class="pipeline">
+
+        <div class="stage">
+          <div class="node"><span class="dot"></span></div>
+          <div class="card">
+            <div class="row1"><h3>調査</h3><span class="stage-no">STAGE 01</span></div>
+            <p>
+              ベースブランチ(既定 <code class="mono">main</code>、指定があれば別ブランチ)から <code class="mono">git worktree add -b &lt;topic-slug&gt; .claude/worktrees/&lt;topic-slug&gt; &lt;base-branch&gt;</code> でトピック専用のワークツリー・専用ブランチを直接作成し、<code class="mono">EnterWorktree(path: ...)</code> で入る(既に存在する場合は新規作成せず<code class="mono">EnterWorktree(path: ...)</code>で入るだけ)。
+              共有メモリを読んでから調査。トピックが独立した複数観点に分解できる場合は
+              <code class="mono">investigator</code> を並列dispatchするファンアウトも選べる(詳細は §03)。
+            </p>
+            <div class="skilltags"><span class="skilltag">investigator</span><span class="skilltag">docs/memory/MEMORY.md</span></div>
+            <div class="refs"><span class="ref file">.claude/commands/investigate.md</span><span class="ref">:10–20(ワークツリー),24</span></div>
+          </div>
+        </div>
+
+        <div class="stage">
+          <div class="node"><span class="dot"></span></div>
+          <div class="card">
+            <div class="row1"><h3>設計</h3><span class="stage-no">STAGE 02</span></div>
+            <p>同じワークツリー内で継続(再度 <code class="mono">EnterWorktree</code> で新規作成はしない)。調査結果と共有メモリの decision / convention を踏まえて設計書を作成。<strong>テスト戦略で自動テストを新規作成するか(する/しない+理由)を必ず明示</strong>し、「する」ならテスト作成も実装ステップに含める。プロジェクト横断の決定はここで共有メモリに書き戻す。</p>
+            <div class="skilltags"><span class="skilltag">designer</span><span class="skilltag">docs/designs/</span></div>
+            <div class="refs"><span class="ref file">.claude/commands/design.md</span><span class="ref">:8–13(ワークツリー),17,20</span></div>
+          </div>
+        </div>
+
+        <div class="stage review">
+          <div class="node"><span class="dot"></span></div>
+          <div class="card">
+            <span class="badge review">Auto Review · 最大2ラウンド</span>
+            <div class="row1"><h3>設計レビュー</h3><span class="stage-no">STAGE 03</span></div>
+            <p>
+              <code class="mono">designer</code>(<code class="mono">sonnet</code>)とは<strong>別モデル(<code class="mono">opus</code>)</strong>の<code class="mono">design-reviewer</code>が独立した視点で判定(<code class="mono">PASS</code> / <code class="mono">MAJOR</code>)。同じモデルで書いてレビューすると同じ盲点をすり抜けやすいため、意図的にモデルを変えている。
+              <code class="mono">MAJOR</code>なら修正して再レビュー、最大2ラウンドまで。新しいLintルールの導入が絡む場合はreport-first(まずwarn)の計画になっているかもここで確認する。ラウンド2で残った指摘は自動でループせず、次のゲートに引き継ぐ。
+            </p>
+            <div class="skilltags"><span class="skilltag">design-reviewer · opus</span></div>
+            <div class="refs"><span class="ref file">.claude/commands/design.md</span><span class="ref">:31–39</span></div>
+          </div>
+        </div>
+
+        <div class="stage gate">
+          <div class="node"><span class="dot"></span></div>
+          <div class="card">
+            <span class="badge gate">Gate 1</span>
+            <div class="row1"><h3>人間確認ゲート</h3><span class="stage-no">STAGE 04</span></div>
+            <p><strong>承認 / 修正依頼 / 差し戻し</strong> の3択を<code class="mono">AskUserQuestion</code>で提示。設計レビューで未解決の<code class="mono">MAJOR</code>、およびスキル化候補(§04)があればここで併せて提示する。承認が得られるまで実装へは進めない。判断結果は承認・却下を問わず毎回「人間確認ゲート記録」に1行追加する(この行数が差し戻し回数のカウントになる)。</p>
+            <div class="refs"><span class="ref">design.md:41–53</span><span class="ref">CLAUDE.md:33</span></div>
+          </div>
+        </div>
+
+        <div class="stage">
+          <div class="node"><span class="dot"></span></div>
+          <div class="card">
+            <div class="row1"><h3>実装 — タスク分割と並列dispatch</h3><span class="stage-no">STAGE 05</span></div>
+            <p><strong>メインエージェントはコードを1行も書かない。</strong> 同じワークツリー内で継続。設計の実装ステップを <code class="mono">TaskCreate</code> でタスク化し、ファイルが重ならず依存もないタスクだけを並列化する。</p>
+
+            <div class="task-board">
+              <div class="example-label">例 — subjectは必ず [&lt;topic-slug&gt;] で始める(タスクは複数トピックで1つのリストを共有するため)</div>
+              <div class="task-wave">
+                <span class="wave-label mono">WAVE 1</span>
+                <span class="task-chip">[add-login] T1 スキーマ変更</span>
+                <span class="task-chip">[add-login] T2 APIハンドラ</span>
+                <span class="task-chip">[add-login] T3 UIコンポーネント</span>
+              </div>
+              <div class="task-wave">
+                <span class="wave-label mono">WAVE 2</span>
+                <span class="task-chip blocked">[add-login] T4 結合(T1–T3 blockedBy)</span>
+              </div>
+            </div>
+
+            <div class="role-split">
+              <div><span class="who">メインエージェント</span><div class="do">分割・並列dispatch・<code class="mono">TaskList</code>を自トピックのプレフィックスで絞って進捗確認・<strong>タスク単位でコミット</strong></div></div>
+              <div><span class="who">implementer(並列)</span><div class="do">割り当てられた1タスクのみ実装・自分ではコミットしない</div></div>
+            </div>
+
+            <div class="skilltags"><span class="skilltag">TaskCreate</span><span class="skilltag">TaskUpdate</span><span class="skilltag">implementer ×N</span></div>
+            <div class="refs"><span class="ref file">.claude/commands/implement.md</span><span class="ref">:15–22(ワークツリー確認),28–36</span></div>
+          </div>
+        </div>
+
+        <div class="stage review">
+          <div class="node"><span class="dot"></span></div>
+          <div class="card">
+            <span class="badge review">Auto Review · 最大2ラウンド</span>
+            <div class="row1"><h3>コードレビュー</h3><span class="stage-no">STAGE 06</span></div>
+            <p>
+              <code class="mono">implementer</code>(<code class="mono">sonnet</code>)とは<strong>別モデル(<code class="mono">opus</code>)</strong>の<code class="mono">code-reviewer</code>が設計ドキュメントと<code class="mono">git diff</code>を照らして判定。
+              <strong>構成されているLint/型チェック/複雑度チェックは必ず実行し、失敗は理由を問わず<code class="mono">MAJOR</code>。</strong> 理由のないインライン抑制(<code class="mono">eslint-disable</code>相当)も<code class="mono">MAJOR</code>として指摘する。
+              <code class="mono">MAJOR</code>なら修正して再レビュー、最大2ラウンドまで。ラウンド2で残った指摘はテストレポート経由でゲート2へ引き継ぐ。
+            </p>
+            <div class="skilltags"><span class="skilltag">code-reviewer · opus</span></div>
+            <div class="refs"><span class="ref file">.claude/commands/implement.md</span><span class="ref">:47–56</span></div>
+          </div>
+        </div>
+
+        <div class="stage">
+          <div class="node"><span class="dot"></span></div>
+          <div class="card">
+            <div class="row1"><h3>テスト</h3><span class="stage-no">STAGE 07</span></div>
+            <p>同じワークツリー内で継続。<strong>Lint/型チェックは構成されていれば必ず実行し、失敗はそのまま不合格</strong>(「あれば実行」ではない)。自動テストが無い/不十分な場合は対象に応じて手動確認する — <strong>API/バックエンドは<code class="mono">curl</code>、フロントエンドはPlaywright CLI</strong>。証跡(レスポンス・スクリーンショット)を残し、人間確認ゲートでは読むのではなく見て判断できるようにする。テストレポートもこのブランチにコミットする。</p>
+            <div class="skilltags"><span class="skilltag">tester</span><span class="skilltag">docs/tests/</span></div>
+            <div class="refs"><span class="ref file">.claude/commands/test.md</span><span class="ref">:8–13,17–30</span></div>
+          </div>
+        </div>
+
+        <div class="stage gate">
+          <div class="node"><span class="dot"></span></div>
+          <div class="card">
+            <span class="badge gate">Gate 2</span>
+            <div class="row1"><h3>人間確認ゲート</h3><span class="stage-no">STAGE 08</span></div>
+            <p><strong>承認してクローズ / 修正依頼 / 設計からやり直し</strong> の3択。コードレビューで未解決の<code class="mono">MAJOR</code>があればここで併せて提示する。不合格が1件でもあれば承認以外を強く推奨する形で提示する。ここも判断結果を毎回「人間確認ゲート記録」に1行追加する。</p>
+            <div class="refs"><span class="ref">test.md:32–42</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="scope-exit"><strong>承認してクローズ</strong> が選ばれたときだけ、この枠の外側でベースブランチへ統合する(下記 STAGE 09)。それ以外はこの枠の中に留まって作業を続ける。</p>
+    </div>
+
+    <div class="pipeline" style="margin-top:1.15rem;">
+      <div class="stage merge">
+        <div class="node"><span class="dot"></span></div>
+        <div class="card">
+          <span class="badge merge">承認時のみ</span>
+          <div class="row1"><h3>マージ &amp; push &amp; ワークツリー削除</h3><span class="stage-no">STAGE 09</span></div>
+          <p>
+            <code class="mono">ExitWorktree(action:"keep")</code> でベースブランチへ戻り <code class="mono">git merge &lt;topic-branch&gt;</code>。
+            コンフリクトは自動解決せず停止して報告。クリーンなら<strong>続けて必ず <code class="mono">git push origin &lt;base-branch&gt;</code> を実行する</strong>(ゲート2の承認は push までを含む承認であり、別途「pushして」の指示を待たない)。push成功後に <code class="mono">git worktree remove</code> と <code class="mono">git branch -d</code> で削除。
+          </p>
+          <div class="refs"><span class="ref">test.md:46–53</span><span class="ref">CLAUDE.md:厳守ルール8</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="branch-note">
+      <span class="mark mono">ワークツリー作成方式の変更(レースコンディション修正)</span>
+      <span>以前は共有ディレクトリで目的のブランチへ<code class="mono">checkout</code>してから<code class="mono">EnterWorktree(name: ...)</code>(<code class="mono">worktree.baseRef: "head"</code>、現在の実行ディレクトリのHEADから分岐)する方式だったが、複数セッションが同時に別々のベースブランチを指定すると<code class="mono">checkout</code>同士が競合し、意図しないブランチから分岐しうるレースコンディションがあった。共有ディレクトリに一切触れず分岐元を明示指定できる<code class="mono">git worktree add -b</code>方式に切り替えて解消した。</span>
+    </div>
+
+    <div class="branch-note">
+      <span class="mark mono">push は必須手順(ゲート2承認・メタ編集完了に含まれる)</span>
+      <span>マージ完了後の <code class="mono">origin</code> への push は、以前は人間の別指示を待つ任意の後片付けだったが、ローカルにcommitだけが積まれ<code class="mono">origin</code>が古いまま取り残される事故(GitHub Pagesが数コミット分古い内容を配信し続けた)を受けて<strong>必須手順</strong>に変更した(CLAUDE.md厳守ルール8)。ゲート2「承認してクローズ」後のマージ、およびCLAUDE.md/.claude/docs配下のメタ編集(ルール7の例外ルート)でのcommit後は、いずれも人間から改めて「pushして」と言われるのを待たず <code class="mono">git push origin &lt;base-branch&gt;</code> まで実行してから完了報告する。pushされたタイミングで <code class="mono">.github/workflows/ci.yml</code> が typecheck・lint・test・build・E2Eを実行し、ここまでの自動チェックを適用する。</span>
+    </div>
+
+    <div class="branch-note">
+      <span class="mark mono">修正依頼 / 設計からやり直し</span>
+      <span>ワークツリーは削除せずそのまま残し、同じブランチ内で <code class="mono">/implement</code> または <code class="mono">/design</code> をやり直してから再びゲート2に戻る。新しいワークツリーは作り直さない。</span>
+    </div>
+
+    <div class="table-scroll" style="margin-top:1.15rem;">
+      <table>
+        <thead><tr><th>ゲート2の判断</th><th>ベースブランチへのマージ</th><th>ワークツリー</th><th>次のアクション</th></tr></thead>
+        <tbody>
+          <tr class="row-approve"><td>承認してクローズ</td><td>する</td><td>削除</td><td>サイクル完了を報告</td></tr>
+          <tr class="row-hold"><td>修正依頼</td><td>しない</td><td>維持</td><td><code class="mono">/implement</code> に戻り同じブランチで修正</td></tr>
+          <tr class="row-hold"><td>設計からやり直し</td><td>しない</td><td>維持</td><td>同じブランチ内で設計書を修正 → <code class="mono">/implement</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="section-note" style="margin-top:0.9rem;">
+      設計レビュー・コードレビューの各ラウンドの判定は設計ドキュメントの「設計レビュー結果」「コードレビュー結果」欄に、未解決のまま引き継がれた指摘はテストレポートの「コードレビューからの引き継ぎ」欄に記録される。
+      同一ゲートの「人間確認ゲート記録」が3行以上(承認以外の判断が2回以上)になったら、<code class="mono">/cycle</code> はサイクルを中断して根本原因を人間と整理することを提案する。
+    </p>
+  </section>
+
+  <section aria-labelledby="s-memory">
+    <div class="section-head"><span class="idx">02</span><h2 id="s-memory">共有メモリ — フェーズをまたぐ長期記憶</h2></div>
+    <p class="section-note">
+      サブエージェントは毎回独立したコンテキストで起動されるため、<code class="mono">docs/memory/MEMORY.md</code> を索引として読み書きする。
+      並列実行中のサブエージェントは直接書き込まず「メモリ候補」として報告し、全員完了後にorchestratorがまとめて1回で反映する。
+    </p>
+    <div class="memcards">
+      <div class="memcard"><span class="kind">decision</span><p>topicを超えたプロジェクト全体の技術的決定</p></div>
+      <div class="memcard"><span class="kind">convention</span><p>命名・実装・テストの規約</p></div>
+      <div class="memcard"><span class="kind">pitfall</span><p>実装・テストで判明した既知の落とし穴</p></div>
+      <div class="memcard"><span class="kind">glossary</span><p>プロジェクト固有の用語定義</p></div>
+      <div class="memcard"><span class="kind">open-question</span><p>複数topicに影響する未解決の疑問</p></div>
+    </div>
+    <div class="refs" style="margin-top:0.9rem;"><span class="ref">CLAUDE.md:82–88</span><span class="ref file">docs/memory/MEMORY.md</span></div>
+  </section>
+
+  <section aria-labelledby="s-fanout">
+    <div class="section-head"><span class="idx">03</span><h2 id="s-fanout">調査の並列化(ファンアウト)</h2></div>
+    <ol class="steps">
+      <li><strong>分解条件</strong> — 互いに依存せず独立して調べられる観点が2〜4個ある場合のみ分解する</li>
+      <li><strong>出力先を明示</strong> — 観点ごとに <code class="mono">docs/investigations/_parts/&lt;topic-slug&gt;/&lt;sub-slug&gt;.md</code> を指定し、investigator自身には決めさせない</li>
+      <li><strong>並列実行中は共有メモリに直接書き込まない</strong> — 知見は「メモリ候補」として最終報告に含める</li>
+      <li><strong>統合</strong> — 全観点が揃ったら1つの調査ドキュメントにまとめ、矛盾は「未解決の疑問」として残す</li>
+    </ol>
+    <div class="refs" style="margin-top:0.9rem;"><span class="ref file">.claude/commands/investigate.md</span><span class="ref">:14,28–32,36,43</span></div>
+  </section>
+
+  <section aria-labelledby="s-skill">
+    <div class="section-head"><span class="idx">04</span><h2 id="s-skill">再利用パターンのSkill化</h2></div>
+    <p class="section-note">
+      convention/pitfallエントリが3つ以上の異なるtopicで再利用されたら、単なる知識共有を超えて手順(Skill)へ格上げする候補として扱う。
+      <strong>自動では作成しない</strong> — 検知から作成まで、必ず人間承認を挟む。
+    </p>
+    <ol class="steps">
+      <li><strong>検知</strong> — convention/pitfallエントリを適用するたび、<code class="mono">related_topics</code> に今回のtopic-slugを追記する</li>
+      <li><strong>閾値</strong> — <code class="mono">related_topics</code> が3つ以上の異なるtopicに達したら「スキル化候補」</li>
+      <li><strong>提案のみ</strong> — その場ではSkill化せず、成果物ドキュメントの末尾と報告に候補として明記する</li>
+      <li><strong>人間承認</strong> — 次の人間確認ゲート(通常ゲート1)で <code class="mono">AskUserQuestion</code> により「Skill化する/しない/保留」を確認する</li>
+      <li><strong>作成</strong> — 承認された候補のみ、メインエージェントが <code class="mono">.claude/skills/&lt;name&gt;/SKILL.md</code> を作成する</li>
+      <li><strong>記録</strong> — 元のメモリエントリは削除せず <code class="mono">status: promoted-to-skill</code> にし、<code class="mono">MEMORY.md</code> にも反映する</li>
+    </ol>
+    <div class="refs" style="margin-top:0.9rem;"><span class="ref">CLAUDE.md:再利用パターンのSkill化</span><span class="ref file">.claude/commands/design.md</span></div>
+  </section>
+
+  <div class="principle">
+    <span class="mark">MUST</span>
+    <p>
+      ゲート1・ゲート2を通過する前に、次のフェーズへ<strong>自動的に進んではならない</strong>。承認は必ず
+      <code class="mono">AskUserQuestion</code>で明示的な選択肢として取得し、曖昧な確認で済ませない。
+      <span class="mono-ref">CLAUDE.md:27–31(厳守ルール)</span>
+    </p>
+  </div>
+
+  <div class="principle" style="margin-top:1rem;">
+    <span class="mark">MUST</span>
+    <p>
+      スラッシュコマンドを使わず<strong>自然言語で実装・修正を依頼された場合</strong>も、対象が実装対象プロジェクトのコード変更であれば
+      <code class="mono">/cycle</code> と同じ全工程(調査→設計→ゲート1→実装→テスト→ゲート2)を起動しなければならない。「軽微だから」を理由に
+      直接ファイルを編集して済ませてはならない(CLAUDE.md自体・<code class="mono">.claude/</code>・<code class="mono">docs/</code>配下の運用ルールのメタ変更は対象外)。
+      このルールは口頭の指示だけでなく、<code class="mono">.claude/settings.json</code> の <code class="mono">PreToolUse</code> フック(<code class="mono">Write|Edit</code>・<code class="mono">Bash</code>)による機械的な二重防御でも担保されている —
+      <code class="mono">sample-app/</code>・<code class="mono">.github/workflows/</code>配下のファイルをトピック専用ワークツリー外で編集・コミットしようとすると、hookが<code class="mono">deny</code>で強制ブロックする。
+      <span class="mono-ref">CLAUDE.md:厳守ルール7 · .claude/settings.json</span>
+    </p>
+  </div>
+
+  <div class="principle" style="margin-top:1rem;">
+    <span class="mark">MUST</span>
+    <p>
+      <strong>ローカルにcommitしただけで作業を終えてはならない。</strong> ゲート2「承認してクローズ」でのマージ後、および
+      CLAUDE.md自体・<code class="mono">.claude/</code>・<code class="mono">docs/</code>配下のメタ編集(厳守ルール7の例外ルート)でのcommit後は、
+      いずれも人間から改めて「pushして」と言われるのを待たず <code class="mono">git push origin &lt;base-branch&gt;</code> まで実行する。
+      ローカルcommitのみが積み重なり<code class="mono">origin</code>が古いまま取り残されると、GitHub Pages等<code class="mono">origin</code>に依存する仕組みが古いまま放置される
+      (実際に8コミット分のpush漏れでGitHub Pagesが古い内容を配信し続けた事故が発生している)。
+      <span class="mono-ref">CLAUDE.md:厳守ルール8 · docs/memory/entries/unpushed-local-commits-stale-origin.md</span>
+    </p>
+  </div>
+
+  <div class="limits">
+    <span class="mark">既知の制限</span>
+    <ul>
+      <li>あるトピックのワークツリーは、<strong>作成された時点</strong>のベースブランチの状態(特に <code class="mono">docs/memory/</code>)を引き継ぐ。作成後にベースブランチへマージされた他トピックの決定・規約は自動反映されない(通常の git worktree の性質上の制限)。長時間かかるトピックでは、途中でベースブランチの最新を取り込むべきか判断してよい。</li>
+      <li>複数トピックのブランチが同時にベースブランチへマージされる場合、<code class="mono">docs/memory/MEMORY.md</code> など共有ファイルでマージコンフリクトが起きうる。この場合も自動解決せず人間に報告する。</li>
+    </ul>
+    <div class="refs" style="margin-top:0.8rem;border-top-color:color-mix(in srgb, var(--gate) 35%, var(--line));"><span class="ref">CLAUDE.md:134–137</span></div>
+  </div>
+
+  <footer>
+    <p class="label">関連ドキュメント</p>
+    <p style="margin:0 0 1.4rem;"><a href="git-workflow-overview.html">→ Git Flow — main/develop/feature/hotfixブランチモデルとPRベースのリリース手順</a></p>
+    <p class="label">参照ファイル一覧</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>ファイル</th><th>役割</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">CLAUDE.md</td><td>運用マニュアル本体(ワークフロー全体・厳守ルール7項目・レビューループ・タスク分割並列化・共有メモリ・Skill化フロー・ファンアウト・ワークツリー分離)</td></tr>
+          <tr><td class="mono">.claude/commands/investigate.md</td><td>調査コマンド(ワークツリー作成・ファンアウト手順含む)</td></tr>
+          <tr><td class="mono">.claude/commands/design.md</td><td>設計コマンド(既存ワークツリーの確認・ゲート1)</td></tr>
+          <tr><td class="mono">.claude/commands/implement.md</td><td>実装コマンド(既存ワークツリーの確認・タスク分割/並列dispatch・コードレビュー)</td></tr>
+          <tr><td class="mono">.claude/commands/test.md</td><td>テストコマンド(ゲート2・マージ処理)</td></tr>
+          <tr><td class="mono">.claude/commands/cycle.md</td><td>通し実行オーケストレーター</td></tr>
+          <tr><td class="mono">.claude/agents/design-reviewer.md</td><td>設計レビュー専任サブエージェント(自分では書き直さない)</td></tr>
+          <tr><td class="mono">.claude/agents/code-reviewer.md</td><td>コードレビュー専任サブエージェント(自分では修正しない)</td></tr>
+          <tr><td class="mono">.claude/agents/implementer.md</td><td>単一タスクだけを実装するサブエージェント。並列時は自分でコミット・メモリ書き込みをしない</td></tr>
+          <tr><td class="mono">.claude/agents/investigator.md ほか2種</td><td>調査・テストの各サブエージェント定義</td></tr>
+          <tr><td class="mono">.claude/worktrees/&lt;topic-slug&gt;/</td><td>調査フェーズ以降で分離されたgit worktree本体。<code class="mono">.gitignore</code>対象、通常はマージ後に<code class="mono">git worktree remove</code>で削除</td></tr>
+          <tr><td class="mono">.claude/settings.json</td><td>プロジェクト共有設定。<code class="mono">worktree.baseRef: "head"</code>(topic用ワークツリーは<code class="mono">git worktree add</code>で分岐元を明示指定するため直接は使わないが、他用途のEnterWorktree呼び出しに備え設定済み)、<code class="mono">hooks.PreToolUse</code>(<code class="mono">sample-app/</code>・<code class="mono">.github/workflows/</code>配下の変更・コミットをトピック専用ワークツリー外で行おうとするとdenyでブロックするガードレール)</td></tr>
+          <tr><td class="mono">docs/memory/MEMORY.md</td><td>共有メモリ索引</td></tr>
+          <tr><td class="mono">docs/memory/templates/entry-template.md</td><td>メモリエントリのテンプレート。<code class="mono">related_topics</code>でのスキル化候補追跡、<code class="mono">status</code>の3値(active/superseded/promoted-to-skill)を定義</td></tr>
+          <tr><td class="mono">docs/templates/*.md</td><td>調査・設計・テストレポートのテンプレート</td></tr>
+          <tr><td class="mono">sample-app/</td><td>実装対象の検証用サンプル(shared型定義 + NestJS backend + Vite/React frontend, npm workspaces)</td></tr>
+          <tr><td class="mono">sample-app/eslint.config.mjs</td><td>サイズ/複雑さ/型/<code class="mono">sonarjs</code>/<code class="mono">security</code>ルール全てを<code class="mono">error</code>(ブロッキング)に昇格済み。<code class="mono">eslint-plugin-prettier/recommended</code>でフォーマットもlintに統合。理由付きで<code class="mono">no-extraneous-class</code>をoff、<code class="mono">no-unused-vars</code>に<code class="mono">ignoreRestSiblings</code>、テストファイルはサイズ/ネスト系ルールをoff</td></tr>
+          <tr><td class="mono">sample-app/.prettierrc</td><td>フォーマット設定(<code class="mono">printWidth: 160</code>)</td></tr>
+          <tr><td class="mono">sample-app/backend/src/logic/pricing.ts</td><td>純粋関数として切り出したロジックの実例(pure-function-extraction)</td></tr>
+          <tr><td class="mono">sample-app/shared/src/</td><td>frontend/backend共有の型定義(QuoteInput/QuoteResult/HealthResponse)</td></tr>
+          <tr><td class="mono">sample-app/backend/src/quote/dto/quote-query.dto.ts</td><td>class-validatorによるHTTP境界のDTOバリデーション実例</td></tr>
+          <tr><td class="mono">.github/workflows/ci.yml</td><td>push/PRごとのtypecheck・lint・test・build・E2E(checks・e2eの2ジョブ)</td></tr>
+          <tr><td class="mono">docs/memory/entries/eslint-strictness-ratchet.md</td><td>warn→drain→error昇格の当初方針(decision、<code class="mono">status: superseded</code> →後継は下記v2)</td></tr>
+          <tr><td class="mono">docs/memory/entries/eslint-strictness-ratchet-v2.md</td><td>サイズ/複雑さ/型/sonarjs/security/prettierの全ルールをdrain確認の上errorへ昇格した記録(decision)</td></tr>
+          <tr><td class="mono">docs/memory/entries/pure-function-extraction.md</td><td>純粋関数への切り出し規約(convention)</td></tr>
+          <tr><td class="mono">docs/memory/entries/shared-types-and-dto-validation.md</td><td>API契約の型共有・DTO検証の規約(convention)</td></tr>
+          <tr><td class="mono">docs/memory/entries/unpushed-local-commits-stale-origin.md</td><td>ローカルcommitのみでは<code class="mono">origin</code>は更新されず、GitHub Pages等が古いまま取り残される落とし穴(pitfall)。厳守ルール8のpush必須化の根拠</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </footer>
+
+</div>
+
+</body>
+</html>

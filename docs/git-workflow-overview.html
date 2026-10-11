@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>loop-basic Git Flow</title>
+<style>
+  :root {
+    --paper: #eef1ee;
+    --paper-raised: #ffffff;
+    --ink: #16201a;
+    --ink-soft: #4b5850;
+    --ink-faint: #7c8a80;
+    --line: #d7ddd6;
+    --line-strong: #b7c2b8;
+
+    --main-color: #1f6f52;
+    --main-soft: #e1efe9;
+    --develop-color: #ab7a1a;
+    --develop-soft: #f7ecd7;
+    --feature-color: #3f5aa8;
+    --feature-soft: #e6eaf6;
+    --hotfix-color: #c2542a;
+    --hotfix-soft: #f9e8de;
+    --danger: #b23a3a;
+    --danger-soft: #f8e3e0;
+
+    --shadow: 0 1px 2px rgba(22, 32, 26, 0.05), 0 10px 26px rgba(22, 32, 26, 0.06);
+
+    --font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --font-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10140f;
+      --paper-raised: #171d16;
+      --ink: #e8ede7;
+      --ink-soft: #aab8ac;
+      --ink-faint: #74847a;
+      --line: #263029;
+      --line-strong: #384539;
+
+      --main-color: #4fbf95;
+      --main-soft: #123024;
+      --develop-color: #e0ac4c;
+      --develop-soft: #3a2c11;
+      --feature-color: #8ea3e8;
+      --feature-soft: #1c2740;
+      --hotfix-color: #e2895b;
+      --hotfix-soft: #3a2317;
+      --danger: #e08787;
+      --danger-soft: #3a1f1e;
+
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 26px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #10140f;
+    --paper-raised: #171d16;
+    --ink: #e8ede7;
+    --ink-soft: #aab8ac;
+    --ink-faint: #74847a;
+    --line: #263029;
+    --line-strong: #384539;
+
+    --main-color: #4fbf95;
+    --main-soft: #123024;
+    --develop-color: #e0ac4c;
+    --develop-soft: #3a2c11;
+    --feature-color: #8ea3e8;
+    --feature-soft: #1c2740;
+    --hotfix-color: #e2895b;
+    --hotfix-soft: #3a2317;
+    --danger: #e08787;
+    --danger-soft: #3a1f1e;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 26px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.7;
+    font-size: 16px;
+  }
+
+  a { color: var(--feature-color); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--feature-color);
+    outline-offset: 2px;
+  }
+
+  .wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+  .wrap--wide { max-width: 920px; }
+
+  header.masthead {
+    padding: 4.5rem 0 3rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 0.9rem;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(2.1rem, 1.5rem + 2.2vw, 3.1rem);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+  .lede {
+    font-size: 1.15rem;
+    color: var(--ink-soft);
+    max-width: 46em;
+    margin: 0 0 1.6rem;
+    text-wrap: pretty;
+  }
+
+  .status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    padding: 0.32em 0.78em;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-soft);
+    background: var(--paper-raised);
+  }
+  .pill--live {
+    color: var(--main-color);
+    border-color: color-mix(in srgb, var(--main-color) 45%, var(--line-strong));
+    background: var(--main-soft);
+  }
+  .pill--live::before { content: "●"; font-size: 0.6em; }
+
+  nav.toc {
+    padding: 1.4rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  nav.toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.84rem;
+  }
+  nav.toc a { color: var(--ink-soft); text-decoration: none; }
+  nav.toc a:hover { color: var(--feature-color); }
+  nav.toc li::before {
+    content: attr(data-n) " ";
+    color: var(--ink-faint);
+  }
+
+  section {
+    padding: 3.6rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  section:last-of-type { border-bottom: none; }
+
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 1.3rem + 0.7vw, 1.85rem);
+    letter-spacing: -0.005em;
+    margin: 0 0 0.4rem;
+    text-wrap: balance;
+    scroll-margin-top: 1.5rem;
+  }
+  .section-kicker {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0 0 0.6rem;
+  }
+  h3 {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin: 2rem 0 0.7rem;
+  }
+  p { margin: 0 0 1.1rem; max-width: 62em; }
+  .prose { max-width: 62em; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.1em 0.4em;
+  }
+
+  /* Branch role table */
+  .table-scroll { overflow-x: auto; margin: 1.4rem 0; border: 1px solid var(--line); border-radius: 10px; }
+  table.roles {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    background: var(--paper-raised);
+    min-width: 640px;
+  }
+  table.roles th, table.roles td {
+    text-align: left;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.roles th {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  table.roles tr:last-child td { border-bottom: none; }
+  .branch-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.88rem;
+  }
+  .dot { width: 0.6em; height: 0.6em; border-radius: 50%; flex: none; }
+  .dot--main { background: var(--main-color); }
+  .dot--develop { background: var(--develop-color); }
+  .dot--feature { background: var(--feature-color); }
+  .dot--hotfix { background: var(--hotfix-color); }
+
+  .tag-push {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.15em 0.6em;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+  .tag-push--no { color: var(--danger); background: var(--danger-soft); }
+  .tag-push--yes { color: var(--main-color); background: var(--main-soft); }
+
+  /* diagram frame */
+  .diagram {
+    margin: 1.8rem 0;
+    padding: 1.6rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+  }
+  .diagram pre.mermaid { margin: 0; display: flex; justify-content: center; }
+  figcaption, .diagram-caption {
+    font-size: 0.86rem;
+    color: var(--ink-faint);
+    margin-top: 0.9rem;
+    text-align: center;
+  }
+
+  /* callouts */
+  .callout {
+    border: 1px solid var(--line-strong);
+    border-left: 4px solid var(--ink-faint);
+    background: var(--paper-raised);
+    border-radius: 8px;
+    padding: 1.1rem 1.3rem;
+    margin: 1.4rem 0;
+  }
+  .callout > :last-child { margin-bottom: 0; }
+  .callout h4 {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .callout--gate { border-left-color: var(--develop-color); }
+  .callout--gate h4 { color: var(--develop-color); }
+  .callout--hotfix { border-left-color: var(--hotfix-color); }
+  .callout--hotfix h4 { color: var(--hotfix-color); }
+  .callout--danger { border-left-color: var(--danger); }
+  .callout--danger h4 { color: var(--danger); }
+  .callout--main { border-left-color: var(--main-color); }
+  .callout--main h4 { color: var(--main-color); }
+
+  /* rule list */
+  ol.rules {
+    list-style: none;
+    counter-reset: rule;
+    margin: 1.6rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  ol.rules li {
+    counter-increment: rule;
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    gap: 0.9rem;
+    padding: 1rem 1.2rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  ol.rules li::before {
+    content: counter(rule);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--feature-color);
+    line-height: 1.5;
+  }
+  ol.rules strong { display: block; margin-bottom: 0.25rem; }
+  ol.rules span.detail { color: var(--ink-soft); font-size: 0.94rem; }
+
+  /* status checklist */
+  ul.checklist { list-style: none; margin: 1.6rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+  ul.checklist li {
+    display: flex;
+    gap: 0.7rem;
+    align-items: flex-start;
+    font-size: 0.96rem;
+  }
+  ul.checklist .check {
+    flex: none;
+    width: 1.3rem; height: 1.3rem;
+    border-radius: 50%;
+    background: var(--main-soft);
+    color: var(--main-color);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem;
+    margin-top: 0.15em;
+  }
+
+  .footnote {
+    font-size: 0.86rem;
+    color: var(--ink-faint);
+  }
+
+  footer {
+    padding: 3rem 0 5rem;
+    font-size: 0.88rem;
+    color: var(--ink-faint);
+  }
+  footer a { color: var(--ink-soft); }
+  footer .links { display: flex; flex-wrap: wrap; gap: 0.4rem 1.4rem; margin-top: 0.8rem; font-family: var(--font-mono); font-size: 0.82rem; }
+
+  @media (max-width: 600px) {
+    header.masthead { padding: 3rem 0 2rem; }
+    section { padding: 2.6rem 0; }
+    ol.rules li { grid-template-columns: 1.6rem 1fr; padding: 0.9rem; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">loop-basic / 運用ドキュメント</p>
+    <h1>Git Flow</h1>
+    <p class="lede">main・develop・feature・hotfix の4ブランチと、PRベースのリリース手順。エージェント(Claude Code)と人間の両方が、同じルールで <code>main</code>/<code>develop</code> を更新する。</p>
+    <div class="status-row">
+      <span class="pill pill--live">移行完了・2026-08-13時点で本文書どおりに稼働中</span>
+      <span class="pill">正本: <code>docs/process/git-workflow.md</code></span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <ol>
+      <li data-n="01"><a href="#branches">ブランチの役割</a></li>
+      <li data-n="02"><a href="#feature-flow">feature のフロー</a></li>
+      <li data-n="03"><a href="#hotfix-flow">hotfix のフロー</a></li>
+      <li data-n="04"><a href="#pr-rules">PRルール</a></li>
+      <li data-n="05"><a href="#defense">三重の防御</a></li>
+      <li data-n="06"><a href="#status">現状ステータス</a></li>
+    </ol>
+  </div>
+</nav>
+
+<main>
+
+  <section id="branches">
+    <div class="wrap wrap--wide">
+      <p class="section-kicker">01 — Branch model</p>
+      <h2>4つのブランチ、それぞれの持ち場</h2>
+      <p class="prose"><code>main</code> と <code>develop</code> は「反映される場所」であり、誰も直接pushしない。実際の作業は <code>feature/&lt;topic-slug&gt;</code> か <code>hotfix/&lt;incident-slug&gt;</code> の上で行い、PR経由でしか <code>main</code>/<code>develop</code> に触れられない。</p>
+
+      <div class="table-scroll">
+        <table class="roles">
+          <thead>
+            <tr><th>ブランチ</th><th>役割</th><th>直接push</th><th>作成元</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="branch-tag"><span class="dot dot--main"></span>main</span></td>
+              <td>本番相当の安定ブランチ。常にデプロイ可能な状態を保つ。</td>
+              <td><span class="tag-push tag-push--no">禁止</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><span class="branch-tag"><span class="dot dot--develop"></span>develop</span></td>
+              <td>統合・検証用のブランチ。人間による動作確認("打鍵確認")の場。</td>
+              <td><span class="tag-push tag-push--no">禁止</span></td>
+              <td><code>main</code></td>
+            </tr>
+            <tr>
+              <td><span class="branch-tag"><span class="dot dot--feature"></span>feature/&lt;topic-slug&gt;</span></td>
+              <td>個々の変更(機能追加・改善・修正)用。既存の調査→設計→実装→テストサイクルをそのまま乗せる。</td>
+              <td><span class="tag-push tag-push--yes">自ブランチのみ可</span></td>
+              <td><code>main</code></td>
+            </tr>
+            <tr>
+              <td><span class="branch-tag"><span class="dot dot--hotfix"></span>hotfix/&lt;incident-slug&gt;</span></td>
+              <td>障害復旧用。feature と同じ構造だが、調査・設計の厚みを簡略化してよい。</td>
+              <td><span class="tag-push tag-push--yes">自ブランチのみ可</span></td>
+              <td><code>main</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="diagram">
+        <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'git0':'@@MAIN@@','git1':'@@DEVELOP@@','git2':'@@FEATURE@@','git3':'@@HOTFIX@@','gitBranchLabel0':'@@BRANCH_LABEL_TEXT@@','gitBranchLabel1':'@@BRANCH_LABEL_TEXT@@','gitBranchLabel2':'@@BRANCH_LABEL_TEXT@@','gitBranchLabel3':'@@BRANCH_LABEL_TEXT@@','tagLabelColor':'@@INK@@','tagLabelBackground':'@@PAPER_RAISED@@','tagLabelBorder':'@@LINE_STRONG@@','commitLabelColor':'@@INK@@','commitLabelBackground':'@@PAPER@@'}}}%%
+gitGraph
+  commit id: "c1"
+  branch develop
+  checkout main
+  branch feature/introduce-knip
+  checkout feature/introduce-knip
+  commit id: "c2" tag: "knip.jsonc"
+  commit id: "c3" tag: "ci job"
+  checkout develop
+  merge feature/introduce-knip id: "m1" tag: "PR #1 → develop"
+  checkout main
+  merge feature/introduce-knip id: "m2" tag: "PR #2 → main"
+  branch hotfix/quote-api-500
+  checkout hotfix/quote-api-500
+  commit id: "c4" tag: "fix validation"
+  checkout develop
+  merge hotfix/quote-api-500 id: "m3" tag: "PR #1 → develop"
+  checkout main
+  merge hotfix/quote-api-500 id: "m4" tag: "PR #2 → main"
+        </pre>
+        <p class="diagram-caption">実際のトピック名(<code>introduce-knip</code>・<code>quote-api-500</code>)で描いた例。1本の feature/hotfix ブランチが、develop への昇格PRではなく、develop と main へそれぞれ<strong>独立したPR</strong>としてマージされる。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="feature-flow">
+    <div class="wrap wrap--wide">
+      <p class="section-kicker">02 — Everyday work</p>
+      <h2>feature のフロー</h2>
+      <p class="prose">通常のトピックは <code>/cycle</code>(または <code>/investigate</code> 単体)を <code>main</code> から起動するところから始まる。調査→設計→実装→テストの中身は変わらない。変わるのは、人間確認ゲート2を通過した<em>あと</em>の反映方法だけ。</p>
+
+      <div class="diagram">
+        <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'@@FEATURE_SOFT@@','primaryBorderColor':'@@FEATURE@@','primaryTextColor':'@@INK@@','lineColor':'@@INK_FAINT@@','tertiaryColor':'@@PAPER_RAISED@@','fontFamily':'ui-sans-serif, sans-serif'}}}%%
+flowchart TD
+    A["main から feature/&lt;topic-slug&gt; を作成"] --> B["調査 → 設計 → 実装 → テスト<br/>(既存の /cycle 4フェーズ・2ゲート)"]
+    B --> C["release: ブランチを push<br/>PR #1 (feature → develop) 作成"]
+    C --> D["CI: typecheck / lint / test / build / e2e"]
+    D -- green --> E{{"AskUserQuestion:<br/>develop へマージしてよいか"}}
+    E -- はい --> F["PR #1 マージ"]
+    F --> G{{"人間が develop で動作確認<br/>(打鍵確認)"}}
+    G -- 確認OK --> H["PR #2 (feature → main) 作成<br/>develop からの昇格ではなく独立PR"]
+    H --> I["CI: typecheck / lint / test / build / e2e"]
+    I -- green --> J{{"AskUserQuestion:<br/>main へマージしてよいか"}}
+    J -- はい --> K["PR #2 マージ・ブランチ削除"]
+    K --> L["リリース完了"]
+
+    style E fill:@@DEVELOP_SOFT@@,stroke:@@DEVELOP@@,stroke-width:2px
+    style G fill:@@DEVELOP_SOFT@@,stroke:@@DEVELOP@@,stroke-width:2px
+    style J fill:@@DEVELOP_SOFT@@,stroke:@@DEVELOP@@,stroke-width:2px
+    style L fill:@@MAIN_SOFT@@,stroke:@@MAIN@@,stroke-width:2px
+        </pre>
+        <p class="diagram-caption">六角形(◇◇)は人間が判断する箇所。develop向け・main向けそれぞれに、CIグリーンの確認と<code>AskUserQuestion</code>によるマージ直前確認が独立して入る。</p>
+      </div>
+
+      <div class="callout callout--gate">
+        <h4>develop の打鍵確認は省略できない</h4>
+        <p>develop へのマージが完了しても、それだけでは main 向けPRを作らない。<code>sample-app</code> にはまだ自動デプロイの仕組みがないため、確認方法(ローカルで <code>develop</code> を動かす・差分をレビューする 等)は都度人間の裁量に委ねているが、エージェントが代行・省略することは一貫して禁止している。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="hotfix-flow">
+    <div class="wrap wrap--wide">
+      <p class="section-kicker">03 — Incident response</p>
+      <h2>hotfix のフロー</h2>
+      <p class="prose"><code>/hotfix &lt;incident&gt;</code> は <code>/cycle</code> と同じ4フェーズ・2ゲート・PR経由の反映を踏襲する。違うのは3点だけで、<strong>安全装置そのものを外すことは一度もない</strong>。</p>
+
+      <div class="table-scroll">
+        <table class="roles">
+          <thead><tr><th>観点</th><th>feature</th><th>hotfix</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>ブランチ名</td>
+              <td><code>feature/&lt;topic-slug&gt;</code></td>
+              <td><code>hotfix/&lt;incident-slug&gt;</code>(ベースは常に <code>main</code>)</td>
+            </tr>
+            <tr>
+              <td>調査・設計の厚み</td>
+              <td>選択肢比較・リスク分析を尽くす</td>
+              <td>被害状況・原因・修正方針が伝われば最小限でよい</td>
+            </tr>
+            <tr>
+              <td>ゲート・レビュー・PR</td>
+              <td>すべて実施</td>
+              <td><span class="tag-push tag-push--yes">すべて実施(省略なし)</span></td>
+            </tr>
+            <tr>
+              <td>develop の打鍵確認</td>
+              <td>通常のペースで実施</td>
+              <td>迅速に、ただし省略はしない</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout--hotfix">
+        <h4>速いのはドキュメント、安全装置ではない</h4>
+        <p>簡略化してよいのは調査・設計ドキュメントの<em>記述量</em>であり、ゲートの回数やPRベースの反映そのものではない。障害対応の緊急性を理由に <code>main</code>/<code>develop</code> への直接pushやブランチ保護のバイパスを行うことは、意図的に禁止している。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="pr-rules">
+    <div class="wrap wrap--wide">
+      <p class="section-kicker">04 — PR rules</p>
+      <h2>PRルール</h2>
+
+      <ol class="rules">
+        <li>
+          <div>
+            <strong><code>main</code>・<code>develop</code> への直接pushは禁止</strong>
+            <span class="detail">すべての変更はPR経由で反映する。CLAUDE.md自体や <code>.claude/</code>・<code>docs/</code> 配下のメタ編集も例外ではない(調査→設計→実装→テストの4フェーズは省略できるが、反映方法は同じPR経由)。</span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>CIグリーンが前提</strong>
+            <span class="detail"><code>.github/workflows/ci.yml</code> の <code>checks</code>(typecheck/lint/test/build)・<code>e2e</code>(Playwright)がすべて成功していること。<code>knip</code> ジョブはレポート専用(<code>continue-on-error</code>)のため、必須チェックには含めていない。</span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>マージ実行の直前に、必ず人間へ確認</strong>
+            <span class="detail"><code>gh pr merge</code> を叩く直前に <code>AskUserQuestion</code> で確認する。これは人間確認ゲート1・2とは別の、マージという不可逆性の高い操作に固有の確認ポイント。develop向け・main向けでそれぞれ独立に発生する。</span>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>develop向けPRとmain向けPRは独立</strong>
+            <span class="detail">技術的には develop 向けPRのマージは main 向けPR作成の前提条件ではない。ただし運用上は必ず「develop マージ → 人間の動作確認 → main 向けPR作成」の順序を守る。</span>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="defense">
+    <div class="wrap wrap--wide">
+      <p class="section-kicker">05 — Defense in depth</p>
+      <h2>三重の防御</h2>
+      <p class="prose">「直接pushしない」は口約束ではない。同じルールを3つの独立した層で強制しており、1層をすり抜けても次の層で止まる。</p>
+
+      <div class="diagram">
+        <pre class="mermaid">
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'@@DANGER_SOFT@@','primaryBorderColor':'@@DANGER@@','primaryTextColor':'@@INK@@','lineColor':'@@INK_FAINT@@','fontFamily':'ui-sans-serif, sans-serif'}}}%%
+flowchart LR
+    P(["git push origin main<br/>(直接push)"]) --> L1{"① 運用ルール<br/>release.md の手順"}
+    L1 -- 従わなかった --> L2{"② PreToolUseフック<br/>.claude/settings.json"}
+    L2 -- すり抜けた --> L3{"③ GitHub<br/>branch protection"}
+    L1 -- 従った --> OK(["PR経由で反映"])
+    L2 -- ブロック --> X(["拒否される"])
+    L3 -- ブロック --> X
+
+    style OK fill:@@MAIN_SOFT@@,stroke:@@MAIN@@,stroke-width:2px
+    style X fill:@@DANGER_SOFT@@,stroke:@@DANGER@@,stroke-width:2px
+        </pre>
+        <p class="diagram-caption">①はエージェントの手順遵守、②はローカルのコマンド実行を機械的に止める仕組み、③はGitHub側でサーバーが強制する仕組み。管理者権限のトークンでも③はバイパスできない(<code>enforce_admins: true</code>)。</p>
+      </div>
+
+      <h3>① 運用ルール</h3>
+      <p><code>.claude/commands/release.md</code> が、feature/hotfixブランチをpushしてからPR作成・CI確認・人間確認・マージまでの手順を定義する。エージェントはこの手順どおりに動く前提。</p>
+
+      <h3>② PreToolUseフック</h3>
+      <p><code>git push origin main</code>・<code>git push origin develop</code>(明示指定・<code>HEAD:main</code>等のrefspec・<code>--force</code>/<code>-f</code>系・ブランチ未指定のまま保護ブランチにいる状態での bare <code>git push</code>)を検知して拒否する。feature/hotfixブランチへのpushは妨げない。</p>
+
+      <div class="callout callout--danger">
+        <h4>実録: このフック自身が最初のテストケースになった</h4>
+        <p>このフックを書き終えた直後、それまでの習慣どおり <code>git push origin main</code> を実行したところ、書いたばかりのフックに即座にブロックされた。結果、その変更(フック追加を含む一連のコミット)自体を <code>feature/git-workflow-pr-migration</code> ブランチに退避し、PRとして反映する羽目になった — 図らずも、この文書が定義する手順そのものの最初の実地検証になった。</p>
+      </div>
+
+      <h3>③ GitHub branch protection</h3>
+      <p><code>main</code>・<code>develop</code> それぞれに <code>required_status_checks</code>(<code>typecheck / lint / test / build</code>・<code>Playwright e2e</code>)・<code>enforce_admins: true</code>・<code>required_pull_request_reviews.required_approving_review_count: 0</code>(ソロメンテナのためレビュー必須数は0だが「PR必須」自体は有効)・force push禁止・削除禁止を設定済み。GitHubのref更新APIへ直接アクセスを試みると <code>422 Changes must be made through a pull request</code> で拒否されることを確認している。</p>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap wrap--wide">
+      <p class="section-kicker">06 — Where things stand</p>
+      <h2>現状ステータス(2026-08-13)</h2>
+      <p class="prose">目標状態の定義から実装までの移行はすべて完了している。</p>
+
+      <ul class="checklist">
+        <li><span class="check">✓</span><span><code>develop</code> ブランチを <code>main</code> から作成・push</span></li>
+        <li><span class="check">✓</span><span><code>/investigate</code>・<code>/cycle</code> のブランチ命名を <code>feature/&lt;topic-slug&gt;</code> に変更</span></li>
+        <li><span class="check">✓</span><span><code>/hotfix &lt;incident&gt;</code> コマンドを新設</span></li>
+        <li><span class="check">✓</span><span><code>/release</code> コマンドを新設し、<code>/test</code>・<code>/cycle</code> のゲート2通過後の処理をPRベースに置き換え</span></li>
+        <li><span class="check">✓</span><span>直接push検知用の <code>PreToolUse</code> フックを追加・実地検証済み</span></li>
+        <li><span class="check">✓</span><span>GitHub側のブランチ保護を <code>main</code>・<code>develop</code> 双方に設定・実地検証済み</span></li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap wrap--wide">
+    <p class="footnote">この文書は <code>docs/process/git-workflow.md</code>(正本、エージェント向けの詳細手順を含む)を人間が読みやすい形に再構成したものです。手順そのものが更新された場合はそちらが常に最新。</p>
+    <div class="links">
+      <a href="pipeline-overview.html">→ 調査から実装まで(4フェーズサイクルの全体像)</a>
+    </div>
+  </div>
+</footer>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+
+  function detectDark() {
+    const explicit = document.documentElement.getAttribute("data-theme");
+    if (explicit === "dark") return true;
+    if (explicit === "light") return false;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  const isDark = detectDark();
+  const tokens = isDark ? {
+    "@@MAIN@@": "#4fbf95", "@@MAIN_SOFT@@": "#123024",
+    "@@DEVELOP@@": "#e0ac4c", "@@DEVELOP_SOFT@@": "#3a2c11",
+    "@@FEATURE@@": "#8ea3e8", "@@FEATURE_SOFT@@": "#1c2740",
+    "@@HOTFIX@@": "#e2895b", "@@HOTFIX_SOFT@@": "#3a2317",
+    "@@DANGER@@": "#e08787", "@@DANGER_SOFT@@": "#3a1f1e",
+    "@@INK@@": "#e8ede7", "@@INK_FAINT@@": "#74847a",
+    "@@PAPER@@": "#10140f", "@@PAPER_RAISED@@": "#171d16",
+    "@@LINE_STRONG@@": "#384539", "@@BRANCH_LABEL_TEXT@@": "#0c1210"
+  } : {
+    "@@MAIN@@": "#1f6f52", "@@MAIN_SOFT@@": "#e1efe9",
+    "@@DEVELOP@@": "#ab7a1a", "@@DEVELOP_SOFT@@": "#f7ecd7",
+    "@@FEATURE@@": "#3f5aa8", "@@FEATURE_SOFT@@": "#e6eaf6",
+    "@@HOTFIX@@": "#c2542a", "@@HOTFIX_SOFT@@": "#f9e8de",
+    "@@DANGER@@": "#b23a3a", "@@DANGER_SOFT@@": "#f8e3e0",
+    "@@INK@@": "#16201a", "@@INK_FAINT@@": "#7c8a80",
+    "@@PAPER@@": "#eef1ee", "@@PAPER_RAISED@@": "#ffffff",
+    "@@LINE_STRONG@@": "#b7c2b8", "@@BRANCH_LABEL_TEXT@@": "#ffffff"
+  };
+
+  document.querySelectorAll("pre.mermaid").forEach((el) => {
+    let text = el.textContent;
+    for (const [token, value] of Object.entries(tokens)) {
+      text = text.split(token).join(value);
+    }
+    el.textContent = text;
+  });
+
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: "loose",
+    fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+  });
+</script>
+</body>
+</html>

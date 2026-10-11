@@ -1,0 +1,34 @@
+{
+  "worktree": {
+    "baseRef": "head"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *sample-app/*|*.github/workflows/*) case \"$PWD\" in */.claude/worktrees/*) exit 0 ;; *) echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PreToolUse\\\",\\\"permissionDecision\\\":\\\"deny\\\",\\\"permissionDecisionReason\\\":\\\"sample-app/ and CI config changes must happen inside a topic worktree (.claude/worktrees/<topic-slug>). Run /investigate or /cycle for this topic instead of editing directly (CLAUDE.md rule 6/7).\\\"}}\"; exit 0 ;; esac ;; *) exit 0 ;; esac",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // empty'); case \"$cmd\" in *\"git commit\"*) case \"$PWD\" in */.claude/worktrees/*) exit 0 ;; *) staged=$(git diff --cached --name-only 2>/dev/null | grep -E '^(sample-app/|\\.github/workflows/)' || true); if [ -n \"$staged\" ]; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PreToolUse\\\",\\\"permissionDecision\\\":\\\"deny\\\",\\\"permissionDecisionReason\\\":\\\"Staged changes include sample-app/ or CI files but this is not a topic worktree. Implementation commits must happen inside .claude/worktrees/<topic-slug> (CLAUDE.md rule 6/7).\\\"}}\"; fi ;; esac ;; esac",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // empty'); if printf '%s' \"$cmd\" | grep -qE '(^|[;&|]| )git[[:space:]]+push([[:space:]]|$)'; then blocked=0; if printf '%s' \"$cmd\" | grep -qE 'origin[[:space:]]+(-{1,2}force(-with-lease)?[[:space:]]+|-f[[:space:]]+)?(HEAD:)?(main|develop)([[:space:]]|$)'; then blocked=1; elif printf '%s' \"$cmd\" | grep -qE ':(main|develop)([[:space:]]|$)'; then blocked=1; elif printf '%s' \"$cmd\" | grep -qE 'git[[:space:]]+push([[:space:]]+(-u|--force(-with-lease)?|-f))*([[:space:]]+origin)?([[:space:]]+(-u|--force(-with-lease)?|-f))*[[:space:]]*([;&|]|$)'; then br=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); case \"$br\" in main|develop) blocked=1 ;; esac; fi; if [ \"$blocked\" = \"1\" ]; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PreToolUse\\\",\\\"permissionDecision\\\":\\\"deny\\\",\\\"permissionDecisionReason\\\":\\\"Direct push to main/develop is blocked. Use the PR-based flow: push your feature/hotfix branch, then gh pr create + gh pr merge after human confirmation (see .claude/commands/release.md and docs/process/git-workflow.md).\\\"}}\"; exit 0; fi; fi; exit 0",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+// sample-app/knip.jsonc
+{
+  "$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+  // 各ワークスペースは意図的に空のオーバーライドにしている。設計時点(静的読解のみ、
+  // Bashツールなしで作成)では entry/project/ignore/ignoreDependencies/vite を
+  // 個別に指定する案だったが、実装ステップ1で実際に `npx knip`(5.88.1)を
+  // 試し打ちした結果、これらを指定してもしなくても検出結果(実質的な指摘0件)が
+  // 変わらないことを確認できた。具体的には:
+  //   - ルートの eslint.config.mjs 起点のentry/projectは、KnipのESLintプラグインが
+  //     自動検出するため不要(明示してもconfig hintで「redundant」と指摘される)。
+  //   - shared/backendのentry(src/index.ts, src/main.ts)も、Knipの既定の
+  //     エントリファイル探索(index/main.ts等)で自動的に見つかる。
+  //   - backendの `vite: false` は指定してもしなくても出力に差が出ない
+  //     (Vite/Vitestは別プラグインとして扱われ、テストファイルの検出は
+  //     vite:falseの有無に関わらずVitestプラグイン側の既定パターンで行われる)。
+  //     `@nestjs/platform-express`・`rxjs` も `ignoreDependencies` に入れていたが
+  //     実際には未使用として指摘されないため削除した(不要な抑制を残さない)。
+  //   - frontendのentry(src/main.tsx, vite.config.ts, playwright.config.ts,
+  //     e2e/**/*.spec.ts)も、Vite/Playwrightプラグインの既定検出で
+  //     過不足なくカバーされる。
+  //   - `@sample-app/shared` へのワークスペース間参照(npm workspacesの
+  //     シンボリックリンク経由)もunresolved/unusedと誤判定されない。
+  //   - ルートワークスペースの `@types/node` 非対称構成(backendのみに存在)に
+  //     起因する型解決の警告も発生しない。
+  //   - `project`自体を明示しない最終形にしたため、`**/dist/**` 等のビルド・
+  //     テスト成果物パターンを `ignore` に個別指定する必要もない。Knipは既定で
+  //     ビルド出力ディレクトリ(`dist/`等)やnode_modules配下をスキャン対象外にする
+  //     ため、`dist/` 配下のファイルが未使用コードとして誤検知されることはない。
+  // 詳細な確認結果は docs/designs/2026-08-12-introduce-knip.md の
+  // 「ステップ1 試し打ち結果」節を参照。将来コードベースの構成が変わり
+  // (例: 独自のentryファイル名を使う等)Knipの既定検出から外れる場合は、
+  // このファイルに個別のentry/project/ignoreDependencies等を追加すること。
+  "workspaces": {
+    ".": {},
+    "shared": {},
+    "backend": {},
+    "frontend": {}
+  }
+}
