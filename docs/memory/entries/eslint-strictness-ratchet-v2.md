@@ -2,9 +2,9 @@
 name: eslint-strictness-ratchet-v2
 type: decision
 status: active
-related_topics: [introduce-knip]
+related_topics: [introduce-knip, baseball-game]
 created: 2026-08-01
-updated: 2026-08-12
+updated: 2026-10-11
 ---
 
 `sample-app/eslint.config.mjs` のサイズ・複雑さ・型の締め付けルールに加え、`eslint-plugin-sonarjs`(recommended, 217ルール)・`eslint-plugin-security`(recommended, 14ルール)を導入し、全て `error`(ブロッキング)にしている: `max-lines-per-function`(max 60）, `complexity`(閾値20), `max-depth`(閾値4), `max-params`(閾値6), `max-nested-callbacks`(閾値4), `@typescript-eslint/no-explicit-any`, `@typescript-eslint/no-non-null-assertion`, `sonarjs/*`(recommendedは元々全ruleがerror), `security/*`(recommendedはデフォルトwarnのため個別にerrorへ上書き)。加えて `@typescript-eslint/no-unused-vars` に `ignoreRestSiblings: true` を付与、`**/*.spec.{ts,js}` / `**/*.test.{ts,js}` では `max-lines-per-function` / `max-nested-callbacks` をoff、`eslint-plugin-prettier/recommended`(+ `.prettierrc`: `{ printWidth: 160 }`)でフォーマットもlintに統合済み。昇格前に `npx eslint .` で該当ルールを一時的に `error` にして指摘ゼロを確認済み(sonarjs/security/prettierとも既存コードは無修正で通過)。

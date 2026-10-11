@@ -33,3 +33,4 @@
 ## open-question(横断的な未解決事項)
 
 <!-- 例: - [auth-strategy](entries/auth-strategy.md) — 認証方式が未決定。複数topicに影響するため要人間判断 -->
+- [react-hooks-lint-not-installed](entries/react-hooks-lint-not-installed.md) — sample-appに`eslint-plugin-react-hooks`が未導入で、hooksの依存配列・cleanup漏れがlintで検出されない。導入するかは要人間判断
