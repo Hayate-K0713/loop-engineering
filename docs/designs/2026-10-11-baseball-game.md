@@ -693,7 +693,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - やること: 架空2チーム(「ルミナス」「ノーブルズ」)のプリセットと `getTeam`。選手名は実在名と連想しないこと。
   - 完了条件: 担当の `vitest run` が成功。
 
-- [ ] **ステップ8: `model/game/` のルール部分と、types のみに依存するモジュール**(並列: 3, 4, 7)
+- [x] **ステップ8: `model/game/` のルール部分と、types のみに依存するモジュール**(並列: 3, 4, 7)
   - 依存: ステップ2。担当ファイル: `model/game/{side,count,runners,outcome,inning,commentary,launch-params}.ts`+各 `.test.ts`、`model/game/test-fixtures.ts`
   - やること: 本書「試合進行」のとおり、乱数を使わない純粋関数として実装する。
     - `runners` の表を表駆動テストで網羅する(`doublePlay` の事前条件違反は網羅対象から外し、`Error` を投げることを確認する)。
@@ -905,6 +905,9 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - `count-balls`/`count-strikes`/`count-outs` は数値だけの visually-hidden span。`bases` の `data-first/second/third` は `"true"`/`"false"`。`pitch-controls` の `data-ready` は `String(ready)`。`batted-ball-marker` は `<circle>`(`data-distance` toFixed(1)、`data-lateral` toFixed(2))。
   - `CommentaryLog` は `log`(古い→新しい)を新しい順に表示。`ResultScreen` は `position: fixed` の dialog、「もう一度」に autoFocus。`SwingControls` の `swing-button` は `onPointerDown` のみ配線。
   - `baseball.css` は `--bb-*` 変数と `.bb-course-grid { position:absolute; inset:8.333% }` を持つ。重ね用ラッパー(`inset:0`)と `GameLayout` のレイアウト用クラスはステップ11の `baseball-field.css`。
+- ステップ8(ステップ9の前提):
+  - 公開API: `side.ts`(`opponent`/`offenseSide`/`defenseSide`/`bySide`/`updateSide`/`tallyAdd`)、`count.ts`(`applyBall`/`applyStrike`/`applyFoul` → `{count, end}`、`EMPTY_COUNT`)、`runners.ts`(`advanceRunners`、`EMPTY_BASES`、`OUTS_PER_INNING`)、`outcome.ts`(`applyPitchResult`、`LINEUP_SIZE`)、`inning.ts`(`settleInning`、`EXTRA_INNINGS_MAX`)、`launch-params.ts`、`commentary.ts`(`describe*`、`INNING_CHANGE_TEXT`、追加の `buildResolutionLines(summary)`)、`test-fixtures.ts`(`makeState(overrides?)` 等。`rng: 12345` 固定で `createInitialState` とは別物)。
+  - 解釈: 四球・三振で打席終了時は count を 0-0 で返す。3アウト目の `advanceRunners` は `runs=0`・`bases` 空。`strength: null` の groundout/flyout は弱い当たり扱い(犠飛なし)。`settleInning` はサヨナラ判定を最初に行い、`outs<3` なら同一参照を返す。最終回表終了で後攻リードなら裏を行わず game-over(後攻 `lineScore` が短いことで「x」を表す)。`applyPitchResult` は rng・pitchSeq・pitchCounts・phase・log・lastPitchKind を更新しない(reducer の責務)。
 - ステップ7: チーム id は `luminous`(ユーザー側)/`nobles`(CPU側)。`PLAYER_TEAM`/`CPU_TEAM`/`getTeam` を export。
 
 ## 壁打ち(grilling)記録
