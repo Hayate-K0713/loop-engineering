@@ -6,9 +6,9 @@
 
 - 型チェック: `cd sample-app && npm run typecheck`(shared/backend/frontend すべて)
 - Lint: `cd sample-app && npm run lint`(サイズ/複雑さ/型/`sonarjs`/`security`/フォーマット(`prettier`)のルールは全て`error`まで昇格済み。詳細は「静的解析・自動チェックの考え方」)
-- 自動テスト(backendの純粋関数): `cd sample-app && npm run test`
+- 自動テスト(backend+frontendの純粋関数): `cd sample-app && npm run test`
 - ビルド: `cd sample-app && npm run build`
-- E2E(frontend+backendを自動起動、要 `npx playwright install chromium`): `cd sample-app && npm run test:e2e --workspace frontend`
+- E2E(frontend+backendを自動起動、要 `npx playwright install chromium`。ブラウザ野球の e2e(`e2e/baseball.spec.ts`)を含む): `cd sample-app && npm run test:e2e --workspace frontend`
 - 手動確認: API は `curl`、画面は Playwright CLI(「手動確認の使い分け」参照)
 
 同じチェックは `.github/workflows/ci.yml` がpush/PRごとにも実行する(CIは人間の直pushに対する最後の砦。「静的解析・自動チェックの考え方」の「壊れたら赤くなる」層の一部)。
@@ -20,7 +20,7 @@
 ## 手動確認の使い分け(自動テストが無い/不十分な場合)
 
 - **API・バックエンド**: `curl` で実際にエンドポイントを叩いて確認する。
-- **フロントエンド(画面・UI)**: Playwright CLI(`npx playwright test` 等)で確認する。
+- **フロントエンド(画面・UI)**: Playwright CLI(`npx playwright test` 等)で確認する。ブラウザ野球の画面は `npm run dev:frontend` で起動して `/#/baseball` を開き、`?seed=<uint32>&innings=1&fast=1` を付けて決定論的・高速に確認する(これらのパラメータは開発サーバーでのみ有効で、本番ビルドでは無視される)。
 - どちらにも当てはまらない対象(バッチ処理・スクリプト等)は、妥当な方法(直接実行など)で確認する。
 
 `/test` および `tester` はこの使い分けに従うこと。

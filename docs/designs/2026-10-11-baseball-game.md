@@ -736,7 +736,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - やること: テスト戦略の E2E 仕様のとおり2テストを作る。固定 sleep を避け、「結果画面」か「投球可能(`pitch-controls[data-ready="true"]`)」のどちらかを `await expect(resultScreen.or(readyControls)).toBeVisible({ timeout: 30_000 })` で待つ(`Promise.race`+`waitFor` は使わない)。投球は `throw-pitch` のクリックで行う(初期選択が中央のため)。`test.setTimeout(120_000)`。起動パラメータは開発ビルドのみ有効なので、`playwright.config.ts` の webServer(`npm run dev`)を前提にする旨をコメントで残す。
   - 完了条件: `cd sample-app && npm run test:e2e --workspace frontend` で `home.spec.ts`(無改変)と新規2テストが成功。3回連続実行して安定している。
 
-- [ ] **ステップ14: ドキュメント更新**(最後。並列: 13)
+- [x] **ステップ14: ドキュメント更新**(最後。並列: 13)
   - 依存: ステップ12。担当ファイル: `sample-app/README.md`、`docs/process/sample-app-dev.md`、(任意)`.github/workflows/ci.yml`
   - やること:
     - `sample-app/README.md`: 構成図に `frontend/src/routes/`・`features/baseball/`・`vitest.config.ts`・`e2e/baseball.spec.ts` を追加。「実行方法」の `npm run test` を「backend/frontend の純粋関数ユニットテスト(vitest)」に更新。ゲームの起動方法(`npm run dev:frontend` → `/#/baseball`)と、テスト用 `?seed=&innings=&fast=1` は**開発サーバー(`npm run dev:frontend`)でのみ有効で本番ビルドでは無視される**旨、ロジックが `model/` の純粋関数・乱数がシード付きPRNGである旨を「この構成が示している方針」に追記。「パワプロ」等の名称は書かない。
