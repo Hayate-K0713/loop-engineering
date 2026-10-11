@@ -641,7 +641,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 
 共通の完了条件(各ステップ): 担当ファイルが `cd sample-app && npx eslint <担当パス>` で0件。テストがあるステップは `cd sample-app/frontend && npx vitest run <担当パス>` が成功。`cd sample-app && npm run typecheck --workspace frontend` で担当ファイル起因のエラーが0(並列中は他タスクの未完成ファイル起因のエラーを無視し、完了報告に記す)。コミット・共有メモリへの書き込みは並列 dispatch 中は行わない(orchestrator が集約)。
 
-- [ ] **ステップ1: vitest 導入・ルート test スクリプト変更・lockfile 同期・eslint 試験実測**(直列・前提)
+- [x] **ステップ1: vitest 導入・ルート test スクリプト変更・lockfile 同期・eslint 試験実測**(直列・前提)
   - 依存: なし。担当ファイル: `sample-app/package.json`、`sample-app/frontend/package.json`、`sample-app/frontend/tsconfig.json`、`sample-app/frontend/vitest.config.ts`(新規)、`sample-app/package-lock.json`、`sample-app/frontend/src/routes/resolve-route.ts`・`resolve-route.test.ts`(新規)
   - やること:
     1. `cd sample-app && npm install --workspace frontend --save-dev vitest@^3.0.4`(backend と同範囲)。`frontend/package.json` に `scripts.test = "vitest run"` を追加。ルート `package.json` の `scripts.test` を `npm run test --workspaces --if-present` に変更。
@@ -876,7 +876,21 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 
 ## ステップ1 試し打ち結果(実装時に記入)
 
-ステップ1の eslint 試験実測の結果(スニペット・error/通過・ルール名)をここに転記する。
+2026-10-11 実測(`npx eslint --stdin`、ファイルは作らず)。設計の想定と全件一致し、規約の見直しは不要。
+
+| 区分 | スニペット | 結果 |
+| --- | --- | --- |
+| 通過 | mulberry32(`Math.imul`・`>>>`・タプル戻り値)、`arr.at(i)`、`Map#get`、`new Map([...])`、`for...of`、`arr[0]`、`Array.from({ length: 5 }, ...)`、`crypto.getRandomValues(...).at(0)`、`switch`(case 3つ/明示 case 2つ)、非ネスト三項、`Object.entries`、`import.meta.env.DEV`(hooks・ui) | 0件 |
+| error | `Math.random()` | `sonarjs/pseudo-random` |
+| error | `arr[i]`・`obj[key]`・`tally[side]` | `security/detect-object-injection` |
+| error | `// TODO` | `sonarjs/todo-tag` |
+| error | ネスト三項 | `sonarjs/no-nested-conditional` |
+| error | case 1つの `switch`、case 1つ+`default` | `sonarjs/no-small-switch` |
+| 実測 | `.tsx` の JSX 行 | `max-lines-per-function` に数えられる(関数全体60行で通過、61行で error) |
+| 実測 | `*.test.ts` の長い `describe`/`it`、4段ネスト | 通過(テスト向け緩和が効く) |
+| 追加知見 | `*.test.ts` の `expect(1).toBe(1)` のようなリテラル同士の assertion | `sonarjs/no-trivial-assertions` で error。テストは関数の戻り値を期待値と比べる |
+
+その他: `npm install --save-dev vitest@^3.0.4` は範囲を `^3.2.7` に書き換えるため、`frontend/package.json` と lockfile の frontend エントリを `^3.0.4` に手で戻した(backend と同範囲)。lockfile 差分は3行、`npm ci --dry-run` 成功。
 
 ## 壁打ち(grilling)記録
 
