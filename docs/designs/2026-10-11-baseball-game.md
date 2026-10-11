@@ -678,7 +678,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
     - クラス名は `bb-` 接頭辞。レスポンシブ(`max-width: 640px`)対応。`ui/` から `../model`・`../hooks` を import しない。
   - 完了条件: lint 0件、typecheck 通過(担当分)。各コンポーネントが 60行以内。担当14コンポーネントに `useState`/`useEffect` 等の hooks が無い。
 
-- [ ] **ステップ5: `model/batting/`**(並列: 6)
+- [x] **ステップ5: `model/batting/`**(並列: 6)
   - 依存: ステップ3。担当ファイル: `model/batting/{params,cursor,contact,batted-ball,batted-landing,result-table,resolve-pitch}.ts`+`params` を除く各 `.test.ts`
   - やること: 本書「打撃判定」「落下点」のとおり実装する。値(落下点の距離帯・フェンス半径・左右範囲を含む)は `params.ts` に外出し。`batted-landing.ts` は乱数・`RngState` を一切受け取らない。
   - 完了条件: 担当の `vitest run` が成功。`resolve-pitch` が人間・CPU 共通の唯一の1球判定である。
@@ -908,6 +908,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 - ステップ8(ステップ9の前提):
   - 公開API: `side.ts`(`opponent`/`offenseSide`/`defenseSide`/`bySide`/`updateSide`/`tallyAdd`)、`count.ts`(`applyBall`/`applyStrike`/`applyFoul` → `{count, end}`、`EMPTY_COUNT`)、`runners.ts`(`advanceRunners`、`EMPTY_BASES`、`OUTS_PER_INNING`)、`outcome.ts`(`applyPitchResult`、`LINEUP_SIZE`)、`inning.ts`(`settleInning`、`EXTRA_INNINGS_MAX`)、`launch-params.ts`、`commentary.ts`(`describe*`、`INNING_CHANGE_TEXT`、追加の `buildResolutionLines(summary)`)、`test-fixtures.ts`(`makeState(overrides?)` 等。`rng: 12345` 固定で `createInitialState` とは別物)。
   - 解釈: 四球・三振で打席終了時は count を 0-0 で返す。3アウト目の `advanceRunners` は `runs=0`・`bases` 空。`strength: null` の groundout/flyout は弱い当たり扱い(犠飛なし)。`settleInning` はサヨナラ判定を最初に行い、`outs<3` なら同一参照を返す。最終回表終了で後攻リードなら裏を行わず game-over(後攻 `lineScore` が短いことで「x」を表す)。`applyPitchResult` は rng・pitchSeq・pitchCounts・phase・log・lastPitchKind を更新しない(reducer の責務)。
+- ステップ5(ステップ9・10の前提): `resolvePitch(rng, {flight, swing, batter, outs, bases})` が唯一の1球判定(乱数はインプレー時のみ1個)。`computeBattedLanding(ball, result, seq)` は乱数なし。`FieldDiagramGeometry` は `LANDING_PARAMS` の同名フィールド(`baseDistance`・`fenceRadius`・`viewHalfWidth`・`viewTop`・`viewBottom`)から組み立てる。`LANDING_BANDS` は `params.ts` の別 export。`clientToZonePoint` は ±`viewHalfExtent`(2.0)でクランプするため、hooks はポインタ位置を `clampCursor`(±`cursorLimit` 1.8)に通してから使う。幅・高さ0以下の矩形では `INITIAL_CURSOR` を返す。
 - ステップ6: `getDifficulty(d)` の戻り値(`DifficultyParams`)を `chooseCpuPitch`/`decideCpuBat` にそのまま渡し、`aimSigmaScale` を `deliverPitch` に渡す。`chooseCpuPitch` は乱数3個(ゾーン内外・球種・セル)、`decideCpuBat` は見送りなら1個で終了。`CPU_PARAMS.maxSwingRate=0.95` を追加。CPU 打者のカーソルはクランプしない。バランス調整対象は `DIFFICULTY_TABLE`・`CPU_PARAMS`・`PITCH_PLAN_TABLE` の数値。
 - ステップ7: チーム id は `luminous`(ユーザー側)/`nobles`(CPU側)。`PLAYER_TEAM`/`CPU_TEAM`/`getTeam` を export。
 
