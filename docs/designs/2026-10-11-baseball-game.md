@@ -731,7 +731,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - やること: `useHashRoute`(`useSyncExternalStore` で `hashchange` を購読し `resolveRoute` の結果を返す)、`AppRoutes`(`"baseball"` なら `BaseballGamePage`、それ以外は `App`)。`main.tsx` は `<App />` を `<AppRoutes />` に差し替えるだけ(StrictMode 維持)。`App.tsx` には `<a href="#/baseball" data-testid="open-baseball">` を1つ追加するのみ(見出し・既存 testid・既存ロジックは不変)。
   - 完了条件: lint・typecheck・`npm run build` 通過。`npm run dev:frontend` で `/` は従来画面、`/#/baseball` はタイトル画面が表示される。既存 `home.spec.ts` が無改変で通る。
 
-- [ ] **ステップ13: E2E `e2e/baseball.spec.ts`**(並列: 14)
+- [x] **ステップ13: E2E `e2e/baseball.spec.ts`**(並列: 14)
   - 依存: ステップ12。担当ファイル: `frontend/e2e/baseball.spec.ts`(新規)
   - やること: テスト戦略の E2E 仕様のとおり2テストを作る。固定 sleep を避け、「結果画面」か「投球可能(`pitch-controls[data-ready="true"]`)」のどちらかを `await expect(resultScreen.or(readyControls)).toBeVisible({ timeout: 30_000 })` で待つ(`Promise.race`+`waitFor` は使わない)。投球は `throw-pitch` のクリックで行う(初期選択が中央のため)。`test.setTimeout(120_000)`。起動パラメータは開発ビルドのみ有効なので、`playwright.config.ts` の webServer(`npm run dev`)を前提にする旨をコメントで残す。
   - 完了条件: `cd sample-app && npm run test:e2e --workspace frontend` で `home.spec.ts`(無改変)と新規2テストが成功。3回連続実行して安定している。
