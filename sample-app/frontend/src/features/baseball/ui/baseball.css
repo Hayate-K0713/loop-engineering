@@ -1,0 +1,648 @@
+/* ブラウザ野球: 表示コンポーネントの基本スタイル。クラス名は bb- 接頭辞。
+   GameLayout / BattingView の配置は baseball-field.css(ステップ11)が担当する。 */
+
+:root {
+  --bb-bg: #f3f5f7;
+  --bb-panel: #ffffff;
+  --bb-border: #cdd5dc;
+  --bb-text: #1c2833;
+  --bb-muted: #5d6d7e;
+  --bb-accent: #1f6fb2;
+  --bb-accent-strong: #15507f;
+  --bb-accent-soft: #dcebf7;
+  --bb-grass: #4f9d5d;
+  --bb-grass-dark: #2f6f3d;
+  --bb-dirt: #d9b27c;
+  --bb-line: #ffffff;
+  --bb-ball: #ffffff;
+  --bb-warn: #d35400;
+  --bb-strike: #e6b800;
+  --bb-out: #c0392b;
+  --bb-ball-lamp: #27ae60;
+  --bb-radius: 8px;
+  --bb-tap: 44px;
+}
+
+/* 視覚的に隠すが、支援技術・テストからは読める */
+.bb-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- ボタン共通 ---- */
+
+.bb-button,
+.bb-toggle {
+  min-height: var(--bb-tap);
+  padding: 0 16px;
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  background: var(--bb-panel);
+  color: var(--bb-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bb-button:hover:not(:disabled),
+.bb-toggle:hover:not(:disabled) {
+  border-color: var(--bb-accent);
+}
+
+.bb-button:focus-visible,
+.bb-toggle:focus-visible,
+.bb-select:focus-visible,
+.bb-course-cell:focus-visible {
+  outline: 3px solid var(--bb-accent);
+  outline-offset: 2px;
+}
+
+.bb-button--primary {
+  border-color: var(--bb-accent-strong);
+  background: var(--bb-accent);
+  color: #ffffff;
+}
+
+.bb-button--primary:hover:not(:disabled) {
+  background: var(--bb-accent-strong);
+}
+
+.bb-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bb-toggle[aria-pressed="true"] {
+  border-color: var(--bb-accent-strong);
+  background: var(--bb-accent-soft);
+  box-shadow: inset 0 0 0 2px var(--bb-accent);
+}
+
+/* ---- TitleScreen ---- */
+
+.bb-title {
+  max-width: 420px;
+  margin: 16px auto;
+  padding: 20px;
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  background: var(--bb-panel);
+}
+
+.bb-title__heading {
+  margin: 0 0 16px;
+  font-size: 1.25rem;
+}
+
+.bb-title__form {
+  display: grid;
+  gap: 14px;
+}
+
+.bb-form-field {
+  display: grid;
+  gap: 4px;
+}
+
+.bb-form-field__label {
+  color: var(--bb-muted);
+  font-size: 0.875rem;
+}
+
+.bb-select {
+  min-height: var(--bb-tap);
+  padding: 0 10px;
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  background: var(--bb-panel);
+  color: var(--bb-text);
+  font: inherit;
+}
+
+/* ---- Scoreboard / LineScore / CountLamps / BaseDiamond ---- */
+
+.bb-scoreboard {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  background: var(--bb-panel);
+}
+
+.bb-scoreboard__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bb-inning {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.bb-extra-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bb-warn);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.bb-scoreboard__state {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bb-line-score-wrap {
+  overflow-x: auto;
+}
+
+.bb-line-score {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.bb-line-score th,
+.bb-line-score td {
+  min-width: 1.75em;
+  padding: 4px 6px;
+  border: 1px solid var(--bb-border);
+}
+
+.bb-line-score thead th {
+  background: var(--bb-bg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.bb-line-score__team {
+  min-width: 5em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.bb-line-score__total {
+  font-weight: 700;
+}
+
+.bb-count {
+  display: grid;
+  gap: 4px;
+}
+
+.bb-count__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bb-count__label {
+  width: 1em;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.bb-lamp {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--bb-muted);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.bb-count__row--balls .bb-lamp--on {
+  border-color: var(--bb-ball-lamp);
+  background: var(--bb-ball-lamp);
+}
+
+.bb-count__row--strikes .bb-lamp--on {
+  border-color: var(--bb-strike);
+  background: var(--bb-strike);
+}
+
+.bb-count__row--outs .bb-lamp--on {
+  border-color: var(--bb-out);
+  background: var(--bb-out);
+}
+
+.bb-bases {
+  width: 64px;
+  height: auto;
+  flex: none;
+}
+
+.bb-bases__diamond {
+  fill: none;
+  stroke: var(--bb-border);
+  stroke-width: 2;
+}
+
+.bb-bases__home {
+  fill: var(--bb-panel);
+  stroke: var(--bb-muted);
+  stroke-width: 1.5;
+}
+
+.bb-base {
+  fill: var(--bb-panel);
+  stroke: var(--bb-muted);
+  stroke-width: 1.5;
+}
+
+.bb-base--occupied {
+  fill: var(--bb-warn);
+  stroke: var(--bb-warn);
+}
+
+/* ---- FieldDiagram ---- */
+
+.bb-diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  background: #eaf3ec;
+}
+
+.bb-diagram-grass {
+  fill: var(--bb-grass);
+}
+
+.bb-diagram-infield {
+  fill: var(--bb-dirt);
+  stroke: var(--bb-line);
+  stroke-width: 0.8;
+}
+
+.bb-diagram-foul {
+  fill: none;
+  stroke: var(--bb-line);
+  stroke-width: 1;
+}
+
+.bb-diagram-fence {
+  fill: none;
+  stroke: var(--bb-grass-dark);
+  stroke-width: 2.4;
+}
+
+.bb-diagram-base {
+  fill: var(--bb-line);
+}
+
+.bb-diagram-trace {
+  stroke: var(--bb-line);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  opacity: 0.85;
+}
+
+.bb-diagram-marker {
+  fill: var(--bb-warn);
+  stroke: var(--bb-line);
+  stroke-width: 1;
+}
+
+.bb-diagram-marker[data-result="single"],
+.bb-diagram-marker[data-result="double"],
+.bb-diagram-marker[data-result="triple"] {
+  fill: var(--bb-accent);
+}
+
+.bb-diagram-marker[data-result="homerun"] {
+  fill: var(--bb-strike);
+  stroke: var(--bb-out);
+  stroke-width: 1.4;
+}
+
+.bb-diagram-marker[data-result="groundout"],
+.bb-diagram-marker[data-result="doublePlay"],
+.bb-diagram-marker[data-result="flyout"],
+.bb-diagram-marker[data-result="lineout"] {
+  fill: var(--bb-out);
+}
+
+.bb-diagram-marker[data-result="error"] {
+  fill: var(--bb-muted);
+}
+
+@keyframes bb-marker-pop {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.bb-diagram-marker-group {
+  animation: bb-marker-pop 0.25s ease-out;
+}
+
+/* ---- MatchupPanel ---- */
+
+.bb-matchup {
+  padding: 10px 12px;
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  background: var(--bb-panel);
+}
+
+.bb-matchup__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.bb-matchup__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bb-matchup__row dt {
+  color: var(--bb-muted);
+  font-size: 0.8125rem;
+}
+
+.bb-matchup__row dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bb-stamina {
+  display: inline-block;
+  width: 72px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bb-bg);
+  overflow: hidden;
+}
+
+.bb-stamina__bar {
+  display: block;
+  height: 100%;
+  background: var(--bb-ball-lamp);
+}
+
+/* ---- StrikeZoneSvg ---- */
+
+.bb-zone-svg {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: var(--bb-radius);
+}
+
+.bb-zone-bg {
+  fill: #1d3a2a;
+}
+
+.bb-zone-grid line {
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+.bb-zone-frame {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.bb-zone-ball {
+  fill: var(--bb-ball);
+  stroke: #202020;
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+.bb-zone-cursor {
+  fill: rgba(243, 156, 18, 0.25);
+  stroke: #f39c12;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* ---- SwingControls / PitchingControls / PitchKindButtons ---- */
+
+.bb-swing,
+.bb-pitching {
+  display: grid;
+  gap: 8px;
+}
+
+.bb-swing__kinds,
+.bb-pitch-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bb-swing__kinds .bb-toggle {
+  flex: 1;
+}
+
+.bb-swing__button,
+.bb-pitching__throw {
+  min-height: calc(var(--bb-tap) + 8px);
+  font-size: 1.125rem;
+}
+
+.bb-swing__button {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---- CourseGrid(ゾーンの正方形に重ねる。親の重ね用ラッパーは inset: 0、inset: 8.333% はここだけが付ける) ---- */
+
+.bb-course-grid {
+  position: absolute;
+  inset: 8.333%;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+}
+
+.bb-course-cell {
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bb-course-cell--zone {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.bb-course-cell:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.bb-course-cell[aria-pressed="true"] {
+  border: 2px solid #f39c12;
+  background: rgba(243, 156, 18, 0.35);
+}
+
+/* ---- CommentaryLog ---- */
+
+.bb-commentary {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  background: var(--bb-panel);
+}
+
+.bb-last-event {
+  min-height: 1.5em;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--bb-radius);
+  background: var(--bb-accent-soft);
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.bb-log {
+  max-height: 9em;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.bb-log__item {
+  padding: 2px 0;
+  border-bottom: 1px solid var(--bb-bg);
+}
+
+.bb-log__item:first-child {
+  font-weight: 600;
+}
+
+/* ---- ResultScreen(GameLayout に重ねる) ---- */
+
+.bb-result {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.bb-result__panel {
+  width: min(100%, 380px);
+  padding: 24px 20px;
+  border-radius: var(--bb-radius);
+  background: var(--bb-panel);
+  text-align: center;
+}
+
+.bb-result__panel[data-outcome="win"] {
+  border-top: 6px solid var(--bb-ball-lamp);
+}
+
+.bb-result__panel[data-outcome="lose"] {
+  border-top: 6px solid var(--bb-out);
+}
+
+.bb-result__panel[data-outcome="draw"],
+.bb-result__panel[data-outcome="none"] {
+  border-top: 6px solid var(--bb-muted);
+}
+
+.bb-result__headline {
+  margin: 0 0 12px;
+  font-size: 1.5rem;
+}
+
+.bb-final-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 20px;
+  font-size: 1rem;
+}
+
+.bb-final-score__value {
+  font-size: 2.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bb-result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* ---- スマホ縦 ---- */
+
+@media (max-width: 640px) {
+  .bb-button,
+  .bb-toggle,
+  .bb-select {
+    min-height: var(--bb-tap);
+  }
+
+  .bb-title {
+    margin: 8px auto;
+    padding: 16px;
+  }
+
+  .bb-scoreboard__state {
+    gap: 12px;
+  }
+
+  .bb-line-score th,
+  .bb-line-score td {
+    padding: 4px 4px;
+  }
+
+  .bb-result__actions .bb-button {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-diagram-marker-group {
+    animation: none;
+  }
+}

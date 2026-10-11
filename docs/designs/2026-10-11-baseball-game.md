@@ -659,12 +659,12 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - やること: 本書「型設計」のとおりに型を定義する(`BattedLanding`、`InPlayRecord`、`GameState.lastInPlay`、`FieldMarkerView`、`FieldDiagramGeometry`、`GameView.fieldMarker`/`fieldDiagram` を含む)。実行時コードは書かない。`GameView` 周辺は本書のフィールド一覧に従う(不足は報告)。
   - 完了条件: `npm run typecheck --workspace frontend` が成功、lint 0件。`types/` が他セグメントを import していない。
 
-- [ ] **ステップ3: `model/rng/` と `model/pitch/`**(並列: 4, 7, 8)
+- [x] **ステップ3: `model/rng/` と `model/pitch/`**(並列: 4, 7, 8)
   - 依存: ステップ2。担当ファイル: `model/rng/{rng,sampling}.ts`+各 `.test.ts`、`model/pitch/{params,zone,kinds,delivery,flight}.ts`+`params` を除く各 `.test.ts`
   - やること: 本書「乱数」「投球」のとおり実装し、テスト戦略の該当テストを同居させる。
   - 完了条件: 担当の `vitest run` が成功(テスト戦略の合格基準を満たす)、`model/` に `from "react"`・`window`・`Math.random` が無い。
 
-- [ ] **ステップ4: `ui/` の表示コンポーネントと基本CSS**(並列: 3, 7, 8)
+- [x] **ステップ4: `ui/` の表示コンポーネントと基本CSS**(並列: 3, 7, 8)
   - 依存: ステップ2(`types/` のみ。hooks・model に依存しない)。担当ファイル: `ui/{TitleScreen,Scoreboard,LineScore,CountLamps,BaseDiamond,FieldDiagram,MatchupPanel,StrikeZoneSvg,SwingControls,PitchingControls,PitchKindButtons,CourseGrid,CommentaryLog,ResultScreen}.tsx`(14ファイル)、`ui/baseball.css`
   - やること: props だけで描画するコンポーネントを作る(`useState` などの状態も持たない)。props と `data-testid` は本書「UI 設計」の「主要な props」表と「`data-testid` と所属の対応表」に従う(表でステップ4に割り当てた testid を全て、このステップのファイルで描く)。
     - `TitleScreen`: イニング・先攻後攻(既定 `away`)・難易度の select と開始ボタン。**非制御フォーム**(`defaultValue` を付けた select、`onSubmit` で `FormData` を読み、ui 定数の `.find()` で `Innings`/`Side`/`Difficulty` に変換して `onStart(config)`)で実装し、`useState` を使わない(設計レビュー ラウンド2 MINOR1)。
@@ -688,7 +688,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - やること: 本書「CPU」のとおり実装する。`cpu/` は `batting/`・`game/` を import しない。
   - 完了条件: 担当の `vitest run` が成功。
 
-- [ ] **ステップ7: `model/data/`**(並列: 3, 4, 8)
+- [x] **ステップ7: `model/data/`**(並列: 3, 4, 8)
   - 依存: ステップ2。担当ファイル: `model/data/teams.ts`・`teams.test.ts`
   - やること: 架空2チーム(「ルミナス」「ノーブルズ」)のプリセットと `getTeam`。選手名は実在名と連想しないこと。
   - 完了条件: 担当の `vitest run` が成功。
@@ -893,6 +893,19 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 ステップ2での追加知見: `type RngState = number` は `sonarjs/redundant-type-aliases` で error になるため、`RngState = Readonly<number>`(`number` と相互代入可)とした。型 `LineScore`(types/game.ts)と ui の `LineScore.tsx` は同名のため、同一ファイルで両方を使う場合は別名 import する。
 
 その他: `npm install --save-dev vitest@^3.0.4` は範囲を `^3.2.7` に書き換えるため、`frontend/package.json` と lockfile の frontend エントリを `^3.0.4` に手で戻した(backend と同範囲)。lockfile 差分は3行、`npm ci --dry-run` 成功。
+
+## 実装時の申し送り(orchestrator 記録)
+
+各ステップの完了報告から、後続ステップが前提にすべき実装上の取り決めを記録する。
+
+- ステップ3: `clamp(value, min, max)` を `model/pitch/zone.ts` から export(共用可)。`ballPositionAt` は曲がる球種では `elapsed=0` で「開始点+bend」から始まり、終点は全球種で `landing` に厳密一致。`pickWeighted` は空・合計0以下・NaN で `Error`。
+- ステップ4(ステップ10・11 の前提):
+  - `StrikeZoneSvg` のボール・カーソルは `<g transform="scale(1 -1)">` 内。hooks が書き換える `cx`/`cy` は**ゾーン座標そのまま(y 上向き、反転不要)**。ボールの `r` は `geometry.ballRadius × scale`。ボールは `key={flight.seq}` で投球ごとに再マウント。カーソル楕円は `showCursor` が偽→真で再マウントされ `cx/cy` が (0,0) に戻る(ステップ10/11 で ref から再適用するか判断)。
+  - `StrikeZoneSvg` のポインタ4ハンドラ(down/move/up/cancel)は必須 props。
+  - `count-balls`/`count-strikes`/`count-outs` は数値だけの visually-hidden span。`bases` の `data-first/second/third` は `"true"`/`"false"`。`pitch-controls` の `data-ready` は `String(ready)`。`batted-ball-marker` は `<circle>`(`data-distance` toFixed(1)、`data-lateral` toFixed(2))。
+  - `CommentaryLog` は `log`(古い→新しい)を新しい順に表示。`ResultScreen` は `position: fixed` の dialog、「もう一度」に autoFocus。`SwingControls` の `swing-button` は `onPointerDown` のみ配線。
+  - `baseball.css` は `--bb-*` 変数と `.bb-course-grid { position:absolute; inset:8.333% }` を持つ。重ね用ラッパー(`inset:0`)と `GameLayout` のレイアウト用クラスはステップ11の `baseball-field.css`。
+- ステップ7: チーム id は `luminous`(ユーザー側)/`nobles`(CPU側)。`PLAYER_TEAM`/`CPU_TEAM`/`getTeam` を export。
 
 ## 壁打ち(grilling)記録
 
