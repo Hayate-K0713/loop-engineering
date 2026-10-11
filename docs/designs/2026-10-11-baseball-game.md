@@ -536,7 +536,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 | `FieldDiagram` | 4 | `marker: FieldMarkerView \| null`、`geometry: FieldDiagramGeometry` | 下記 |
 | `MatchupPanel` | 4 | `batter`(`GameView.batter`)、`pitcher`(`GameView.pitcher`)、`pitchSpeedLabel` | |
 | `StrikeZoneSvg` | 4 | `geometry: FieldGeometry`、`flight: PitchFlight \| null`、`showCursor`、`cursorRadii: CursorRadii`、`svgRef`・`ballRef`・`cursorRef`(RefObject を通常の props として受ける)、`onPointerDown`/`onPointerMove`/`onPointerUp`/`onPointerCancel` | 描画のみで状態を持たない。`ball` は `flight` があるときだけ描き、位置は hooks が ref 経由で更新する |
-| `SwingControls` | 4 | `ready`(`swingReady`)、`swingKind`、`onSelectSwingKind(kind)`、`onSwing()` | |
+| `SwingControls` | 4 | `ready`(`swingReady`)、`swingKind`、`onSelectSwingKind(kind)`、`onSwing()` | `onSwing` は `swing-button` の **`onPointerDown`** に結ぶ(`onClick` は pointerup 時点になりタイミングが遅れる。ラウンド2 MINOR3)。キーボード操作は Space/Enter(`useBattingControls`)が担う |
 | `PitchingControls` | 4 | `ready`(`pitchReady`)、`repertoire`、`selectedKind`、`onSelectKind(kind)`、`onThrow()` | 内部で `PitchKindButtons` と `throw-pitch` を描く。コースのグリッドは含まない |
 | `PitchKindButtons` | 4 | `repertoire`、`selectedKind`、`onSelectKind(kind)` | 選択中に `aria-pressed="true"` |
 | `CourseGrid` | 4 | `selectedCell: CourseCell`、`onSelectCell(cell)` | 選択中のセル1つに `aria-pressed="true"` |
@@ -553,7 +553,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 
 - デスクトップ: 上段に `Scoreboard`(内部に `LineScore`・`CountLamps`・`BaseDiamond` を含む。ステップ4)と `FieldDiagram` を横に並べる(並べるのは `GameLayout`。ステップ11)。中央にゾーン(`BattingView`)、その下か右に操作系(`SwingControls` または `PitchingControls`)と `MatchupPanel`・`CommentaryLog`。
 - スマホ縦(`max-width: 640px`): 縦積みにし、`FieldDiagram` は `Scoreboard` の直下に小さく置く。スイング・コース・投げるボタンは親指で押せる大きさ(高さ44px以上)。
-- ゾーン: SVG は正方形(`aspect-ratio: 1`)で `viewBox` は `±viewHalfExtent`(2.0)。`touch-action: none`・`user-select: none` を付ける。`StrikeZoneSvg` はストライクゾーン枠、5×5 グリッド線、ボール(ref)、人間打撃時のみスイングカーソル(楕円。`cx`/`cy` は ref で更新し、`rx`/`ry` は props の `cursorRadii`)を描く。`CourseGrid` は `overlay` として同じ正方形に重ねる(CSS grid 5×5、`inset: 8.333%` = (2 − 5/3)/4)。
+- ゾーン: SVG は正方形(`aspect-ratio: 1`)で `viewBox` は `±viewHalfExtent`(2.0)。`touch-action: none`・`user-select: none` を付ける。`StrikeZoneSvg` はストライクゾーン枠、5×5 グリッド線、ボール(ref)、人間打撃時のみスイングカーソル(楕円。`cx`/`cy` は ref で更新し、`rx`/`ry` は props の `cursorRadii`)を描く。`CourseGrid` は `overlay` として同じ正方形に重ねる(CSS grid 5×5、`inset: 8.333%` = (2 − 5/3)/4)。**`BattingView` の重ね用ラッパー(ステップ11)は SVG の正方形と同寸(`inset: 0`)とし、`inset: 8.333%` は `CourseGrid` の root(ステップ4、`baseball.css`)だけが付ける**(二重適用の防止。ラウンド2 MINOR2)。
 - `FieldDiagram`: SVG(`viewBox` は `geometry` から。y 反転)に、ダイヤモンド(塁・本塁)、ファウルライン、外野フェンス弧を描き、`marker` があれば本塁からの線と点(ホームランは点をフェンスの外側に描く)を描く。点の色や形は結果ごとに変えてよい(`data-result` で識別)。`marker` が `null` のときは点を描かない。`role="img"` と `aria-label` を付ける。
 
 #### `data-testid` と所属の対応表(e2e・手動確認の契約)
@@ -667,7 +667,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 - [ ] **ステップ4: `ui/` の表示コンポーネントと基本CSS**(並列: 3, 7, 8)
   - 依存: ステップ2(`types/` のみ。hooks・model に依存しない)。担当ファイル: `ui/{TitleScreen,Scoreboard,LineScore,CountLamps,BaseDiamond,FieldDiagram,MatchupPanel,StrikeZoneSvg,SwingControls,PitchingControls,PitchKindButtons,CourseGrid,CommentaryLog,ResultScreen}.tsx`(14ファイル)、`ui/baseball.css`
   - やること: props だけで描画するコンポーネントを作る(`useState` などの状態も持たない)。props と `data-testid` は本書「UI 設計」の「主要な props」表と「`data-testid` と所属の対応表」に従う(表でステップ4に割り当てた testid を全て、このステップのファイルで描く)。
-    - `TitleScreen`: イニング・先攻後攻(既定 `away`)・難易度の select と開始ボタン。
+    - `TitleScreen`: イニング・先攻後攻(既定 `away`)・難易度の select と開始ボタン。**非制御フォーム**(`defaultValue` を付けた select、`onSubmit` で `FormData` を読み、ui 定数の `.find()` で `Innings`/`Side`/`Difficulty` に変換して `onStart(config)`)で実装し、`useState` を使わない(設計レビュー ラウンド2 MINOR1)。
     - `Scoreboard`: `inning-label` を持ち、`LineScore`・`CountLamps`・`BaseDiamond` を内部で描く。`FieldDiagram` は含めない(横に並べるのはステップ11の `GameLayout`)。
     - `FieldDiagram`: ダイヤモンド+ファウルライン+フェンス弧+打球の点と線(`field-diagram`・`batted-ball-marker` と data 属性)。
     - `MatchupPanel`: `batter-name`・`pitcher-name`・`pitch-count`・`pitcher-stamina`・`pitch-speed`。
@@ -783,7 +783,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 - `outcome.test.ts`: ボール/ストライク/ファウルでカウントのみ変化。打席終了でカウント0-0・`lineupIndex`+1(9で0に戻る)・得点が現在の半イニングに加算。`single`〜`homerun` で `hits` 増、`error` で守備側 `errors` 増(`hits` は不変)。`lastResult` は毎球設定、`lastPlate` は打席が続く球(ボール・ストライク・2ストライク後のファウル等)で `null`、打席が終わった球で `walk`/`strikeout`/`InPlayResult`。インプレーで `lastInPlay = { seq: pitchSeq, result, ball }` が設定され、ボール/ストライク/ファウル/四球/三振では `lastInPlay` が直前の値のまま保持される。`lastInPlay.seq` は `state.pitchSeq`。テストの入力 `GameState` は `test-fixtures.ts` で作る(ステップ8のテスト全般で同様)。
 - `inning.test.ts`(イニング数 1/3/5/9 で表駆動): 表の終了→同イニングの裏、裏の終了→次イニング表。最終回表終了で後攻リード→裏なしで後攻勝ち(「x」)。最終回裏でサヨナラ(リードを奪った瞬間に終了)。最終回裏終了で先攻リード→先攻勝ち。同点→延長1回目(表、走者1・2塁、outs 0)。延長でのサヨナラ。`innings+3` 終了で同点→引き分け。攻守交代で `lastInPlay` が保持される。
 - `state.test.ts`: 初期値(1回表・0アウト・0-0・走者なし・`lineScore`・`rng = createRng(seed)`・`await-pitch`・`lastInPlay = null`)。`humanSide` に応じたチーム割り当て(`"home"` のときユーザーチームが後攻)。
-- `reducer.test.ts`(タイムアウト30秒): 純粋性(同一入力2回で deep equal、deep freeze した入力で変更されない)。`CPU_PITCH`/`THROW` が `in-flight`・`pitchSeq`+1・`pitchCounts`+1・`rng` 更新で、`phase.flight.seq` が加算後の `pitchSeq` と一致。インプレーで解決した後の `lastInPlay.seq` がその球の `flight.seq` と一致。無効な組み合わせ(人間守備で `CPU_PITCH`、`in-flight` 以外で `SWING`/`PITCH_ARRIVED`、人間攻撃以外で `SWING`)が同一参照を返す。人間打者の `PITCH_ARRIVED` は見逃し判定。同一シード・同一アクション列で最終状態が一致。CPU 同士の固定シード試合が `simulateGame` の上限(10,000アクション)内で必ず `game-over` に到達(イニング1/3/5/9 × 難易度3種 × 30シード)。`simulateGame` の `plates` の件数が、両チームの打席数(`lineupIndex` の進み)と矛盾しない。`humanSide` を持つ試合で、人間側が全球見送り(人間攻撃時は `PITCH_ARRIVED` のみ、人間守備時は固定セルへ `THROW`)でも必ず終了する。**`toGameView` を呼んでも呼ばなくても最終状態(`rng` を含む)が同一**(フィールド図の計算が乱数消費順に影響しない)。
+- `reducer.test.ts`(タイムアウト30秒): 純粋性(同一入力2回で deep equal、deep freeze した入力で変更されない)。`CPU_PITCH`/`THROW` が `in-flight`・`pitchSeq`+1・`pitchCounts`+1・`rng` 更新で、`phase.flight.seq` が加算後の `pitchSeq` と一致。インプレーで解決した後の `lastInPlay.seq` がその球の `flight.seq` と一致。無効な組み合わせ(人間守備で `CPU_PITCH`、`in-flight` 以外で `SWING`/`PITCH_ARRIVED`、人間攻撃以外で `SWING`)が同一参照を返す。人間打者の `PITCH_ARRIVED` は見逃し判定。同一シード・同一アクション列で最終状態が一致。CPU 同士の固定シード試合が `simulateGame` の上限(10,000アクション)内で必ず `game-over` に到達(イニング1/3/5/9 × 難易度3種 × 30シード)。`simulateGame` の `plates` の件数について `(final.lineupIndex.away + final.lineupIndex.home) % 9 === plates.length % 9` が成り立つ(ラウンド2 MINOR4)。`humanSide` を持つ試合で、人間側が全球見送り(人間攻撃時は `PITCH_ARRIVED` のみ、人間守備時は固定セルへ `THROW`)でも必ず終了する。**`toGameView` を呼んでも呼ばなくても最終状態(`rng` を含む)が同一**(フィールド図の計算が乱数消費順に影響しない)。
 - `view.test.ts`: `inningLabel`(「1回表」等)、`mode`、`pitchReady`/`swingReady`/`cpuPitchPending` の組み合わせ、`scoreboard` の整形(「-」「x」)、`result` の勝敗(人間視点)、`arriveAfterMs`。`fieldMarker` は `lastInPlay` が `null` の間 `null`、インプレー後に非 `null` で `computeBattedLanding` の結果と一致し(`seq`・`result` を含む)、次のインプレーまで保持される。`fieldDiagram` の5値が `LANDING_PARAMS` の同名フィールドと、`geometry` の4値が `PITCH_PARAMS` の同名フィールドと一致する。`pitchSpeedLabel` は飛行中に「NNNkm/h 球種名」、それ以外は「-」。`toGameView` が state を変更しない。
 - `commentary.test.ts`: すべての `PitchResult`・`PlateOutcome` に空でない文字列。
 - `launch-params.test.ts`: `?seed=42&innings=1&fast=1` → (42, 1, true)。不正値は無視して既定(seed が負・小数・文字・4294967296・空 → `null`、innings が 2/0/文字 → `null`、fast が 0/true/yes → `false`、`seed=0`・`4294967295` は有効)。先頭 `?` の有無。重複キーは最初。`""` を渡すと全て既定値(本番ビルドで hooks が渡す入力)。`getPlaybackSpeed` の2値。
@@ -853,9 +853,9 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 | ラウンド | 判定 | 主な指摘 |
 | --- | --- | --- |
 | 1 | MAJOR | M1(UIステップ境界・testid割り当て・ステップ11の担当ファイル不足)+MINOR10件 → 全件反映 |
-| 2(ラウンド1がMAJORの場合のみ) | PASS / MAJOR |  |
+| 2(ラウンド1がMAJORの場合のみ) | PASS | M1・MINOR1〜10 の解消を確認。残MINOR4件(TitleScreen の state 方針、CourseGrid の inset の付け先、スイングボタンのイベント、plates 件数の判定式)は orchestrator が本書へ反映済み |
 
-未解決のMAJORが残った場合: (なければ「なし」)
+未解決のMAJORが残った場合: なし
 
 ## コードレビュー結果
 
