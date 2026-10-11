@@ -23,6 +23,8 @@
 
 <!-- 例: - [ci-no-network](entries/ci-no-network.md) — CI環境は外部ネットワークにアクセスできない、モック必須 -->
 - [unpushed-local-commits-stale-origin](entries/unpushed-local-commits-stale-origin.md) — ローカルcommitだけではoriginは更新されない、GitHub Pages等が古いまま取り残される。ゲート2・メタ編集後は必ずpushまで行う(CLAUDE.md厳守ルール8)
+- [sample-app-lint-random-and-index-access](entries/sample-app-lint-random-and-index-access.md) — sample-appのlintでは`Math.random()`・変数添字`arr[i]`・`// TODO`がerror。シード付きPRNG注入と`.at()`/`Map`/`for...of`で書く
+- [vitest-include-picks-playwright-specs](entries/vitest-include-picks-playwright-specs.md) — Vitestの既定`include`はPlaywrightの`e2e/*.spec.ts`も拾う。frontendに追加する際は`include`を限定する
 
 ## glossary(プロジェクト固有の用語集)
 
