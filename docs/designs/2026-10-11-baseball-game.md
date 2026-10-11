@@ -654,7 +654,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
     5. 想定と異なる結果が出た場合は、先のステップに進まず orchestrator に報告する(本設計の「静的解析・規約への対応」の見直しが必要になる)。
   - 完了条件: ルートで `npm run test`(backend+frontend)・`npm run typecheck`・`npm run lint`・`npm run build` が成功。`npm ci --dry-run`(または一時ディレクトリでの `npm ci`)で lockfile 同期を確認。`package-lock.json` の差分が frontend エントリ(と必要最小限の依存解決)に限られる。試験実測の表を報告(orchestrator が本書末尾「ステップ1 試し打ち結果」に転記する)。
 
-- [ ] **ステップ2: `types/` の作成**(直列)
+- [x] **ステップ2: `types/` の作成**(直列)
   - 依存: ステップ1。担当ファイル: `features/baseball/types/{common,team,pitch,batting,game,actions,view}.ts`(新規7ファイル)
   - やること: 本書「型設計」のとおりに型を定義する(`BattedLanding`、`InPlayRecord`、`GameState.lastInPlay`、`FieldMarkerView`、`FieldDiagramGeometry`、`GameView.fieldMarker`/`fieldDiagram` を含む)。実行時コードは書かない。`GameView` 周辺は本書のフィールド一覧に従う(不足は報告)。
   - 完了条件: `npm run typecheck --workspace frontend` が成功、lint 0件。`types/` が他セグメントを import していない。
@@ -889,6 +889,8 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
 | 実測 | `.tsx` の JSX 行 | `max-lines-per-function` に数えられる(関数全体60行で通過、61行で error) |
 | 実測 | `*.test.ts` の長い `describe`/`it`、4段ネスト | 通過(テスト向け緩和が効く) |
 | 追加知見 | `*.test.ts` の `expect(1).toBe(1)` のようなリテラル同士の assertion | `sonarjs/no-trivial-assertions` で error。テストは関数の戻り値を期待値と比べる |
+
+ステップ2での追加知見: `type RngState = number` は `sonarjs/redundant-type-aliases` で error になるため、`RngState = Readonly<number>`(`number` と相互代入可)とした。型 `LineScore`(types/game.ts)と ui の `LineScore.tsx` は同名のため、同一ファイルで両方を使う場合は別名 import する。
 
 その他: `npm install --save-dev vitest@^3.0.4` は範囲を `^3.2.7` に書き換えるため、`frontend/package.json` と lockfile の frontend エントリを `^3.0.4` に手で戻した(backend と同範囲)。lockfile 差分は3行、`npm ci --dry-run` 成功。
 
