@@ -17,7 +17,7 @@ const SIDE_OPTIONS: readonly Option<Side>[] = [
 ];
 
 const DIFFICULTY_OPTIONS: readonly Option<Difficulty>[] = [
-  { value: "easy", label: "やさしい" },
+  { value: "easy", label: "かんたん" },
   { value: "normal", label: "ふつう" },
   { value: "hard", label: "むずかしい" },
 ];

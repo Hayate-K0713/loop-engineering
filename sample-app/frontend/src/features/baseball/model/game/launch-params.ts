@@ -22,7 +22,7 @@ function parseInnings(raw: string | null): Innings | null {
 /**
  * 起動パラメータ(`?seed=<uint32>&innings=<1|3|5|9>&fast=1`)を検証して解釈する純粋関数。
  * 不正値は無視して既定値(`null` / `false`)にする。先頭の `?` の有無どちらも可、重複キーは最初の値。
- * 開発ビルド限定の判定(`import.meta.env.DEV`)は呼び出し側(hooks)で行い、本番では空文字列を渡す。
+ * 開発ビルド限定の判定(開発ビルドかどうかの環境フラグ)は呼び出し側(hooks)で行い、本番では空文字列を渡す。
  */
 export function parseLaunchParams(search: string): LaunchParams {
   const params = new URLSearchParams(search);
