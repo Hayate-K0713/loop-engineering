@@ -20,9 +20,9 @@ export type DifficultyParams = {
 };
 
 const DIFFICULTY_TABLE: ReadonlyMap<Difficulty, DifficultyParams> = new Map<Difficulty, DifficultyParams>([
-  ["easy", { zoneSwingRate: 0.55, chaseSwingRate: 0.4, cursorSigma: 0.45, timingSigmaMs: 90, aimSigmaScale: 1.4, twoStrikeOutsideRate: 0.2 }],
-  ["normal", { zoneSwingRate: 0.65, chaseSwingRate: 0.3, cursorSigma: 0.3, timingSigmaMs: 60, aimSigmaScale: 1.0, twoStrikeOutsideRate: 0.35 }],
-  ["hard", { zoneSwingRate: 0.7, chaseSwingRate: 0.2, cursorSigma: 0.2, timingSigmaMs: 40, aimSigmaScale: 0.75, twoStrikeOutsideRate: 0.5 }],
+  ["easy", { zoneSwingRate: 0.55, chaseSwingRate: 0.4, cursorSigma: 0.4, timingSigmaMs: 80, aimSigmaScale: 1.4, twoStrikeOutsideRate: 0.2 }],
+  ["normal", { zoneSwingRate: 0.65, chaseSwingRate: 0.3, cursorSigma: 0.34, timingSigmaMs: 65, aimSigmaScale: 1.0, twoStrikeOutsideRate: 0.35 }],
+  ["hard", { zoneSwingRate: 0.7, chaseSwingRate: 0.2, cursorSigma: 0.27, timingSigmaMs: 52, aimSigmaScale: 0.75, twoStrikeOutsideRate: 0.5 }],
 ]);
 
 /** 難易度のパラメータを返す。未定義の難易度は `Error`(プログラミングエラー)。 */

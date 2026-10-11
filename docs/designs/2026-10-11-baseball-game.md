@@ -344,7 +344,7 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 
 `batting/cursor.ts` の補助: `INITIAL_CURSOR`(ゾーン中心 (0,0))、`clampCursor`、`moveCursor(cursor, direction, dtMs)`(押下方向×`keyboardSpeed`×dt、クランプ)、`clientToZonePoint(client, rect)`(SVG の矩形→ゾーン座標。y 反転。`viewHalfExtent` 基準でクランプ)。
 
-`batting/params.ts`(`BATTING_PARAMS`)初期値: `meetBaseRx 0.50`、`meetRxPerAbility 0.004`、`aspect 0.6`、`powerScale 0.65`、`cursorLimit 1.8`、`keyboardSpeed 3.0`(ゾーン単位/秒)、`contactWindowMs 150`、`powerWindowScale 0.75`、`foulRatio 0.70`、`centerRatio 0.25`、`edgePenaltyStart 0.6`、`edgePenaltyPerUnit 0.4`、`linerHalfBand 0.30`、`trajectoryShiftPerLevel 0.10`、`powerBase 0.6`、`powerPerAbility 0.008`、`kindFactor {meet 1.0, power 1.5}`、`directionFactor {pull 1.15, center 1.0, opposite 0.9}`、`mediumFrom 0.15`、`strongFrom 0.35`(CPU 普通の q 平均≈0.27 を想定した叩き台)。
+`batting/params.ts`(`BATTING_PARAMS`)初期値: `meetBaseRx 0.50`、`meetRxPerAbility 0.004`、`aspect 0.6`、`powerScale 0.65`、`cursorLimit 1.8`、`keyboardSpeed 3.0`(ゾーン単位/秒)、`contactWindowMs 150`、`powerWindowScale 0.75`、`foulRatio 0.70`、`centerRatio 0.25`、`edgePenaltyStart 0.6`、`edgePenaltyPerUnit 0.4`、`linerHalfBand 0.30`、`trajectoryShiftPerLevel 0.10`、`powerBase 0.6`、`powerPerAbility 0.008`、`kindFactor {meet 1.0, power 1.5}`、`directionFactor {pull 1.15, center 1.0, opposite 0.9}`、`mediumFrom 0.18`、`strongFrom 0.42`(当初の叩き台 0.15/0.35 から、ステップ9のバランス検証で調整。CPU ふつうの q が想定より高く打率 .36 になったため)。
 
 結果表の初期値(重み。仮値。調査の叩き台に、併殺・ライナー弱を補った):
 
@@ -398,9 +398,11 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 
   | 難易度 | zoneSwingRate | chaseSwingRate | cursorSigma | timingSigmaMs | aimSigmaScale | twoStrikeOutsideRate |
   | --- | --- | --- | --- | --- | --- | --- |
-  | easy | 0.55 | 0.40 | 0.45 | 90 | 1.4 | 0.20 |
-  | normal | 0.65 | 0.30 | 0.30 | 60 | 1.0 | 0.35 |
-  | hard | 0.70 | 0.20 | 0.20 | 40 | 0.75 | 0.50 |
+  | easy | 0.55 | 0.40 | 0.40 | 80 | 1.4 | 0.20 |
+  | normal | 0.65 | 0.30 | 0.34 | 65 | 1.0 | 0.35 |
+  | hard | 0.70 | 0.20 | 0.27 | 52 | 0.75 | 0.50 |
+
+  (`cursorSigma`/`timingSigmaMs` はステップ9で調整済み。当初値 easy 0.45/90・normal 0.30/60・hard 0.20/40 では easy の CPU 打率 .167・hard .49 と極端だったため)
 
   `cursorSigma`/`timingSigmaMs` は CPU 打者のノイズ(0にならない=下限あり)、`aimSigmaScale` は CPU 投手の狙いの外し(`deliverPitch` の `aimSigmaScale` にそのまま渡す)、`twoStrikeOutsideRate` は 0-2/1-2 でボール球を選ぶ率。CPU 共通定数(同ファイル): `twoStrikeSwingBoost 0.2`、`threeBallsSwingFactor 0.4`、`outsideSigmaScale 1.5`(ゾーン外のスイングはノイズ増)、`powerSwingBase 0.10`、`powerSwingPerAbility 0.004`、`repeatKindPenalty 0.6`、`speedDiffBiasRatio 0.15`(球速差による早振り)。
 - 配球プラン `getPitchPlan(count)`(キー `"b-s"` の Map。12カウント):
@@ -703,7 +705,7 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
     - `commentary.ts`・`launch-params.ts` は `types/` のみに依存するため、ここで実装する。
   - 完了条件: 担当の `vitest run` が成功。
 
-- [ ] **ステップ9: `model/game/` の統合部分(state/reducer/view/simulate)とバランス検証**(直列)
+- [x] **ステップ9: `model/game/` の統合部分(state/reducer/view/simulate)とバランス検証**(直列)
   - 依存: ステップ5, 6, 7, 8。担当ファイル: `model/game/{state,reducer,view,simulate}.ts`+`simulate` を除く各 `.test.ts`、`model/game/balance.test.ts`
   - **例外(値のみ調整可)**: `balance.test.ts` を通すためにのみ、`batting/params.ts`(落下点の定数を除く)・`batting/result-table.ts`・`cpu/difficulty.ts`・`cpu/pitcher-weights.ts`・`pitch/params.ts`・`data/teams.ts` の**数値だけ**を調整してよい(構造・関数は変更しない)。このステップは単独で動くため所有の競合は無い。調整内容(変更前後)は完了報告に記す。
   - やること: 本書「試合進行」のとおり実装。`createInitialState` は `lastInPlay = null`。`toGameView` は `fieldMarker`/`fieldDiagram`(`batted-landing`・`LANDING_PARAMS`)と `geometry`(`PITCH_PARAMS`)、`pitchSpeedLabel` を組み立てる(state を変更しない)。`reduce` は action ごとにハンドラへ委譲し、無効な組み合わせは同一参照を返す。CPU の判断には `getDifficulty(config.difficulty)` で引いた `DifficultyParams` を渡し、`deliverPitch` には加算後の `pitchSeq` を渡す。`simulate.ts`(`SimulationResult` を返す)で CPU 同士の試合を回し、`balance.test.ts` のしきい値(テスト戦略)を満たすよう数値を調整する。しきい値を緩める場合は理由を報告する。
@@ -910,6 +912,9 @@ BaseballGamePage (11)        h1・back-home・session(未開始/開始中)の管
   - 解釈: 四球・三振で打席終了時は count を 0-0 で返す。3アウト目の `advanceRunners` は `runs=0`・`bases` 空。`strength: null` の groundout/flyout は弱い当たり扱い(犠飛なし)。`settleInning` はサヨナラ判定を最初に行い、`outs<3` なら同一参照を返す。最終回表終了で後攻リードなら裏を行わず game-over(後攻 `lineScore` が短いことで「x」を表す)。`applyPitchResult` は rng・pitchSeq・pitchCounts・phase・log・lastPitchKind を更新しない(reducer の責務)。
 - ステップ5(ステップ9・10の前提): `resolvePitch(rng, {flight, swing, batter, outs, bases})` が唯一の1球判定(乱数はインプレー時のみ1個)。`computeBattedLanding(ball, result, seq)` は乱数なし。`FieldDiagramGeometry` は `LANDING_PARAMS` の同名フィールド(`baseDistance`・`fenceRadius`・`viewHalfWidth`・`viewTop`・`viewBottom`)から組み立てる。`LANDING_BANDS` は `params.ts` の別 export。`clientToZonePoint` は ±`viewHalfExtent`(2.0)でクランプするため、hooks はポインタ位置を `clampCursor`(±`cursorLimit` 1.8)に通してから使う。幅・高さ0以下の矩形では `INITIAL_CURSOR` を返す。
 - ステップ6: `getDifficulty(d)` の戻り値(`DifficultyParams`)を `chooseCpuPitch`/`decideCpuBat` にそのまま渡し、`aimSigmaScale` を `deliverPitch` に渡す。`chooseCpuPitch` は乱数3個(ゾーン内外・球種・セル)、`decideCpuBat` は見送りなら1個で終了。`CPU_PARAMS.maxSwingRate=0.95` を追加。CPU 打者のカーソルはクランプしない。バランス調整対象は `DIFFICULTY_TABLE`・`CPU_PARAMS`・`PITCH_PLAN_TABLE` の数値。
+- ステップ9: `createInitialState`・`reduce`・`toGameView`・`simulateGame`(既定 `maxActions` 10,000)を実装。補助として `currentBatter(state)`/`currentPitcher(state)` を `state.ts` から export。`lastEvent` は `log` 末尾(空なら「プレイボール」)、`orderLabel` は「N番」、`headline` は人間視点で「あなたの勝ち!」「あなたの負け…」「引き分け」。`state.log` は上限なし、`view.log` で直近50件。
+  - バランス実測(ふつう・9回制・CPU同士・シード1〜100): 半イニング平均得点 0.583、K率 23.2%、BB率 5.0%、打率 .295、HR率 2.15%、併殺 109、引き分け 0%、先攻勝率 54.0%(全しきい値内、しきい値は緩めていない)。難易度別(9回制・100シード、CPU打者の成績): かんたん K 38.9%・打率 .209・0.26点、ふつう 23.2%・.295・0.58点、むずかしい 8.7%・.391・1.07点。
+  - 懸念: `strongFrom` を上げたため、人間の雑なスイングでは強い打球が出にくい。実プレイ確認が必要(/test の手動確認)。
 - ステップ7: チーム id は `luminous`(ユーザー側)/`nobles`(CPU側)。`PLAYER_TEAM`/`CPU_TEAM`/`getTeam` を export。
 
 ## 壁打ち(grilling)記録

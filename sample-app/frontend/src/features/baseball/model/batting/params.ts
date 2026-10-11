@@ -66,8 +66,8 @@ export const BATTING_PARAMS: BattingParams = {
   powerPerAbility: 0.008,
   kindFactor: { meet: 1.0, power: 1.5 },
   directionFactor: { pull: 1.15, center: 1.0, opposite: 0.9 },
-  mediumFrom: 0.15,
-  strongFrom: 0.35,
+  mediumFrom: 0.18,
+  strongFrom: 0.42,
 };
 
 /** `lateral`(= x / y)の範囲。 */
