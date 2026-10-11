@@ -12,14 +12,15 @@
 
 ### やること
 
-- 1試合モード(CPU対戦)。画面タイトルは中立名「ブラウザ野球」。カーソルは「スイングカーソル」と呼ぶ。チーム・選手は架空の固定プリセット2チーム。
+- 1試合モード(CPU対戦)。画面タイトルは中立名「ブラウザ野球」。カーソルは「スイングカーソル」と呼ぶ。チーム・選手は架空の固定プリセット2チーム(「ルミナス」「ノーブルズ」。壁打ちで設計案どおり確定)。
 - 試合設定(タイトル画面): イニング数 1/3/5/9(既定3)、先攻/後攻、難易度 かんたん/ふつう/むずかしい(既定ふつう)。延長は最大3イニング、延長回は無死一・二塁タイブレーク、決着しなければ引き分け。サヨナラあり。
 - 打撃(人間攻撃時): 投球中にスイングカーソル(横長楕円)をポインタ(マウス移動/タッチドラッグ)・矢印/WASD キーで動かし、Space/Enter・クリック・画面の「スイング」ボタンでスイング。ミート打ち/強振の切替あり(強振=カーソル小・パワー補正大)。見送りはスイングしないこと。
   - 判定は調査の案C(ハイブリッド): 楕円距離+タイミング誤差Δt → 接触・質q、カーソル内の高さ → ゴロ/ライナー/フライ、Δtの早遅 → 引っ張り/流し/ファウル、q×パワー×スイング種別 → 強さ段階、表[タイプ×強さ]で1回抽選(併殺は結果種別として同じ抽選に含める)。判定窓・半径などは `params.ts` に外出し。
-- 投球(人間守備時): 球種ボタン(投手ごとの持ち球。全体の球種セットはストレート/スライダー/カーブ/フォーク/シュート)+5×5コースグリッド(中央3×3がストライク)で選んで投げる。調査の案2-1: 選んだセル=狙い、着弾点=狙い+ガウス誤差(σはコントロールとスタミナ)。球種は球速(=タイミング)・見た目の軌道・打ちにくさ補正に効く。スタミナは球数で減り、球速低下と誤差増。投手交代なし。
+- 投球(人間守備時): 球種ボタン(投手ごとの持ち球。全体の球種セットはストレート/スライダー/カーブ/フォーク/シュート)で球種を選び、5×5コースグリッド(中央3×3がストライク)の**セルをクリックして選択(`aria-pressed`)→「投げる」ボタン(`throw-pitch`)で投球**する。選択は投球後も保持し、初期選択は中央(2,2)+ストレート。調査の案2-1: 選んだセル=狙い、着弾点=狙い+ガウス誤差(σはコントロールとスタミナ)。球種は球速(=タイミング)・見た目の軌道・打ちにくさ補正に効く。スタミナは球数で減り、球速低下と誤差増。投手交代なし。
+- 簡易フィールド図: 小さなフィールド図(SVG。ダイヤモンド+外野フェンス弧)に、直近のインプレー打球の方向・飛距離を点(+本塁からの線)で表示する。守備モデルは持たず、`BattedBall`(type/strength/direction)と `InPlayResult` から**決定論で**逆算する(乱数を消費しない。ばらつきは `pitchSeq` 由来の決定論的な数列で作る)。
 - CPU: 投手=カウント別の重み付き配球(難易度パラメータ)。打者=擬似入力(カーソル位置・スイング時刻にガウスノイズ、ゾーン内/外スイング率)を生成し、人間と同じ `resolve-pitch` を通す。
 - 走者進塁は決定論(調査 game-mechanics §3-4 の表を本設計で具体化)。
-- テスト用起動パラメータ `location.search` の `?seed=<uint32>&innings=<1|3|5|9>&fast=1`(`fast=1` は投球アニメ・CPU待機時間の短縮。不正値は無視して既定値)。
+- テスト用起動パラメータ `location.search` の `?seed=<uint32>&innings=<1|3|5|9>&fast=1`(`fast=1` は投球アニメ・CPU待機時間の短縮。不正値は無視して既定値)。**開発ビルド(`import.meta.env.DEV`)でのみ有効で、本番ビルドでは無視する**(判定は hooks の `useLaunchParams`)。
 - デスクトップ(マウス+キーボード)とタッチ(スマホ縦画面)の両方で操作可能なレスポンシブUI。
 - ルーティング: `#/baseball` で切替する自前の薄い `routes/` 層(react-router は導入しない)。`/` は従来画面のまま、`App.tsx` にゲームへのリンクを1つ追加する。
 - テスト基盤: `frontend` に vitest を導入し、ルート `npm run test` を全 workspace 対象に変更(lockfile 同期を含む)。単体テスト(model 全モジュール・routes)と E2E(`e2e/baseball.spec.ts`)を新規作成する。
@@ -30,7 +31,7 @@
 - 育成モード、守備・走塁の操作、盗塁/バント/代打/継投、コールド、結果保存(localStorage/backend)、サウンド。
 - backend・`@sample-app/shared` の変更。結果保存 API は作らない。
 - 「パワプロ」等の名称・キャラクター・UIの使用や模倣(README・アプリ内文言・チーム名・選手名を含む)。実在の球団名・選手名・ロゴ、およびそれらを連想させる名称。
-- 打球の軌道アニメーション・野手モデル(結果は文章ログと結果バナーで示す)、物理風判定(案A)、変化ベクトル方式の投球(案2-2)、ブレの失投確率モデル(β)。
+- 打球の軌道アニメーション・野手モデル(守備判定)。結果は文章ログと結果バナーに加え、簡易フィールド図の点(落下点の目安)で示すに留める。物理風判定(案A)、変化ベクトル方式の投球(案2-2)、ブレの失投確率モデル(β)。
 - 確率進塁(走力による補正)、盗塁以外を含む走塁判断、死球・暴投・捕逸・ファウルフライのアウト、犠打。
 - プレイヤー側アシスト(ロックオン等)、動的難易度調整(DDA)、CPU打者の「配球の読み」「連投への慣れ」。
 - ルーターライブラリ(react-router)、状態管理ライブラリ、ゲームライブラリ(Phaser/Pixi)、Canvas 描画の導入。`eslint-plugin-react-hooks` の導入(別topic。open-question: [[react-hooks-lint-not-installed]])。
@@ -39,24 +40,24 @@
 
 ### 設計の既定値と論点(壁打ち用)
 
-orchestrator が決めた既定値(#1〜#9)と、本設計で新たに置いた判断(#10〜#19)を、根拠と「壁打ちで確認したい論点」付きで並べる。数値は全て仮値であり、`balance.test.ts` とプレイで調整する前提。
+orchestrator が決めた既定値(#1〜#9)と、本設計で新たに置いた判断(#10〜#19)を、根拠と「壁打ちで確認したい論点」付きで並べる。数値は全て仮値であり、`balance.test.ts` とプレイで調整する前提。**#2・#5・#8・#14 は壁打ち(2026-10-11)の人間回答により確定/変更した**(行頭に【壁打ち確定】と記す。経緯は末尾「壁打ち(grilling)記録」)。
 
 | # | 項目 | 設計での決定 | 根拠 | 壁打ちで確認したい論点 |
 | --- | --- | --- | --- | --- |
 | 1 | スコープ | 1試合モード(CPU対戦)のみ。育成・守備走塁操作・盗塁/バント/代打/継投・コールド・結果保存・サウンドは対象外 | 調査で範囲確認済み。操作系を増やすと判定・UI・テストが指数的に増える | 結果保存(localStorage)を次topicにするか。コールドを設定に足す価値があるか |
-| 2 | 名称・UI | 「ブラウザ野球」、「スイングカーソル」、架空2チーム(名前のみの選手名) | 調査 Q6: 名称は商標、UI/キャラの模倣は不競法の論点。「ミートカーソル」はパワプロ由来の呼称の可能性 | 画面名・チーム名・選手名の最終決定。公開前の J-PlatPat 確認は人間作業 |
+| 2 | 名称・UI | 【壁打ち確定】「ブラウザ野球」、「スイングカーソル」、架空2チーム「ルミナス」(ユーザー側)・「ノーブルズ」(CPU側)、選手は名のみ | 調査 Q6: 名称は商標、UI/キャラの模倣は不競法の論点。「ミートカーソル」はパワプロ由来の呼称の可能性 | 設計案のまま確定。公開前の J-PlatPat 確認は人間作業(残) |
 | 3 | 試合設定 | イニング 1/3/5/9(既定3)、先攻/後攻、難易度3段階(既定ふつう)。延長最大3回+無死一・二塁タイブレーク+引き分け+サヨナラ | 調査 3-2: 3回≈10〜15分、9回≈25〜50分。タイブレークは必ず決着に近づける | 既定3回でよいか。延長上限3回・引き分けありで爽快感は足りるか。チーム選択は設けない(自軍=固定、CPU=固定)でよいか |
 | 4 | 打撃判定 | 案C。窓 ±150ms(強振は×0.75)、強さ段階は q×能力から算出、最後に表を1回抽選 | 調査 比較1: 実装小・網羅テスト可・得点環境を表で制御可 | 最後の抽選による「当たったのにアウト」はどこまで許容か。タイミング窓の広さ(入力遅延の吸収)。強振の旨味(×1.5)は妥当か |
-| 5 | 投球 | 案2-1。クリック=即投球(確認ボタンなし)、狙い=セル中心、ガウス誤差、球種は球速・軌道・打ちにくさ補正。CPU打者はファストボール基準でタイミングを取るため、遅い球は早振り気味になる | UI最小・CPUとロジック共有。調査 比較2、2.7(球速差は打ち損じを増やす) | 即投球のミスタップ(特にタッチ)は許容か。球種の戦略性が薄い点(案2-2は将来拡張)は許容か |
+| 5 | 投球 | 【壁打ち変更】案2-1。**セルをクリックして選択(`aria-pressed`)→「投げる」ボタン(`throw-pitch`)で投球**。選択は投球後も保持、初期選択は中央(2,2)+ストレート。狙い=セル中心、ガウス誤差、球種は球速・軌道・打ちにくさ補正。CPU打者はストレート基準でタイミングを取るため、遅い球は早振り気味になる | ミスタップ(特にタッチ)の防止。同じコースへ連投するときはボタンを押すだけで済む。UI最小・CPUとロジック共有。調査 比較2、2.7(球速差は打ち損じを増やす) | 球種の戦略性が薄い点(案2-2は将来拡張)は許容か。投球に2操作(選択+投げる)かかるテンポは許容か |
 | 6 | CPU | 投手=カウント別重み表+難易度。打者=擬似入力(ノイズ)を人間と同じ判定へ。難易度はCPUの強さのみを変える | 調査 Q4: 人間と同じ解決関数を通す・σに下限 | 人間側アシストが無い「かんたん」は初心者に優しいか |
 | 7 | 進塁 | 決定論(単打は2塁走者生還、1塁走者は2塁止まり等) | テスト容易・UI説明容易。調査 比較3 | 1塁走者が単打で3塁へ行かない単調さは許容か |
-| 8 | テスト用起動パラメータ | `?seed=&innings=&fast=1`。本番ビルドにも残す | e2e を決定的かつ短時間にする(30秒/test に収める)。対戦相手がCPUのみで不正対策の価値が無い。同一シードでの不具合再現にも使える | 本番に残してよいか(`import.meta.env.DEV` 限定にすると本番で不具合を再現できなくなるため採らなかった) |
+| 8 | テスト用起動パラメータ | 【壁打ち変更】`?seed=&innings=&fast=1` は**開発ビルド(`import.meta.env.DEV`)でのみ有効**。本番ビルドでは無視する。判定は hooks の `useLaunchParams` で行い、model の `parseLaunchParams` は渡された文字列だけを解釈する純粋関数のまま | 本番に隠しパラメータ(固定シード・高速化)を残さない。e2e は Playwright の webServer が `npm run dev`(vite dev)なので影響なし | 本番ビルドでの不具合再現(同一シード)はできなくなる(再現は dev ビルドで行う)。e2e の webServer を `vite preview` 等に変えると効かなくなる点に注意 |
 | 9 | 端末 | デスクトップ+スマホ縦画面のレスポンシブ。e2e は Desktop Chrome のみ | タッチ仕様(ドラッグ=移動、ボタン=スイング)を入れるが、モバイルprojectはコスト過大 | タッチは手動確認(viewport縮小+hasTouch)のみで十分か |
 | 10 | 乱数 | mulberry32。ガウスは Irwin–Hall(一様乱数12個の和−6)で近似し、`sin/cos/log/exp` を使わない | StrictMode の reducer 二重呼び出しに耐える。超越関数の実装差でエンジン間に差が出ないため同一シードの再現性が強い。lint 例外不要 | 裾が±6σで切れる点は問題ないか |
 | 11 | 再生速度 | `fast=1` は壁時計の再生だけを高速化(`timeScale`)し、モデルの数値(球速・窓)は不変 | `fast` の有無で試合結果(同一シード・同一入力)が変わらない。e2e が本番ロジックを検証できる | — |
 | 12 | 画面状態 | タイトル↔試合の切替は page 層の state。`GameState.phase` は `await-pitch`/`in-flight`/`game-over` のみ | `GameState` を常に有効な試合にでき、型と reducer が簡潔になる。frontend-designer 案からの調整 | — |
 | 13 | rAF/副作用の作法 | 最新コールバックは `useLatest`(ref)パターン。`useEffectEvent` は使わない | `frontend/package.json` の react 範囲が `^19.0.0` で 19.2 を保証しない(lockfile は 19.2.8)。バージョン依存を増やさない | 19.2 へ範囲を引き上げて `useEffectEvent` を使う方がよいか |
-| 14 | 打球の見せ方 | 打球アニメ無し。結果バナー(最新イベント)+ログ+スコアボード | 守備モデルを持たない前提(調査 3-5 (iii) の演出は将来拡張)。規模を抑える | 手応えが物足りないか。ゾーン上の「当たり位置マーカー」だけ足すか |
+| 14 | 打球の見せ方 | 【壁打ち変更】**簡易フィールド図を追加**。ダイヤモンド+外野フェンス弧の SVG に、直近のインプレー打球の方向・飛距離を点(+本塁からの線)で表示する。`BattedBall`/`InPlayResult` から決定論で逆算(乱数を消費しない。ばらつきは `pitchSeq` 由来の数列)。打球の軌道アニメ・守備モデルは持たない | 結果の手応えを補う最小コスト案。乱数を消費しないので既存の rng 消費順とシード再現性に影響しない。見た目だけの目安であり判定とは独立 | 点の位置は結果と整合する範囲の目安にすぎない(実際の野手配置とは無関係)。距離帯・フェンス距離は見た目の調整対象 |
 | 15 | CPU同士の試合 | `GameConfig.humanSide: null` を許容(UIでは選べない)。`simulate.ts` と `balance.test.ts` が使う | 得点環境のモンテカルロ検証に必要。調査の推奨(バランス検証) | — |
 | 16 | シードの扱い | `?seed=` は最初の1試合にのみ適用。2試合目以降は `crypto.getRandomValues` | 連続プレイで同じ試合が再現されるのを避ける | — |
 | 17 | 投手の疲労 | 球数でスタミナが減り、6割を切ると球速低下・誤差増。交代なし | 調査 2.5(開発者対談の方針を単純化)。9回制は後半に打たれやすくなる | 9回制で先発が持たない展開は許容か(`pitchesPerStamina` で調整可) |
@@ -71,6 +72,7 @@ orchestrator が決めた既定値(#1〜#9)と、本設計で新たに置いた�
 - 状態は `useReducer`(離散: 打席結果・フェーズ遷移)+ ref と rAF(連続: ボール位置・カーソル位置)。連続値は state に入れず、ref 経由で SVG 属性を直接更新する。
 - reducer は完全に純粋(`(state, action) → state`)。乱数状態は `GameState.rng` に持ち、CPU の配球・打撃判断も reducer 内で消費する。無効な action(phase や操作主体が合わない)は同一参照の state を返して無視する。
 - スイング時刻は hooks が `performance.now()` から「投球開始からの経過ゲーム時間 ms」を計算して action に載せる。判定はすべてその引数に対する純粋関数。
+- フィールド図の点は `GameState.lastInPlay` から `toGameView` が**乱数を使わず**計算する(state を変更しない)。reducer の乱数消費順は変わらない。
 
 試合内のフェーズ遷移(`GameState.phase`):
 
@@ -81,9 +83,9 @@ await-pitch ──(CPU_PITCH / THROW)──> in-flight ──(SWING / PITCH_ARRI
 
 1球の流れ:
 
-1. 守備側の選択: 人間なら ui → `THROW{command}`、CPU なら hooks の `useCpuTurn` が待機後に `CPU_PITCH`。reducer が `deliverPitch`(狙い+ガウス誤差で着弾点・球速・飛行時間を決定)し、`phase = in-flight(flight)` にする。
+1. 守備側の選択: 人間なら ui(「投げる」ボタン)→ `THROW{command}`、CPU なら hooks の `useCpuTurn` が待機後に `CPU_PITCH`。reducer が `deliverPitch`(狙い+ガウス誤差で着弾点・球速・飛行時間を決定)し、`phase = in-flight(flight)` にする。
 2. 飛行中: `usePitchFlight` が rAF でボール位置を更新。人間打者がスイングすれば `SWING{swing}`、しなければ飛行時間+窓の経過後に `PITCH_ARRIVED`。CPU 打者の場合は `flight.durationMs` 経過時に `PITCH_ARRIVED`。
-3. 判定: reducer が(CPU 打者なら `decideCpuBat` で擬似入力を生成し)`resolvePitch` → `PitchResult` を得て、`outcome`(カウント・アウト・走者・得点)→ `inning`(攻守交代・延長・サヨナラ・終了)の順に遷移を計算し、ログを追記して `await-pitch` か `game-over` へ。
+3. 判定: reducer が(CPU 打者なら `decideCpuBat` で擬似入力を生成し)`resolvePitch` → `PitchResult` を得て、`outcome`(カウント・アウト・走者・得点。インプレーなら `lastInPlay` も記録)→ `inning`(攻守交代・延長・サヨナラ・終了)の順に遷移を計算し、ログを追記して `await-pitch` か `game-over` へ。
 
 `PITCH_ARRIVED` の意味は「ボールが到達した。人間打者ならスイング無し(見送り)、CPU 打者ならここで打撃判断を行う」。
 
@@ -153,19 +155,19 @@ sample-app/
                 │   ├── common.ts        RngState, Side, ZonePoint(ゾーン=[-1,1]² の正規化座標)
                 │   ├── team.ts          BatterProfile, PitcherProfile, Team
                 │   ├── pitch.ts         PitchKind, CourseCell(5×5), PitchCommand, PitchFlight
-                │   ├── batting.ts       SwingKind, SwingInput, CpuBatDecision, BattedBall, PitchResult(designer案の PlateResult を 1球の結果として改名)
-                │   ├── game.ts          GameConfig, Phase(判別共用体), Count, Bases, GameState(rng を含む)
+                │   ├── batting.ts       SwingKind, SwingInput, CpuBatDecision, BattedBall, PitchResult(designer案の PlateResult を 1球の結果として改名), ★BattedLanding
+                │   ├── game.ts          GameConfig, Phase(判別共用体), Count, Bases, GameState(rng を含む), ★InPlayRecord
                 │   ├── actions.ts       GameAction(判別共用体)
-                │   └── view.ts          GameView ほか ui 用の表示データ型
+                │   └── view.ts          GameView ほか ui 用の表示データ型(★FieldMarkerView, FieldDiagramGeometry)
                 ├── model/               React 非依存の純粋関数 + 同居 *.test.ts
                 │   ├── rng/             rng.ts(mulberry32: createRng/nextFloat/nextInt、[値, 次状態]を返す), sampling.ts(nextGaussian, pickWeighted)
                 │   ├── pitch/           zone.ts(5×5セル↔ZonePoint、isStrike), kinds.ts(Map<PitchKind, PitchSpec>), delivery.ts(狙い+コントロール/疲労→ガウス誤差→着弾点), flight.ts(ballPositionAt(flight, elapsedMs)), ★params.ts(投球・飛行の定数)
-                │   ├── batting/         params.ts(判定窓・カーソル半径・閾値、データ), cursor.ts(移動・クランプ・clientToZonePoint・楕円半径), contact.ts(楕円距離+タイミング誤差→接触・質q), batted-ball.ts(q・高さ・Δt・パワー→タイプ/強さ/方向/ファウル、決定論), result-table.ts([タイプ×強さ]→結果の重み表、drawInPlayResult で1回抽選), resolve-pitch.ts(1球判定の司令塔。人間もCPUも同じ関数)
+                │   ├── batting/         params.ts(判定窓・カーソル半径・閾値、データ。★落下点の距離帯・フェンス距離も含む), cursor.ts(移動・クランプ・clientToZonePoint・楕円半径), contact.ts(楕円距離+タイミング誤差→接触・質q), batted-ball.ts(q・高さ・Δt・パワー→タイプ/強さ/方向/ファウル、決定論), result-table.ts([タイプ×強さ]→結果の重み表、drawInPlayResult で1回抽選), resolve-pitch.ts(1球判定の司令塔。人間もCPUも同じ関数), ★batted-landing.ts(BattedBall+InPlayResult+pitchSeq → フィールド図上の落下点。決定論・乱数なし)
                 │   ├── cpu/             difficulty.ts(データ。★CPU共通定数も同居), pitcher-weights.ts(カウント別配球重み、キー "b-s" の Map), cpu-pitcher.ts(chooseCpuPitch), cpu-batter.ts(decideCpuBat: スイング判断+ガウスノイズ)
                 │   ├── data/            teams.ts(架空チーム・選手プリセット+getTeam), teams.test.ts
                 │   └── game/            state.ts(createInitialState), count.ts, runners.ts(決定論進塁、乱数なし), outcome.ts, inning.ts(攻守交代・最終回/延長/サヨナラ/引き分け), reducer.ts(action種別ごとに委譲), view.ts(toGameView), commentary.ts, launch-params.ts(?seed=&innings= 等の検証), balance.test.ts(CPU同士の固定シード試合ループ: 必ず終了・得点環境が許容範囲), ★side.ts(Side の補助。SideTally の添字アクセスを関数化), ★simulate.ts(CPU同士の試合を最後まで回す。balance.test.ts と reducer.test.ts が使う)
-                ├── hooks/               useGame.ts(useReducer+useMemo(toGameView)+操作関数), useCpuTurn.ts(CPU手番・自動進行を setTimeout で dispatch、cleanup必須), useAnimationFrame.ts(汎用rAF、cleanupでcancel。★最新コールバックは useLatest), usePitchFlight.ts(ref+rAFで SVG 属性を更新、到達時 onArrive), usePointerInput.ts, useKeyboardInput.ts(event.repeat 無視), useBattingControls.ts(合成), useLaunchParams.ts(location.search を1回読む), ★useLatest.ts(最新値 ref), ★random-seed.ts(createRandomSeed: crypto.getRandomValues)
-                └── ui/                  BaseballGamePage.tsx(★タイトル↔試合の切替は page 層 state。試合中の GameState.phase で結果画面を重ねる), TitleScreen.tsx, GameScreen.tsx, Scoreboard.tsx, LineScore.tsx, CountLamps.tsx, BaseDiamond.tsx, BattingView.tsx(ゾーンSVG・カーソル・ボール。★人間守備中もボール軌跡の表示に使う), PitchingControls.tsx, PitchKindButtons.tsx, CourseGrid.tsx(5×5 の <button>), ResultScreen.tsx, CommentaryLog.tsx(aria-live), baseball.css(クラス名は bb- 接頭辞), ★baseball-field.css(BattingView/GameScreen 用。CSS の所有ステップを分けるため)
+                ├── hooks/               useGame.ts(useReducer+useMemo(toGameView)+操作関数), useCpuTurn.ts(CPU手番・自動進行を setTimeout で dispatch、cleanup必須), useAnimationFrame.ts(汎用rAF、cleanupでcancel。★最新コールバックは useLatest), usePitchFlight.ts(ref+rAFで SVG 属性を更新、到達時 onArrive), usePointerInput.ts, useKeyboardInput.ts(event.repeat 無視), useBattingControls.ts(合成), useLaunchParams.ts(location.search を1回読む。★開発ビルドのみ), ★useLatest.ts(最新値 ref), ★random-seed.ts(createRandomSeed: crypto.getRandomValues)
+                └── ui/                  BaseballGamePage.tsx(★タイトル↔試合の切替は page 層 state。試合中の GameState.phase で結果画面を重ねる), TitleScreen.tsx, GameScreen.tsx, Scoreboard.tsx, LineScore.tsx, CountLamps.tsx, BaseDiamond.tsx, ★FieldDiagram.tsx(簡易フィールド図: ダイヤモンド+フェンス弧+打球の点), BattingView.tsx(ゾーンSVG・カーソル・ボール。★人間守備中もボール軌跡の表示に使う), PitchingControls.tsx(★セル選択+「投げる」ボタン), PitchKindButtons.tsx, CourseGrid.tsx(5×5 の <button>。★aria-pressed で選択), ResultScreen.tsx, CommentaryLog.tsx(aria-live), baseball.css(クラス名は bb- 接頭辞), ★baseball-field.css(BattingView/GameScreen 用。CSS の所有ステップを分けるため)
 ```
 
 作らないもの(意図的): `features/baseball/api/`、`src/shared/`、`src/utils`。ui のコンポーネントテスト(jsdom 不使用。ui/hooks の検証は e2e に寄せる)。
@@ -184,10 +186,10 @@ main.tsx → routes/AppRoutes ─┬→ App.tsx(従来画面)
 | `routes/` | hash と画面の対応づけだけ | ゲーム設定・クエリの解釈、状態 |
 | `types/` | 3層以上に跨る型 | 実行時コード、他セグメントの import |
 | `model/` | 判定・状態遷移・AI・表示データ整形。React/DOM 非依存 | React、`window`、`Math.random`、`Date`/`performance`(時刻は引数) |
-| `hooks/` | useReducer、rAF/Pointer/Keyboard/タイマー購読、ref、シード生成(`crypto.getRandomValues`、`?seed=` 指定時はその値) | 判定ロジック、JSX |
+| `hooks/` | useReducer、rAF/Pointer/Keyboard/タイマー購読、ref、シード生成(`crypto.getRandomValues`、`?seed=` 指定時はその値。開発ビルドのみ)、`import.meta.env.DEV` の判定 | 判定ロジック、JSX |
 | `ui/` | view と callback を描画・配線するだけ | `model/` の直接 import、データ加工 |
 
-model 内部の依存 DAG(循環禁止): `rng ← pitch ← batting ← game`(game が最上位)、`rng ← cpu`(cpu は pitch 参照可、batting/game 参照不可)、`data ← types のみ`。CPU打者は擬似入力を返すだけで、判定は batting/resolve-pitch に渡す。
+model 内部の依存 DAG(循環禁止): `rng ← pitch ← batting ← game`(game が最上位)、`rng ← cpu`(cpu は pitch 参照可、batting/game 参照不可)、`data ← types のみ`。CPU打者は擬似入力を返すだけで、判定は batting/resolve-pitch に渡す。落下点の計算(`batting/batted-landing.ts`)は `BattedBall`/`InPlayResult` の派生値なので batting に置き、game の `view.ts` から呼ぶ(DAG の向きに沿う)。
 
 lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`readonly Row[]`+`.find()`、`Map`、`switch`。`record[kind]` 禁止)/`Math.random` 禁止(乱数は state.rng のみ)/2ケース switch 禁止(no-small-switch)/reducer は action ごとにハンドラ委譲し 60行・複雑度20・cognitive 15 以内/ネスト三項禁止/大きなテーブルは関数外のデータ定数/TODO コメント禁止。
 
@@ -210,13 +212,15 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 4. **`useEffectEvent` を使わない**(#13): 最新コールバックは `useLatest` の ref パターン。
 5. **GameState に `lastResult`/`lastPlate` を持たせた**: バランス検証・結果バナー・ログ生成のため。
 6. **`types/view.ts` に `FieldGeometry` を含める**: ui が `model/` を import せずにゾーンSVGを描くため。
-7. **`useLaunchParams` が再生速度も返す**: ui が `getPlaybackSpeed`(model)を直接 import しないため、hooks 側で `parseLaunchParams` と `getPlaybackSpeed` を呼ぶ。
+7. **`useLaunchParams` が再生速度も返す**: ui が `getPlaybackSpeed`(model)を直接 import しないため、hooks 側で `parseLaunchParams` と `getPlaybackSpeed` を呼ぶ。起動パラメータは開発ビルドのみ有効(#8)で、`import.meta.env.DEV` の判定も hooks 側に置く。
+8. **簡易フィールド図の追加(壁打ち Q1)**: `model/batting/batted-landing.ts`(落下点の計算。batting に置く理由は上記 DAG の項)、`ui/FieldDiagram.tsx`、`GameState.lastInPlay`(`InPlayRecord`)、`GameView.fieldMarker`/`fieldDiagram`、型 `BattedLanding`/`FieldMarkerView`/`FieldDiagramGeometry`。
+9. **投球操作を「セル選択→投げるボタン」に変更(壁打ち Q2)**: `PitchingControls` が選択状態 `{ kind, cell }` をローカル `useState` で持つ(初期=ストレート+中央(2,2))。`CourseGrid`/`PitchKindButtons` は選択中を `aria-pressed` で示す。
 
 #### リスク・要検証事項(frontend-designer より)
 
 1. セグメント間依存は機械的に強制されない → code-reviewer/tester が grep で確認(`model/` に `from "react"`・`window.`・`document.` なし、`ui/` に `../model` import なし、`types/` に他セグメント import なし)
 2. `eslint-plugin-react-hooks` 未導入 → effect を持つ hooks(useAnimationFrame, usePitchFlight, usePointerInput, useKeyboardInput, useCpuTurn)を重点レビュー
-3. hooks/ui は unit テスト不可 → e2e。CPUの待ち時間・投球アニメ時間を短縮する入口が必要(本設計では `fast=1`)
+3. hooks/ui は unit テスト不可 → e2e。CPUの待ち時間・投球アニメ時間を短縮する入口が必要(本設計では `fast=1`。開発ビルドのみ)
 4. `src/shared/`(共有層、今回は作らない)と `@sample-app/shared`(ワークスペース)は別物
 5. 実装初手で `npx eslint` 試験実測を行い規約を確定
 
@@ -251,6 +255,7 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
   - `InPlayResult = "groundout" | "doublePlay" | "flyout" | "lineout" | "single" | "double" | "triple" | "homerun" | "error"`
   - `PitchResult = { kind: "ball" } | { kind: "called-strike" } | { kind: "swinging-strike" } | { kind: "foul" } | { kind: "in-play"; result: InPlayResult; ball: BattedBall }`
   - `PlateOutcome = "walk" | "strikeout" | InPlayResult`(打席の終わり方)
+  - `BattedLanding = { x: number; y: number; distance: number; lateral: number; overFence: boolean }`(フィールド図上の落下点。**座標系**: 原点=本塁、y=本塁からセンター方向(外野側)が正、x=右(ライト側)が正、単位はメートル相当の図上の長さ。`distance = sqrt(x² + y²)`、`lateral = x / y`(左右の振れ。±1 がファウルライン=45°)。**値域**: `0 < y ≤ 125`、`distance` は 14〜125、`|lateral| ≤ 0.85`(フェア内)、`overFence = distance ≥ fenceRadius`(フェンス半径 105)。打者の左右は持たず全員右打ち扱いとし、引っ張り=レフト側(x<0)、流し=ライト側(x>0)で固定)
 - `game.ts`
   - `Difficulty = "easy" | "normal" | "hard"`、`Innings = 1 | 3 | 5 | 9`
   - `GameConfig = { innings: Innings; humanSide: Side | null; difficulty: Difficulty }`(`humanSide: null` は CPU 同士=テスト/バランス検証専用。UI では選べない)
@@ -258,6 +263,7 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
   - `Phase = { kind: "await-pitch" } | { kind: "in-flight"; flight: PitchFlight } | { kind: "game-over"; winner: Side | null }`(`winner: null` は引き分け)
   - `LineScore = { away: readonly number[]; home: readonly number[] }`(各半イニングの得点。添字=イニング-1。未到達/スキップされた裏は配列長で表現)
   - `LogEntry = { seq: number; text: string }`
+  - `InPlayRecord = { seq: number; result: InPlayResult; ball: BattedBall }`(直近のインプレー打球。`seq` はその投球の `pitchSeq`)
   - `GameState`:
     - `config`、`teams: { away: Team; home: Team }`、`rng: RngState`
     - `inning`(1始まり)、`half`、`outs`(0〜2。3は `outcome` から `inning` に渡す一時値)、`count`、`bases`
@@ -265,6 +271,7 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
     - `lineupIndex: SideTally`(各チームの現在の打者番号 0〜8)、`pitchCounts: SideTally`(各チームの投手の投球数)
     - `pitchSeq: number`(投球通し番号)、`lastPitchKind: PitchKind | null`(直前の投球。攻守交代でリセット)
     - `lastResult: PitchResult | null`、`lastPlate: PlateOutcome | null`(直近の1球の結果と、打席が終わったならその結果。バランス検証・バナー・ログ用)
+    - `lastInPlay: InPlayRecord | null`(直近のインプレー打球。インプレー以外の投球では更新せず保持し、攻守交代でもクリアしない。フィールド図用)
     - `phase: Phase`、`log: readonly LogEntry[]`
   - `LaunchParams = { seed: number | null; innings: Innings | null; fast: boolean }`、`PlaybackSpeed = { timeScale: number; cpuWaitMs: number }`
 - `actions.ts`
@@ -280,8 +287,11 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
     - `pitchReady: boolean`(人間が投げられる)、`swingReady: boolean`(人間がスイングできる)、`cpuPitchPending: boolean`(CPU が投げる番)
     - `turnKey: string`(`${pitchSeq}:${phase.kind}`。effect のキー)
     - `lastEvent: string`、`log: readonly LogEntry[]`(直近50件)
-    - `geometry: FieldGeometry`(`FieldGeometry = { viewHalfExtent: number; zoneHalf: number; gridHalf: number; ballRadius: number }`)
+    - `geometry: FieldGeometry`(`FieldGeometry = { viewHalfExtent: number; zoneHalf: number; gridHalf: number; ballRadius: number }`。ゾーンSVG用)
+    - `fieldMarker: FieldMarkerView | null`(`lastInPlay` が `null` の間は `null`)、`fieldDiagram: FieldDiagramGeometry`(フィールド図SVG用の定数)
     - `result: ResultView | null`(`ResultView = { humanOutcome: "win" | "lose" | "draw" | null; headline: string; awayRuns: number; homeRuns: number }`)
+  - `FieldMarkerView = { seq: number; result: InPlayResult; x: number; y: number; distance: number; lateral: number; overFence: boolean }`(`BattedLanding` の各値+`seq`・`result`。座標系・値域は `BattedLanding` と同じ)
+  - `FieldDiagramGeometry = { baseDistance: number; fenceRadius: number; viewHalfWidth: number; viewTop: number; viewBottom: number }`(図の座標系は `BattedLanding` と同じで、初期値は `baseDistance 27.4`、`fenceRadius 105`、`viewHalfWidth 85`、`viewTop 130`、`viewBottom -8`。ui はこれらから SVG の `viewBox`(y を反転)、塁の位置(1塁 (+baseDistance/√2, +baseDistance/√2)、2塁 (0, baseDistance×√2)、3塁 (-baseDistance/√2, +baseDistance/√2))、ファウルライン(本塁から ±45° でフェンスまで)、フェンス弧(半径 `fenceRadius`、±45° の間)を描く)
 
 ### モデル設計(`model/`)
 
@@ -351,6 +361,36 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 
 `-` は重み0。各行は非負・合計正。タイプと矛盾する結果(ground 行の flyout 等)は0。`doublePlay` は ground 行のみ。
 
+#### 落下点(`batting/batted-landing.ts`、フィールド図用)
+
+打球の見た目の目安を、守備モデルを持たずに**決定論で**逆算する(壁打ち Q1)。`computeBattedLanding(ball: BattedBall, result: InPlayResult, seq: number): BattedLanding`。**乱数(`RngState`)を引数に取らず消費しない**ため、reducer の乱数消費順・シード再現性に影響しない。`sin/cos/log/exp` も使わない。
+
+- **ばらつき**: `seq`(投球通し番号)から黄金比数列で 0〜1 の2値を作る: `t1 = frac(seq × 0.6180339887)`、`t2 = frac(seq × 0.7548776662 + 0.5)`(`frac(x) = x - floor(x)`)。同じ打球でも `seq` が違えば点が変わるが、同じ入力は常に同じ点になる。
+- **距離**: `distance = min + t1 × (max - min)`。`[min, max]` は `(result, type, strength)` から `LANDING_BANDS`(`params.ts` のデータ表。`.find()` で先頭一致、`any` は任意に一致)で引く。初期値(メートル相当、フェンス半径 105):
+
+  | result | type | strength | min | max |
+  | --- | --- | --- | --- | --- |
+  | groundout | any | any | 14 | 32 |
+  | doublePlay | any | any | 16 | 30 |
+  | flyout | any | weak | 35 | 60 |
+  | flyout | any | medium | 60 | 90 |
+  | flyout | any | strong | 90 | 103 |
+  | lineout | any | weak | 25 | 45 |
+  | lineout | any | medium | 40 | 70 |
+  | lineout | any | strong | 55 | 90 |
+  | single | ground | any | 28 | 55 |
+  | single | liner | any | 45 | 80 |
+  | single | fly | any | 38 | 65 |
+  | double | any | any | 78 | 98 |
+  | triple | any | any | 98 | 104 |
+  | homerun | any | any | 106 | 125 |
+  | error | any | any | 18 | 50 |
+
+  全 `InPlayResult` × `BattedType` × `Strength` の組み合わせに必ず1行以上一致すること(一致なしは `Error`)。ホームラン以外は `distance < fenceRadius`(フェンス内)、ホームランは `distance ≥ fenceRadius`(フェンス外)。
+- **左右**: `lateral`(= x/y)を方向の範囲内で `t2` で決める: `pull` は -0.85〜-0.25(レフト側)、`center` は -0.25〜+0.25、`opposite` は +0.25〜+0.85(ライト側)。tan 換算で約14°と約40°が境界。
+- **座標**: `y = distance / sqrt(1 + lateral²)`、`x = lateral × y`(`distance² = x² + y²`、`x/y = lateral`)。`overFence = distance ≥ fenceRadius`。
+- 定数(`params.ts` の `LANDING_PARAMS`): `fenceRadius 105`、`baseDistance 27.4`、方向ごとの `lateral` 範囲、`LANDING_BANDS`、黄金比の係数。`FieldDiagramGeometry` の値は `view.ts` がここから組み立てる。
+
 #### CPU(`cpu/`)
 
 - 難易度表 `getDifficulty(difficulty): DifficultyParams`(フラットなオブジェクト。初期値は調査 4-3 をカーソル半径に合わせて置き直したもの):
@@ -384,7 +424,7 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 
 #### チームデータ(`data/`)
 
-- 固定プリセット2チーム(ユーザー側 `PLAYER_TEAM`、CPU側 `CPU_TEAM`)。各チーム9人の打者と先発投手1人。名前は実在の球団・選手と一致/連想しない架空名(チーム例: 「ルミナス」「ノーブルズ」。選手は名のみのカタカナ。最終決定は実装時に人間レビュー)。
+- 固定プリセット2チーム(ユーザー側 `PLAYER_TEAM`=「ルミナス」、CPU側 `CPU_TEAM`=「ノーブルズ」)。各チーム9人の打者と先発投手1人。選手名は実在の球団・選手と一致/連想しない架空の名のみ(カタカナ)。
 - 能力の目安: 打者 meet 45〜70・power 35〜75・trajectory 1〜3(各チーム1人は4)。投手 speedKmh 140〜146・control 55〜70・stamina 60〜75。持ち球は `straight` を含む3〜4球種(チームごとに構成を変える)。2チームの打者能力の平均差は小さく(meet・power とも差5以内)、投手能力も同程度にする(先攻/後攻・チームの有利不利を作らない)。
 - `getTeam(id): Team`(未知 id は `Error`)。ユーザーの陣営割り当ては `createInitialState` が行う(`humanSide` が `"home"` ならユーザーチームが後攻、それ以外(`"away"`/`null`)は先攻)。
 
@@ -409,9 +449,9 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
   | error | 打者1塁、全走者+1塁 | 0 |
 
   `outs + outsAdded ≥ 3` の場合は得点なし(`runs = 0`)で、走者は後続処理(攻守交代)でクリアされる。
-- `outcome.ts`: `applyPitchResult(state, result): GameState`。`count.ts` でカウントを進め、打席が終わる(walk/strikeout/in-play)なら `advanceRunners` を適用して outs・bases・現在の半イニングの得点・`hits`(single〜homerun)・`errors`(守備側。`error`)・`lineupIndex`(+1 mod 9)を更新し、カウントを0-0に戻す。`lastResult`/`lastPlate` を設定する。攻守交代は行わない(`outs` が3になりうる)。
-- `inning.ts`: `settleInning(state): GameState`。順に判定する: ①**サヨナラ**: 裏で `inning ≥ innings` かつ後攻が先攻を上回った瞬間に `game-over`(後攻勝ち)。②`outs ≥ 3` なら半イニング終了: 表の終了で `inning ≥ innings` かつ後攻リード → `game-over`(後攻勝ち。裏は行わず「x」)、それ以外は同イニングの裏へ。裏の終了で `inning < innings` → 次イニングの表。`inning ≥ innings` で得点差あり → `game-over`、同点なら延長へ(`inning < innings + 3`)、`inning ≥ innings + 3` なら引き分け。③新しい半イニング開始時は outs=0、カウント0-0、走者クリア、`lastPitchKind = null`、`lineScore` に0を追加。延長の各半イニング(`inning > innings`)は走者を1塁・2塁にセット(タイブレーク)。`EXTRA_INNINGS_MAX = 3` を公開。
-- `state.ts`: `createInitialState({ config, seed })`。1回表、outs 0、0-0、走者なし、`lineScore = { away: [0], home: [] }`、`rng = createRng(seed)`、`phase = await-pitch`、`pitchSeq 0`、`pitchCounts`/`hits`/`errors`/`lineupIndex` 全0、`log` 空。
+- `outcome.ts`: `applyPitchResult(state, result): GameState`。`count.ts` でカウントを進め、打席が終わる(walk/strikeout/in-play)なら `advanceRunners` を適用して outs・bases・現在の半イニングの得点・`hits`(single〜homerun)・`errors`(守備側。`error`)・`lineupIndex`(+1 mod 9)を更新し、カウントを0-0に戻す。`lastResult`/`lastPlate` を設定する。`result.kind === "in-play"` のときは `lastInPlay = { seq: state.pitchSeq, result: result.result, ball: result.ball }` を設定する(それ以外の投球では更新しない)。攻守交代は行わない(`outs` が3になりうる)。
+- `inning.ts`: `settleInning(state): GameState`。順に判定する: ①**サヨナラ**: 裏で `inning ≥ innings` かつ後攻が先攻を上回った瞬間に `game-over`(後攻勝ち)。②`outs ≥ 3` なら半イニング終了: 表の終了で `inning ≥ innings` かつ後攻リード → `game-over`(後攻勝ち。裏は行わず「x」)、それ以外は同イニングの裏へ。裏の終了で `inning < innings` → 次イニングの表。`inning ≥ innings` で得点差あり → `game-over`、同点なら延長へ(`inning < innings + 3`)、`inning ≥ innings + 3` なら引き分け。③新しい半イニング開始時は outs=0、カウント0-0、走者クリア、`lastPitchKind = null`、`lineScore` に0を追加(`lastInPlay` は保持)。延長の各半イニング(`inning > innings`)は走者を1塁・2塁にセット(タイブレーク)。`EXTRA_INNINGS_MAX = 3` を公開。
+- `state.ts`: `createInitialState({ config, seed })`。1回表、outs 0、0-0、走者なし、`lineScore = { away: [0], home: [] }`、`rng = createRng(seed)`、`phase = await-pitch`、`pitchSeq 0`、`pitchCounts`/`hits`/`errors`/`lineupIndex` 全0、`lastInPlay = null`、`log` 空。
 - `reducer.ts`: `reduce(state, action)`。`switch (action.type)`(4ケース)で `handleCpuPitch`/`handleThrow`/`handleSwing`/`handlePitchArrived` に委譲。
 
   | action | 有効条件 | 効果 |
@@ -422,21 +462,21 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
   | `PITCH_ARRIVED` | `in-flight` | 攻撃側が CPU なら `decideCpuBat` の結果(`take` なら `swing = null`)、人間なら `swing = null` で `resolvePitch` し、以降は `SWING` と同じ |
 
   無効な組み合わせは同一参照の `state` を返す。
-- `view.ts`: `toGameView(state): GameView`。`arriveAfterMs = durationMs + (人間打者 ? contactWindowMs : 0)`。`pitchReady = await-pitch かつ人間が守備`、`swingReady = in-flight かつ人間が攻撃`、`cpuPitchPending = await-pitch かつ CPU が守備`。`scoreboard.columns = max(innings, inning)`。`result` は `game-over` のときのみ。
+- `view.ts`: `toGameView(state): GameView`。`arriveAfterMs = durationMs + (人間打者 ? contactWindowMs : 0)`。`pitchReady = await-pitch かつ人間が守備`、`swingReady = in-flight かつ人間が攻撃`、`cpuPitchPending = await-pitch かつ CPU が守備`。`scoreboard.columns = max(innings, inning)`。`result` は `game-over` のときのみ。`fieldMarker` は `state.lastInPlay` が非 `null` のとき `computeBattedLanding(ball, result, seq)` の結果に `seq`・`result` を加えて作り(`null` なら `null`)、`fieldDiagram` は `LANDING_PARAMS` から組み立てる。`state` も `rng` も変更しない。
 - `commentary.ts`: `PitchResult`・`PlateOutcome`・得点・攻守交代・試合終了から日本語のログ行を作る(例: 「ボール」「見逃しストライク」「空振り」「ファウル」「ヒット」「二塁打」「ホームラン」「併殺打」「三振」「四球」「3アウトチェンジ」「N点が入りました」「試合終了」)。反映は reducer が1解決につき数行まで `log` に追記する。
-- `launch-params.ts`: `parseLaunchParams(search: string): LaunchParams`、`getPlaybackSpeed(fast): PlaybackSpeed`(通常 `{ timeScale: 1, cpuWaitMs: 700 }`、fast `{ timeScale: 8, cpuWaitMs: 20 }`)。検証規則: `seed` は `/^\d{1,10}$/` かつ 0〜4294967295 の整数のみ有効(それ以外は `null`)、`innings` は 1/3/5/9 のみ有効、`fast` は値が正確に `"1"` のときのみ `true`。先頭の `?` の有無どちらも可。重複キーは最初の値。
+- `launch-params.ts`: `parseLaunchParams(search: string): LaunchParams`、`getPlaybackSpeed(fast): PlaybackSpeed`(通常 `{ timeScale: 1, cpuWaitMs: 700 }`、fast `{ timeScale: 8, cpuWaitMs: 20 }`)。検証規則: `seed` は `/^\d{1,10}$/` かつ 0〜4294967295 の整数のみ有効(それ以外は `null`)、`innings` は 1/3/5/9 のみ有効、`fast` は値が正確に `"1"` のときのみ `true`。先頭の `?` の有無どちらも可。重複キーは最初の値。**開発ビルド限定の判定(`import.meta.env.DEV`)は hooks 側で行い、この関数は渡された文字列だけを解釈する純粋関数のまま**(本番では hooks が空文字列を渡す)。
 - `simulate.ts`: `simulateGame(config, seed, maxActions): GameState`(`humanSide: null` を前提。`CPU_PITCH` と `PITCH_ARRIVED` を交互に dispatch して `game-over` まで回す。`maxActions` 超過は `Error`)。専用テストは設けず、`reducer.test.ts`・`balance.test.ts` で検証する。
 
 ### 起動パラメータと再生速度
 
-- `location.search` は `useLaunchParams`(`useState` の遅延初期化)で1回だけ読む。`?seed=` は最初の1試合にのみ適用(#16)。`?innings=` はタイトル画面の既定値になる(開始ボタンは押す必要がある)。
+- `location.search` は `useLaunchParams`(`useState` の遅延初期化)で1回だけ読む。**`import.meta.env.DEV` が真のときのみ読み、本番ビルドでは `search` を無視して既定値(`seed: null`、`innings: null`、`fast: false`)を返す**(#8)。Playwright の webServer は `npm run dev`(vite dev)なので e2e には影響しない。`?seed=` は最初の1試合にのみ適用(#16)。`?innings=` はタイトル画面の既定値になる(開始ボタンは押す必要がある)。
 - `timeScale`: hooks が `elapsedGameMs = (performance.now() - startedAt) × timeScale` を計算する。`fast=1` でも `flight.durationMs`・判定窓などモデルの数値は変えない(#11)。`cpuWaitMs` は CPU 手番の `setTimeout` 待機。
-- e2e の所要時間見積もり: fast では1球≈飛行170ms+待機20ms+操作遅延で約0.25秒。1イニング(両軍)≈30球で約8秒、延長を含めて最大でも約30秒。
+- e2e の所要時間見積もり: fast では1球≈飛行170ms+待機20ms+操作遅延で約0.25秒(守備時は「投げる」クリックの分が加わる)。1イニング(両軍)≈30球で約8秒、延長を含めて最大でも約30秒。
 
 ### hooks 設計
 
 - `useGame(config, seed)`: `useReducer(reduce, { config, seed }, createInitialState)`、`view = useMemo(() => toGameView(state), [state])`。戻り値は `view` と `throwPitch(command)`・`swing(input)`・`cpuPitch()`・`pitchArrived()`。
-- `useLaunchParams()`: `{ seed, innings, fast, speed }` を返す(`speed` は `getPlaybackSpeed(fast)`)。
+- `useLaunchParams()`: `{ seed, innings, fast, speed }` を返す(`speed` は `getPlaybackSpeed(fast)`)。`import.meta.env.DEV` が偽(本番ビルド)のときは `parseLaunchParams("")` と同じ既定値を返し、`location.search` を読まない。
 - `useCpuTurn({ cpuPitchPending, turnKey, cpuWaitMs, onCpuPitch })`: `cpuPitchPending` が真の間 `setTimeout(cpuWaitMs)` で `onCpuPitch` を呼ぶ。cleanup で `clearTimeout`(StrictMode の二重 mount でも1回だけ dispatch される)。
 - `usePitchFlight({ flight, arriveAfterMs, timeScale, onArrive, ballRef })`: `flight` が現れたら開始時刻を記録(effect 内)、rAF で `ballPositionAt` を呼び ref の SVG 属性(`cx`/`cy`/`r`)を直接更新。経過が `arriveAfterMs` に達したら `onArrive()` を1回呼んで停止。`getElapsedMs()` を返し、スイング時刻の算出に使う。cleanup で `cancelAnimationFrame`。
 - `usePointerInput`/`useKeyboardInput`/`useBattingControls`: カーソルは ref(`INITIAL_CURSOR` から開始)に保持し、SVG の楕円属性を直接更新。入力の対応は次の表。スイングは `swingReady` のときのみ有効で、`atMs = getElapsedMs()`、`cursor = 現在のカーソル`、`kind = 選択中のスイング種別` を載せて `swing(input)`。以降の入力は phase が変わるため reducer のガードで無視される。
@@ -456,19 +496,21 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 
 ### UI 設計
 
-- 画面: タイトル(設定: イニング数 select・先攻/後攻 select・難易度 select・開始ボタン)→ 試合(スコアボード、ゾーンSVG、操作系、実況ログ)→ 結果(勝敗・最終スコア・「もう一度(同じ設定)」「タイトルへ」)。全画面共通でページ見出しとホームへ戻るリンクを持つ。
+- 画面: タイトル(設定: イニング数 select・先攻/後攻 select・難易度 select・開始ボタン)→ 試合(スコアボード、簡易フィールド図、ゾーンSVG、操作系、実況ログ)→ 結果(勝敗・最終スコア・「もう一度(同じ設定)」「タイトルへ」)。全画面共通でページ見出しとホームへ戻るリンクを持つ。
 - イニング選択肢(1/3/5/9)・難易度ラベルなどの選択肢は ui 側の定数として持つ(`ui/` は `model/` を import しない)。
-- レイアウト: デスクトップは上段にスコアボード、中央にゾーンSVG、下段/右に操作系とログ。スマホ縦(`max-width: 640px`)は縦積みで、スイング/コースのボタンは親指で押せる大きさ(高さ44px以上)。ゾーンSVGは正方形(`aspect-ratio: 1`)で `viewBox` は `±viewHalfExtent`(2.0)。`touch-action: none`・`user-select: none` をSVGに付ける。
+- レイアウト: デスクトップは上段にスコアボード(`BaseDiamond` と `FieldDiagram` を並べる)、中央にゾーンSVG、下段/右に操作系とログ。スマホ縦(`max-width: 640px`)は縦積みで、`FieldDiagram` はスコアボード直下に小さく置き、スイング/コース/投げるボタンは親指で押せる大きさ(高さ44px以上)。ゾーンSVGは正方形(`aspect-ratio: 1`)で `viewBox` は `±viewHalfExtent`(2.0)。`touch-action: none`・`user-select: none` をSVGに付ける。
 - `BattingView`: ストライクゾーン枠、5×5 グリッド線、ボール(ref)、人間打撃時のみスイングカーソル(楕円、ref)。`CourseGrid` は人間守備時に同じ正方形へ重ねる(CSS grid 5×5、`inset: 8.333%` = (2 − 5/3)/4)。
+- `FieldDiagram`(props: `marker: FieldMarkerView | null`、`geometry: FieldDiagramGeometry`): SVG(`viewBox` は `geometry` から。y 反転)に、ダイヤモンド(塁・本塁)、ファウルライン、外野フェンス弧を描き、`marker` があれば本塁からの線と点(フェンス外=ホームランは点をフェンスの外側に描く)を描く。点の色や形は結果ごとに変えてよい(`data-result` で識別)。`marker` が `null` のときは点を描かない。`role="img"` と `aria-label` を付ける。
 - `data-testid`(e2e・手動確認の契約):
   - ページ共通: `back-home`(`#/` へのリンク)
   - ホーム: `open-baseball`(`App.tsx` のリンク)
   - タイトル: `baseball-title`、`setting-innings`、`setting-side`、`setting-difficulty`、`start-game`
   - 試合: `scoreboard`、`line-score`、`score-away`、`score-home`、`inning-label`、`count-balls`/`count-strikes`/`count-outs`、`bases`(`data-first`/`data-second`/`data-third`)、`batter-name`、`pitcher-name`、`pitch-count`、`pitcher-stamina`、`last-event`、`commentary-log`
+  - フィールド図: `field-diagram`(常時表示)、`batted-ball-marker`(`lastInPlay` があるときのみ。`data-result`(`InPlayResult`)、`data-seq`、`data-over-fence`(`"true"/"false"`)、`data-distance`(小数1桁)、`data-lateral`)
   - 打撃: `batting-view`、`zone-svg`、`ball`(`data-seq`/`data-landing-x`/`data-landing-y`/`data-duration-ms`。飛行中のみ)、`swing-cursor`、`swing-button`、`swing-kind-meet`/`swing-kind-power`(`aria-pressed`)、`pitch-speed`
-  - 投球: `pitch-controls`(`data-ready="true"/"false"`)、`pitch-kind-<kind>`、`course-cell-<col>-<row>`
+  - 投球: `pitch-controls`(`data-ready="true"/"false"`)、`pitch-kind-<kind>`(`aria-pressed`)、`course-cell-<col>-<row>`(`aria-pressed`)、`throw-pitch`
   - 結果: `result-screen`、`result-text`、`final-score-away`、`final-score-home`、`restart-game`、`back-to-title`
-- 守備側の選択: 球種は持ち球のボタン(既定=`straight`)で、グリッドのセルをクリックした時点で即投球する。飛行中・CPU手番中は `disabled`。
+- 守備側の選択(壁打ち Q2): 球種は持ち球のボタンで選ぶ(初期=`straight`)。コースのセルをクリックすると**選択状態になるだけで投球はしない**(`aria-pressed="true"`、同時に選択されるのは1セル)。「投げる」ボタン(`throw-pitch`)を押すと、選択中の `{ kind, cell }` で `onThrow(command)` を呼ぶ。選択は投球後も保持され、初期選択は中央 (2,2)。`pitchReady` が偽の間(飛行中など)は `throw-pitch` を `disabled` にする(球種・セルの選択操作自体は可能のままにしてよい)。`pitch-controls` の `data-ready` は `pitchReady` と一致させる。
 - `BaseballGamePage` は `<h1>ブラウザ野球</h1>` を持つ(従来画面の見出し「loop-basic sample app」を重複して出さない)。
 
 ### 静的解析・規約への対応
@@ -482,7 +524,7 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 - `lib` は ES2022(`Array.prototype.toSorted`/`with` など ES2023 は使わない)。
 - テストファイルは `*.test.ts` のみ(`max-lines-per-function` 等の緩和対象)。フォーマットは prettier(`printWidth: 160`)。`npx eslint --fix` で整形する。
 - `sonarjs/no-identical-functions`(同一本体の関数の重複)、`sonarjs/no-nested-functions`(深さ4)に注意する。
-- model に `Math.hypot`/`sin`/`cos`/`log`/`exp` を使わない(再現性: #10)。
+- model に `Math.hypot`/`sin`/`cos`/`log`/`exp` を使わない(再現性: #10)。落下点の計算も同様(`sqrt` と四則演算、`floor` のみ)。
 
 ## 実装ステップ
 
@@ -511,7 +553,7 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
     2. `frontend/vitest.config.ts` を新規作成(`vitest/config` の `defineConfig`、`test.include = ["src/**/*.test.ts"]`、`test.environment = "node"`)。`frontend/tsconfig.json` の `include` に `"vitest.config.ts"` を追加。`tsc` が `vitest/config` の型を解決できることを確認する(解決できない場合は原因を報告)。
     3. 動作確認を兼ねて `routes/resolve-route.ts`(純粋関数 `resolveRoute(hash: string): "home" | "baseball"`。`#/baseball` と `#/baseball/` のみ `"baseball"`、他は `"home"`)と `resolve-route.test.ts` を作る。`vitest run` が `e2e/home.spec.ts` を拾わないこと(対象一覧で確認)。テストが1件も無い状態で `vitest run` が失敗する(No test files found)のを避ける目的も兼ねる。
     4. **eslint 試験実測**: `cd sample-app && npx eslint --stdin --stdin-filename frontend/src/features/baseball/model/probe.ts`(`.tsx` 用は `probe.tsx`、テスト用は `probe.test.ts`)に下記スニペットを流し、結果(error/通過とルール名)を表にして完了報告に含める。ファイルは作らない(stdin のみ)。
-       - 通過を期待: mulberry32(`Math.imul`・`>>>`・ビット演算)、`arr.at(i)`、`Map#get`、`for...of`、`arr[0]`、`Array.from({ length: 5 }, (_, i) => i - 2)`、`crypto.getRandomValues(new Uint32Array(1))`、`switch`(3ケース以上)、タプル戻り値 `readonly [number, number]`、`new Map<string, X>([...])`、`Object.entries`
+       - 通過を期待: mulberry32(`Math.imul`・`>>>`・ビット演算)、`arr.at(i)`、`Map#get`、`for...of`、`arr[0]`、`Array.from({ length: 5 }, (_, i) => i - 2)`、`crypto.getRandomValues(new Uint32Array(1))`、`switch`(3ケース以上)、タプル戻り値 `readonly [number, number]`、`new Map<string, X>([...])`、`Object.entries`、`import.meta.env.DEV`(`.tsx`/`.ts` の hooks 相当)
        - error を期待: `Math.random()`、`arr[i]`、`obj[key]`、`tally[side]`、`// TODO`、ネスト三項、2ケースの `switch`
        - 実測が必要: 61行以上の JSX を返すコンポーネントで `max-lines-per-function` が JSX 行を数えるか、`*.test.ts` で長い `describe` が通るか
     5. 想定と異なる結果が出た場合は、先のステップに進まず orchestrator に報告する(本設計の「静的解析・規約への対応」の見直しが必要になる)。
@@ -519,7 +561,7 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 
 - [ ] **ステップ2: `types/` の作成**(直列)
   - 依存: ステップ1。担当ファイル: `features/baseball/types/{common,team,pitch,batting,game,actions,view}.ts`(新規7ファイル)
-  - やること: 本書「型設計」のとおりに型を定義する。実行時コードは書かない。`GameView` 周辺は本書のフィールド一覧に従う(不足は報告)。
+  - やること: 本書「型設計」のとおりに型を定義する(`BattedLanding`、`InPlayRecord`、`GameState.lastInPlay`、`FieldMarkerView`、`FieldDiagramGeometry`、`GameView.fieldMarker`/`fieldDiagram` を含む)。実行時コードは書かない。`GameView` 周辺は本書のフィールド一覧に従う(不足は報告)。
   - 完了条件: `npm run typecheck --workspace frontend` が成功、lint 0件。`types/` が他セグメントを import していない。
 
 - [ ] **ステップ3: `model/rng/` と `model/pitch/`**(並列: 4, 7, 8)
@@ -528,13 +570,19 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
   - 完了条件: 担当の `vitest run` が成功(テスト戦略の合格基準を満たす)、`model/` に `from "react"`・`window`・`Math.random` が無い。
 
 - [ ] **ステップ4: `ui/` の表示コンポーネントと基本CSS**(並列: 3, 7, 8)
-  - 依存: ステップ2(`types/` のみ。hooks・model に依存しない)。担当ファイル: `ui/{TitleScreen,Scoreboard,LineScore,CountLamps,BaseDiamond,CommentaryLog,PitchKindButtons,CourseGrid,PitchingControls,ResultScreen}.tsx`、`ui/baseball.css`
-  - やること: props のみで描画するコンポーネントを作る。`TitleScreen`(props: `defaultInnings`・`onStart(config)`。イニング・先攻後攻・難易度の select)、`PitchingControls`(球種の選択状態をローカル `useState` で持ち、`onThrow(command)` を呼ぶ。`data-ready`)、`ResultScreen`(props: `result`・`onRestart`・`onBackToTitle`)、`Scoreboard`(`LineScore`・`CountLamps`・`BaseDiamond` を合成)ほか。`data-testid` は本書「UI 設計」の一覧に従う。クラス名は `bb-` 接頭辞。レスポンシブ(`max-width: 640px`)対応。`ui/` から `../model` を import しない。
+  - 依存: ステップ2(`types/` のみ。hooks・model に依存しない)。担当ファイル: `ui/{TitleScreen,Scoreboard,LineScore,CountLamps,BaseDiamond,FieldDiagram,CommentaryLog,PitchKindButtons,CourseGrid,PitchingControls,ResultScreen}.tsx`、`ui/baseball.css`
+  - やること: props のみで描画するコンポーネントを作る。
+    - `TitleScreen`(props: `defaultInnings`・`onStart(config)`。イニング・先攻後攻・難易度の select)。
+    - `PitchingControls`(props: `ready`・`repertoire`・`onThrow(command)`。選択状態 `{ kind, cell }` をローカル `useState` で持つ。初期はストレート+中央(2,2)。セルのクリックは選択のみ、「投げる」ボタン(`throw-pitch`)で `onThrow`。投球後も選択を保持。`ready` が偽のとき `throw-pitch` は `disabled`。`data-ready`)。
+    - `CourseGrid`(props: `selected: CourseCell`・`onSelect(cell)`。選択中のセルに `aria-pressed="true"`)、`PitchKindButtons`(選択中に `aria-pressed`)。
+    - `FieldDiagram`(props: `marker`・`geometry`。本書「UI 設計」のとおり、ダイヤモンド+ファウルライン+フェンス弧+打球の点と線。`field-diagram`・`batted-ball-marker` の testid と data 属性)。
+    - `ResultScreen`(props: `result`・`onRestart`・`onBackToTitle`)、`Scoreboard`(`LineScore`・`CountLamps`・`BaseDiamond` を合成。`FieldDiagram` の配置は結線側のステップ11が行うため、`Scoreboard` には含めない)ほか。
+    - `data-testid` は本書「UI 設計」の一覧に従う。クラス名は `bb-` 接頭辞。レスポンシブ(`max-width: 640px`)対応。`ui/` から `../model` を import しない。
   - 完了条件: lint 0件、typecheck 通過(担当分)。各コンポーネントが 60行以内。
 
 - [ ] **ステップ5: `model/batting/`**(並列: 6)
-  - 依存: ステップ3。担当ファイル: `model/batting/{params,cursor,contact,batted-ball,result-table,resolve-pitch}.ts`+`params` を除く各 `.test.ts`
-  - やること: 本書「打撃判定」のとおり実装する。値は `params.ts` に外出し。
+  - 依存: ステップ3。担当ファイル: `model/batting/{params,cursor,contact,batted-ball,batted-landing,result-table,resolve-pitch}.ts`+`params` を除く各 `.test.ts`
+  - やること: 本書「打撃判定」「落下点」のとおり実装する。値(落下点の距離帯・フェンス半径・左右範囲を含む)は `params.ts` に外出し。`batted-landing.ts` は乱数・`RngState` を一切受け取らない。
   - 完了条件: 担当の `vitest run` が成功。`resolve-pitch` が人間・CPU 共通の唯一の1球判定である。
 
 - [ ] **ステップ6: `model/cpu/`**(並列: 5)
@@ -544,28 +592,28 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 
 - [ ] **ステップ7: `model/data/`**(並列: 3, 4, 8)
   - 依存: ステップ2。担当ファイル: `model/data/teams.ts`・`teams.test.ts`
-  - やること: 架空2チームのプリセットと `getTeam`。名前は実在名と連想しないこと。
+  - やること: 架空2チーム(「ルミナス」「ノーブルズ」)のプリセットと `getTeam`。選手名は実在名と連想しないこと。
   - 完了条件: 担当の `vitest run` が成功。
 
 - [ ] **ステップ8: `model/game/` のルール部分**(並列: 3, 4, 7)
   - 依存: ステップ2。担当ファイル: `model/game/{side,count,runners,outcome,inning}.ts`+各 `.test.ts`
-  - やること: 本書「試合進行」のとおり、乱数を使わない純粋関数として実装する。`runners` の表を表駆動テストで網羅する。
+  - やること: 本書「試合進行」のとおり、乱数を使わない純粋関数として実装する。`runners` の表を表駆動テストで網羅する。`outcome.ts` はインプレーのとき `lastInPlay` を設定する(テストに含める)。
   - 完了条件: 担当の `vitest run` が成功。
 
 - [ ] **ステップ9: `model/game/` の統合部分(state/reducer/view/commentary/launch-params/simulate)とバランス検証**(直列)
   - 依存: ステップ5, 6, 7, 8。担当ファイル: `model/game/{state,reducer,view,commentary,launch-params,simulate}.ts`+`simulate` を除く各 `.test.ts`、`model/game/balance.test.ts`
-  - **例外(値のみ調整可)**: `balance.test.ts` を通すためにのみ、`batting/params.ts`・`batting/result-table.ts`・`cpu/difficulty.ts`・`cpu/pitcher-weights.ts`・`pitch/params.ts`・`data/teams.ts` の**数値だけ**を調整してよい(構造・関数は変更しない)。このステップは単独で動くため所有の競合は無い。調整内容(変更前後)は完了報告に記す。
-  - やること: 本書「試合進行」のとおり実装。`reduce` は action ごとにハンドラへ委譲し、無効な組み合わせは同一参照を返す。`simulate.ts` で CPU 同士の試合を回し、`balance.test.ts` のしきい値(テスト戦略)を満たすよう数値を調整する。しきい値を緩める場合は理由を報告する。
+  - **例外(値のみ調整可)**: `balance.test.ts` を通すためにのみ、`batting/params.ts`(落下点の定数を除く)・`batting/result-table.ts`・`cpu/difficulty.ts`・`cpu/pitcher-weights.ts`・`pitch/params.ts`・`data/teams.ts` の**数値だけ**を調整してよい(構造・関数は変更しない)。このステップは単独で動くため所有の競合は無い。調整内容(変更前後)は完了報告に記す。
+  - やること: 本書「試合進行」のとおり実装。`createInitialState` は `lastInPlay = null`。`toGameView` は `fieldMarker`/`fieldDiagram` を `batted-landing` から組み立てる(state を変更しない)。`reduce` は action ごとにハンドラへ委譲し、無効な組み合わせは同一参照を返す。`simulate.ts` で CPU 同士の試合を回し、`balance.test.ts` のしきい値(テスト戦略)を満たすよう数値を調整する。しきい値を緩める場合は理由を報告する。
   - 完了条件: `cd sample-app/frontend && npx vitest run` が全て成功(`balance.test.ts` を含む)。
 
 - [ ] **ステップ10: `hooks/`**(直列)
   - 依存: ステップ9。担当ファイル: `hooks/{useGame,useCpuTurn,useAnimationFrame,usePitchFlight,usePointerInput,useKeyboardInput,useBattingControls,useLaunchParams,useLatest}.ts`、`hooks/random-seed.ts`
-  - やること: 本書「hooks 設計」のとおり実装する。全ての effect に cleanup(rAF の cancel、`clearTimeout`、リスナ解除)を付け、「二重実行を防ぐ ref ガード」で StrictMode を回避しない。判定ロジック・JSX を書かない。コールバックは `useLatest` 経由で最新値を参照する。
-  - 完了条件: lint・typecheck 通過。`hooks/` から `Math.random`・`Date` が使われていない(時刻は `performance.now()` のみ)。
+  - やること: 本書「hooks 設計」のとおり実装する。全ての effect に cleanup(rAF の cancel、`clearTimeout`、リスナ解除)を付け、「二重実行を防ぐ ref ガード」で StrictMode を回避しない。判定ロジック・JSX を書かない。コールバックは `useLatest` 経由で最新値を参照する。`useLaunchParams` は `import.meta.env.DEV` が真のときのみ `location.search` を読み、偽(本番ビルド)では `parseLaunchParams("")` 相当の既定値を返す。
+  - 完了条件: lint・typecheck 通過。`hooks/` から `Math.random`・`Date` が使われていない(時刻は `performance.now()` のみ)。`npm run build` 後の本番ビルドで起動パラメータが無視されることを、ステップ12完了後の手動確認で検証できる実装になっている。
 
 - [ ] **ステップ11: `ui/` の結線コンポーネントと公開口**(直列)
   - 依存: ステップ4, 10。担当ファイル: `ui/{BattingView,GameScreen,BaseballGamePage}.tsx`、`ui/baseball-field.css`、`features/baseball/index.ts`
-  - やること: `BaseballGamePage`(session 管理、`useLaunchParams`、`baseball.css`・`baseball-field.css` の import、`<h1>ブラウザ野球</h1>`、ホームへ戻るリンク `back-home`)、`GameScreen`(各 hooks の結線、`result` があれば `ResultScreen`)、`BattingView`(ゾーンSVG・ボール・カーソル・スイング操作)を実装。`index.ts` は `BaseballGamePage` のみ export。各コンポーネントは 60行以内になるよう分割する。
+  - やること: `BaseballGamePage`(session 管理、`useLaunchParams`、`baseball.css`・`baseball-field.css` の import、`<h1>ブラウザ野球</h1>`、ホームへ戻るリンク `back-home`)、`GameScreen`(各 hooks の結線、`FieldDiagram` に `view.fieldMarker`/`view.fieldDiagram` を渡して `BaseDiamond` と並べて配置、`PitchingControls` に `view.pitchReady`・`view.pitcher.repertoire`・`throwPitch` を渡す、`result` があれば `ResultScreen`)、`BattingView`(ゾーンSVG・ボール・カーソル・スイング操作)を実装。`index.ts` は `BaseballGamePage` のみ export。各コンポーネントは 60行以内になるよう分割する。
   - 完了条件: lint・typecheck 通過。`ui/` から `../model` を import していない。
 
 - [ ] **ステップ12: ルーティングの結線**(直列)
@@ -575,13 +623,13 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 
 - [ ] **ステップ13: E2E `e2e/baseball.spec.ts`**(並列: 14)
   - 依存: ステップ12。担当ファイル: `frontend/e2e/baseball.spec.ts`(新規)
-  - やること: テスト戦略の E2E 仕様のとおり2テストを作る。固定 sleep を避け、`locator.waitFor`/`Promise.race` で「投球可能(`pitch-controls[data-ready="true"]`)」か「結果画面」を待つ。`test.setTimeout(120_000)`。
+  - やること: テスト戦略の E2E 仕様のとおり2テストを作る。固定 sleep を避け、`locator.waitFor`/`Promise.race` で「投球可能(`pitch-controls[data-ready="true"]`)」か「結果画面」を待つ。投球は `throw-pitch` のクリックで行う(初期選択が中央のため)。`test.setTimeout(120_000)`。起動パラメータは開発ビルドのみ有効なので、`playwright.config.ts` の webServer(`npm run dev`)を前提にする旨をコメントで残す。
   - 完了条件: `cd sample-app && npm run test:e2e --workspace frontend` で `home.spec.ts`(無改変)と新規2テストが成功。3回連続実行して安定している。
 
 - [ ] **ステップ14: ドキュメント更新**(最後。並列: 13)
   - 依存: ステップ12。担当ファイル: `sample-app/README.md`、`docs/process/sample-app-dev.md`、(任意)`.github/workflows/ci.yml`
   - やること:
-    - `sample-app/README.md`: 構成図に `frontend/src/routes/`・`features/baseball/`・`vitest.config.ts`・`e2e/baseball.spec.ts` を追加。「実行方法」の `npm run test` を「backend/frontend の純粋関数ユニットテスト(vitest)」に更新。ゲームの起動方法(`npm run dev:frontend` → `/#/baseball`、テスト用 `?seed=&innings=&fast=1`)と、ロジックが `model/` の純粋関数・乱数がシード付きPRNGである旨を「この構成が示している方針」に追記。「パワプロ」等の名称は書かない。
+    - `sample-app/README.md`: 構成図に `frontend/src/routes/`・`features/baseball/`・`vitest.config.ts`・`e2e/baseball.spec.ts` を追加。「実行方法」の `npm run test` を「backend/frontend の純粋関数ユニットテスト(vitest)」に更新。ゲームの起動方法(`npm run dev:frontend` → `/#/baseball`)と、テスト用 `?seed=&innings=&fast=1` は**開発サーバー(`npm run dev:frontend`)でのみ有効で本番ビルドでは無視される**旨、ロジックが `model/` の純粋関数・乱数がシード付きPRNGである旨を「この構成が示している方針」に追記。「パワプロ」等の名称は書かない。
     - `docs/process/sample-app-dev.md`: コマンド一覧の「自動テスト(backendの純粋関数)」を backend+frontend に更新し、E2E 行にゲームの e2e が含まれる旨を追記。手動確認の使い分け(フロントエンドは Playwright CLI)にゲーム画面の確認方法を一行追記。
     - (任意)`ci.yml` の step 名「Unit tests (backend pure functions)」を「Unit tests (pure functions)」へ。動作は変えない。
   - 完了条件: 記述が実装と一致している。`grep -rin "パワプロ\|パワフル" sample-app --exclude-dir=node_modules` が0件。
@@ -607,6 +655,14 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 - `cursor.test.ts`: `clampCursor`/`moveCursor` の境界クランプ。`clientToZonePoint` — 矩形中心→(0,0)、左上隅→(-viewHalfExtent,+viewHalfExtent)(y 反転)、矩形外はクランプ。`cursorRadii` — meet が高いほど大、強振は `powerScale` 倍、`rx > ry`。
 - `contact.test.ts`: カーソル=着弾点・Δt=0 で `contact`。`d>1` は miss。`|Δt|=window` は contact、`window` 超は miss(境界)。強振は窓が狭い。q は d・|Δt| に対して単調非増加。球種の `cursorScale` が小さいほど接触しにくい。`edgeFactor` により端・ボールゾーンは q が下がる。
 - `batted-ball.test.ts`: 高さの境界値で ground/liner/fly が切り替わる。同じ v で弾道4の方が弾道1より fly になりやすい。Δt の符号と `centerRatio` で pull/center/opposite。`|Δt|/window ≥ foulRatio` で foul(境界の前後)。強さ段階の境界(score が `mediumFrom`/`strongFrom` の直前・ちょうど・直後)。強振>ミート、pull>opposite。
+- `batted-landing.test.ts`(フィールド図の落下点。壁打ち Q1):
+  - 決定論・乱数非依存: 同一 `(ball, result, seq)` で同一出力(厳密一致)。関数が `RngState` を引数に取らない(型で保証)。`seq` を 1〜200 で変えると同一入力でも点が複数種類に分かれる(全点が同一でない)が、各 `seq` を再計算すると同じ点に戻る。
+  - 方向ごとの左右範囲: `lateral = x/y` が `pull` ∈ [-0.85,-0.25]、`center` ∈ [-0.25,+0.25]、`opposite` ∈ [+0.25,+0.85](全 `result`×`type`×`strength`、`seq` 1〜200 で)。`|lateral| < 1`(フェア内)。pull は x<0、opposite は x>0。
+  - 結果ごとの距離帯(`seq` 1〜200 で全点が帯内): groundout 14〜32、doublePlay 16〜30、flyout は weak 35〜60/medium 60〜90/strong 90〜103、lineout は weak 25〜45/medium 40〜70/strong 55〜90、single は ground 28〜55/liner 45〜80/fly 38〜65、double 78〜98、triple 98〜104、error 18〜50、homerun 106〜125。
+  - フェンス: homerun は常に `overFence = true` かつ `distance ≥ fenceRadius`(105)、それ以外の全 `InPlayResult` は常に `overFence = false` かつ `distance < fenceRadius`。
+  - 凡打の帯: groundout/doublePlay は内野の範囲(`distance ≤ 32` < 2塁までの距離 38.8)。flyout/lineout は外野寄りの帯(強さが上がるほど平均距離が大きい)。
+  - 座標の整合: `y > 0`、`distance² ≈ x² + y²`(`toBeCloseTo`)、`x/y ≈ lateral`、`y ≤ 125`、`|x| ≤ 85`(`viewHalfWidth` 内)。
+  - 網羅: 全 `InPlayResult`(9)× `BattedType`(3)× `Strength`(3)× `Direction`(3)の組み合わせで例外なく値が返る(到達不能な組み合わせも含む)。`LANDING_BANDS` が全組み合わせに一致する。
 - `result-table.test.ts`: 9行(タイプ×強さ)がすべて存在。各重みは非負で合計が正。タイプと矛盾する結果の重みは0、`doublePlay` は ground 行のみ。`doublePlayPossible=false` で `doublePlay` が5,000回で一度も出ず、重みは `groundout` に畳み込まれる。10,000回の頻度が重みと±2pt。同一 rng で同一結果。タイプごとに強さが上がるほど安打系(single〜homerun)の合計重みが単調増加。
 - `resolve-pitch.test.ts`: 見送りはゾーン内→`called-strike`・外→`ball`で、返る rng が入力と同一(乱数を消費しない)。遠いカーソル→`swinging-strike`。窓の端→`foul`。完璧なスイング(カーソル=着弾点・Δt=0・強振・power 80)を連続シード1000個で打つと全てインプレーで、安打系が1件以上出る(「打撃でヒットが出る」の自動化)。同一入力・同一 rng で同一出力。
 - `difficulty.test.ts`/`pitcher-weights.test.ts`: 難易度の単調性(easy→hard で `cursorSigma`・`timingSigmaMs`・`aimSigmaScale` 減、`zoneSwingRate`・`twoStrikeOutsideRate` 増、`chaseSwingRate` 減)、σ・ノイズが0でない。12カウントすべてが Map にあり、`zoneRate`/`fastballRate` ∈ (0,1]、3-0 の `fastballRate` ≥ 0.8。
@@ -615,13 +671,13 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 - `teams.test.ts`: 2チーム、各9人、id 重複なし、能力が範囲内(meet/power 1〜100、trajectory 1〜4)、`repertoire` に `straight`、投手球速 120〜160、2チームの meet・power の平均差が5以内、`getTeam` の未知 id は `Error`。
 - `count.test.ts`: ボール4で `walk`、ストライク3で `strikeout`、ファウルは 0/1 ストライクで+1・2ストライクで不変、不変条件(balls≤3, strikes≤2)。
 - `runners.test.ts`: 上の進塁表の全結果 × 8通りの塁状況 × outs 0/1/2 を表駆動で。保存則 `走者数(前)+1 = runs + 走者数(後) + outsAdded`(3アウト未満の場合)。併殺は1塁走者あり・2アウト未満のみ。犠飛は3塁走者あり・強さ中以上・2アウト未満のみ。押し出し、エラー、3アウト目で得点なし。
-- `outcome.test.ts`: ボール/ストライク/ファウルでカウントのみ変化。打席終了でカウント0-0・`lineupIndex`+1(9で0に戻る)・得点が現在の半イニングに加算。`single`〜`homerun` で `hits` 増、`error` で守備側 `errors` 増(`hits` は不変)。`lastResult`/`lastPlate` の設定。
-- `inning.test.ts`(イニング数 1/3/5/9 で表駆動): 表の終了→同イニングの裏、裏の終了→次イニング表。最終回表終了で後攻リード→裏なしで後攻勝ち(「x」)。最終回裏でサヨナラ(リードを奪った瞬間に終了)。最終回裏終了で先攻リード→先攻勝ち。同点→延長1回目(表、走者1・2塁、outs 0)。延長でのサヨナラ。`innings+3` 終了で同点→引き分け。
-- `state.test.ts`: 初期値(1回表・0アウト・0-0・走者なし・`lineScore`・`rng = createRng(seed)`・`await-pitch`)。`humanSide` に応じたチーム割り当て(`"home"` のときユーザーチームが後攻)。
-- `reducer.test.ts`(タイムアウト30秒): 純粋性(同一入力2回で deep equal、deep freeze した入力で変更されない)。`CPU_PITCH`/`THROW` が `in-flight`・`pitchSeq`+1・`pitchCounts`+1・`rng` 更新。無効な組み合わせ(人間守備で `CPU_PITCH`、`in-flight` 以外で `SWING`/`PITCH_ARRIVED`、人間攻撃以外で `SWING`)が同一参照を返す。人間打者の `PITCH_ARRIVED` は見逃し判定。同一シード・同一アクション列で最終状態が一致。CPU 同士の固定シード試合が必ず `game-over` に到達(イニング1/3/5/9 × 難易度3種 × 30シード)。`humanSide` を持つ試合で、人間側が全球見送り(人間攻撃時は `PITCH_ARRIVED` のみ、人間守備時は固定セルへ `THROW`)でも必ず終了する。
-- `view.test.ts`: `inningLabel`(「1回表」等)、`mode`、`pitchReady`/`swingReady`/`cpuPitchPending` の組み合わせ、`scoreboard` の整形(「-」「x」)、`result` の勝敗(人間視点)、`arriveAfterMs`。
+- `outcome.test.ts`: ボール/ストライク/ファウルでカウントのみ変化。打席終了でカウント0-0・`lineupIndex`+1(9で0に戻る)・得点が現在の半イニングに加算。`single`〜`homerun` で `hits` 増、`error` で守備側 `errors` 増(`hits` は不変)。`lastResult`/`lastPlate` の設定。インプレーで `lastInPlay = { seq: pitchSeq, result, ball }` が設定され、ボール/ストライク/ファウル/四球/三振では `lastInPlay` が直前の値のまま保持される。
+- `inning.test.ts`(イニング数 1/3/5/9 で表駆動): 表の終了→同イニングの裏、裏の終了→次イニング表。最終回表終了で後攻リード→裏なしで後攻勝ち(「x」)。最終回裏でサヨナラ(リードを奪った瞬間に終了)。最終回裏終了で先攻リード→先攻勝ち。同点→延長1回目(表、走者1・2塁、outs 0)。延長でのサヨナラ。`innings+3` 終了で同点→引き分け。攻守交代で `lastInPlay` が保持される。
+- `state.test.ts`: 初期値(1回表・0アウト・0-0・走者なし・`lineScore`・`rng = createRng(seed)`・`await-pitch`・`lastInPlay = null`)。`humanSide` に応じたチーム割り当て(`"home"` のときユーザーチームが後攻)。
+- `reducer.test.ts`(タイムアウト30秒): 純粋性(同一入力2回で deep equal、deep freeze した入力で変更されない)。`CPU_PITCH`/`THROW` が `in-flight`・`pitchSeq`+1・`pitchCounts`+1・`rng` 更新。無効な組み合わせ(人間守備で `CPU_PITCH`、`in-flight` 以外で `SWING`/`PITCH_ARRIVED`、人間攻撃以外で `SWING`)が同一参照を返す。人間打者の `PITCH_ARRIVED` は見逃し判定。同一シード・同一アクション列で最終状態が一致。CPU 同士の固定シード試合が必ず `game-over` に到達(イニング1/3/5/9 × 難易度3種 × 30シード)。`humanSide` を持つ試合で、人間側が全球見送り(人間攻撃時は `PITCH_ARRIVED` のみ、人間守備時は固定セルへ `THROW`)でも必ず終了する。**`toGameView` を呼んでも呼ばなくても最終状態(`rng` を含む)が同一**(フィールド図の計算が乱数消費順に影響しない)。
+- `view.test.ts`: `inningLabel`(「1回表」等)、`mode`、`pitchReady`/`swingReady`/`cpuPitchPending` の組み合わせ、`scoreboard` の整形(「-」「x」)、`result` の勝敗(人間視点)、`arriveAfterMs`。`fieldMarker` は `lastInPlay` が `null` の間 `null`、インプレー後に非 `null` で `computeBattedLanding` の結果と一致し(`seq`・`result` を含む)、次のインプレーまで保持される。`fieldDiagram` の定数が `LANDING_PARAMS` と一致し、`toGameView` が state を変更しない。
 - `commentary.test.ts`: すべての `PitchResult`・`PlateOutcome` に空でない文字列。
-- `launch-params.test.ts`: `?seed=42&innings=1&fast=1` → (42, 1, true)。不正値は無視して既定(seed が負・小数・文字・4294967296・空 → `null`、innings が 2/0/文字 → `null`、fast が 0/true/yes → `false`、`seed=0`・`4294967295` は有効)。先頭 `?` の有無。重複キーは最初。`getPlaybackSpeed` の2値。
+- `launch-params.test.ts`: `?seed=42&innings=1&fast=1` → (42, 1, true)。不正値は無視して既定(seed が負・小数・文字・4294967296・空 → `null`、innings が 2/0/文字 → `null`、fast が 0/true/yes → `false`、`seed=0`・`4294967295` は有効)。先頭 `?` の有無。重複キーは最初。`""` を渡すと全て既定値(本番ビルドで hooks が渡す入力)。`getPlaybackSpeed` の2値。
 - `routes/resolve-route.test.ts`: `""`・`"#"`・`"#/"`→home、`"#/baseball"`・`"#/baseball/"`→baseball、`"#/unknown"`・`"#/baseballs"`・`"#baseball"`→home。
 - `balance.test.ts`(`simulate.ts` で CPU 同士、`humanSide: null`、難易度ふつう、9回制、シード1〜100、タイムアウト30秒):
   - 全試合が上限アクション数内に終了する。
@@ -635,23 +691,26 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 - 既存 `home.spec.ts` が**無改変**で通ること。
 - 新規 `baseball.spec.ts`:
   1. 「`/` のリンクからゲーム画面へ遷移できる」: `/` を開き `open-baseball` をクリック → URL が `#/baseball`、`baseball-title` が可視、見出し「loop-basic sample app」が存在しない(0件)。
-  2. 「1イニングの試合が結果画面まで到達する」: `/?seed=42&innings=1&fast=1#/baseball` を開く → `setting-innings` の値が `1` → `start-game` をクリック → `scoreboard` が可視。人間は先攻(既定)で、人間攻撃中は何も操作しない(全球見送り)。人間守備中は `pitch-controls[data-ready="true"]` になるたびに `course-cell-2-2` をクリック(固定セルへ投球)。これを `result-screen` が可視になるまで繰り返す。到達後、`final-score-away`/`final-score-home` と `score-away`/`score-home` の text が `/^\d+$/`。
-- 同一シード・人間の入力が見送りと固定セルのみなので試合は壁時計に依存せず決定的。`test.setTimeout(120_000)`、固定 sleep を使わない。
+  2. 「1イニングの試合が結果画面まで到達する」: `/?seed=42&innings=1&fast=1#/baseball` を開く → `setting-innings` の値が `1` → `start-game` をクリック → `scoreboard` と `field-diagram` が可視。人間は先攻(既定)で、人間攻撃中は何も操作しない(全球見送り)。人間守備中は `pitch-controls[data-ready="true"]` になるたびに `throw-pitch` をクリックして投球する(初期選択が中央(2,2)+ストレートのため、選択操作は不要)。最初の守備ターンでは投球前に `course-cell-2-2` の `aria-pressed="true"` を確認し、投球後も選択が保持されている(`aria-pressed="true"` のまま)ことを確認する。これを `result-screen` が可視になるまで繰り返す。到達後、`final-score-away`/`final-score-home` と `score-away`/`score-home` の text が `/^\d+$/`。
+- 同一シード・人間の入力が見送りと「投げる」(中央固定)のみなので試合は壁時計に依存せず決定的。`test.setTimeout(120_000)`、固定 sleep を使わない。`batted-ball-marker` の有無はシード展開に依存するため e2e では断定しない(単体テストと手動確認で検証する)。
+- 起動パラメータ(`?seed=&innings=&fast=1`)は開発ビルドのみ有効(#8)。`playwright.config.ts` の webServer は `npm run dev`(vite dev)なので問題ない。webServer を `vite preview` 等の本番ビルドに変えるとパラメータが無視されて e2e が壊れる点を、spec のコメントに残す。
 
 ### 静的チェック
 
 - `cd sample-app && npm run typecheck`、`npm run lint`、`npm run test`、`npm run build`、`npm run test:e2e --workspace frontend` がすべて成功。Knip(report-only)は判定に使わない([[knip-dead-code-detection]])。
-- 構造検査(code-reviewer/tester が grep): `model/` に `from "react"`・`window.`・`document.`・`Math.random`・`Date`・`performance` が無い。`ui/` に `../model` の import が無い。`types/` が他セグメントを import していない。`cpu/` が `batting/`・`game/` を import していない。`grep -rin "パワプロ\|パワフル" sample-app --exclude-dir=node_modules` が0件。
+- 構造検査(code-reviewer/tester が grep): `model/` に `from "react"`・`window.`・`document.`・`Math.random`・`Date`・`performance` が無い。`ui/` に `../model` の import が無い。`types/` が他セグメントを import していない。`cpu/` が `batting/`・`game/` を import していない。`batting/batted-landing.ts` が `RngState`・`rng/` を import していない。`import.meta.env` の参照が `hooks/useLaunchParams.ts` のみである。`grep -rin "パワプロ\|パワフル" sample-app --exclude-dir=node_modules` が0件。
 
 ### 手動確認(Playwright CLI でスクリーンショット)
 
 通常速度(`fast` なし)で `npm run dev:frontend` を起動し(ゲームは backend 不要)、使い捨てスクリプト(コミットしない)で確認する。保存先は tester が決める。
 
 1. 打撃でヒットが出る: `/?seed=7&innings=1#/baseball` を開いて開始。`ball` の `data-landing-x/y`・`data-duration-ms` を読み、`zone-svg` の矩形から画面座標へ変換(`px = left + (x / (2 × viewHalfExtent) + 0.5) × width`、`py = top + (0.5 - y / (2 × viewHalfExtent)) × height`)してマウスを移動、`data-duration-ms` 経過の直前にクリックでスイング。10球以内に実況ログに安打系(ヒット/二塁打/三塁打/ホームラン)が出る。スイング直前・結果後のスクリーンショットを撮る。Space キーでのスイングが、フォーカス中のボタンの click と二重発火しないことも確認する。
-2. 投球できる: 後攻を選んで開始(人間が先に守備)。球種ボタンとコースを選んで投げ、ボールが飛行して判定されログに出る。スクリーンショットを撮る。
-3. スマホ縦(viewport 390×844、`hasTouch`): レイアウトが崩れず、ドラッグでカーソルが動き、「スイング」ボタンでスイングできる(実機では未検証)。
+2. 投球できる: 後攻を選んで開始(人間が先に守備)。球種ボタンとコースのセルを選び(選択が `aria-pressed` で示され、この時点では投球されない)、「投げる」ボタンで投げる。ボールが飛行して判定されログに出る。投球後も選択が保持され、飛行中は「投げる」が押せない。スクリーンショットを撮る。
+3. **フィールド図に打球が表示される**: 1 または 2 でインプレー(ゴロ/ヒット/フライ等)が出たあと、`field-diagram` 内に `batted-ball-marker` が現れ、`data-result` が実況ログの結果と対応し、点が結果に見合った位置(凡打は内野付近、長打は外野、ホームランはフェンス弧の外側。`data-over-fence="true"`)にある。次のインプレーで点が更新される。引っ張りは左側・流しは右側に出る。スクリーンショットを撮る(ホームランが出るまで数試合試してよい。出なくても単体テストで担保済み)。
+4. スマホ縦(viewport 390×844、`hasTouch`): レイアウトが崩れず(フィールド図がスコアボード直下に収まる)、ドラッグでカーソルが動き、「スイング」ボタンでスイングできる(実機では未検証)。
+5. **本番ビルドで起動パラメータが無視される**: `cd sample-app && npm run build --workspace frontend` 後に `npx vite preview`(`frontend` ディレクトリ)で `/?seed=42&innings=1&fast=1#/baseball` を開き、タイトルのイニング既定が `3` のままで、`fast` も効かない(通常速度)ことを確認する。
 
-合格基準: 1・2 でヒット/投球が確認でき、致命的な表示崩れ・コンソールエラーがない。
+合格基準: 1〜3 でヒット/投球/フィールド図の打球が確認でき、致命的な表示崩れ・コンソールエラーがない。5 で本番ビルドの起動パラメータが無視される。
 
 ## リスク・トレードオフ
 
@@ -661,11 +720,13 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 - **タイミング精度と入力遅延**: rAF は約16.7ms刻み、タッチは遅延が数十ms。窓を±150msと広めにして `params.ts` に外出し。スイング時刻は `performance.now()` 系で統一(`event.timeStamp` は使わない: `page.clock` と整合し、判定は引数の純粋関数のまま)。
 - **タブ非表示**: タブが非表示になると rAF が止まり、復帰時に経過時間が飛んで見逃し扱いになりうる(許容。将来 `visibilitychange` での一時停止を検討)。
 - **キー入力の二重発火**: Space/Enter のスイングとフォーカス中ボタンの click が重なる恐れ(`preventDefault` で回避、手動確認項目に含める)。
-- **e2e の長さと安定性**: `fast=1`・固定シード・見送り/固定セルのみで決定的。ただし延長で長引く可能性があるため上限120秒。ロジックを変えるとシードごとの試合展開が変わる(スコアは検証せず「到達」と「数値表示」のみを検証)。
+- **投球操作が2操作になる**: セル選択+「投げる」で、連続投球のテンポは1クリック方式より1操作ぶん遅いが、同じコースへ連投するときは「投げる」だけで済み、ミスタップは防げる(壁打ち Q2 の判断)。スマホでは選択ボタンと「投げる」を親指の届く範囲に置く。
+- **フィールド図は見た目の目安**: 落下点は `BattedBall`/`InPlayResult` からの決定論的な逆算で、実際の野手配置や守備判定とは無関係(結果と矛盾しない帯に収めているだけ)。`seq` 由来の黄金比数列なので、同じ結果が続くと点の並びに規則性が見える(許容)。距離帯・フェンス半径は見た目の調整対象(仮値)。左右は全打者を右打ち扱いに固定(引っ張り=レフト側)。乱数を消費しないので既存の乱数消費順・シード再現性には影響しない(`reducer.test.ts` で検証)。
+- **起動パラメータが開発ビルドのみ有効**: 本番ビルドでは同一シードでの不具合再現ができない(再現は dev ビルドで行う)。e2e の webServer を `vite preview` 等へ変えるとパラメータが効かなくなり e2e が壊れる(現行は `npm run dev` で影響なし。spec にコメントを残す)。DEV 判定を hooks に置く以上、その分岐は単体テストできず、手動確認5と grep(`import.meta.env` が `useLaunchParams.ts` のみ)で担保する。
+- **e2e の長さと安定性**: `fast=1`・固定シード・見送り/中央固定のみで決定的。ただし延長で長引く可能性があるため上限120秒。ロジックを変えるとシードごとの試合展開が変わる(スコアは検証せず「到達」と「数値表示」のみを検証)。
 - **再現性**: 同一シード・同一入力で同一結果。ガウスは Irwin–Hall(加減算のみ)で、エンジン差が出ない。
-- **規模**: model が約30ソース+約25テスト。ステップ分割・`types/` 先行・シグネチャ固定で並列実装のずれを抑える。型契約の不一致は完了報告で上申させ、orchestrator が直列で解決する。
+- **規模**: model が約31ソース+約26テスト。ステップ分割・`types/` 先行・シグネチャ固定で並列実装のずれを抑える。型契約の不一致は完了報告で上申させ、orchestrator が直列で解決する。
 - **著作権/商標**: 名称・チーム名・選手名・UIは独自(架空)。公開前の最終確認(J-PlatPat 等)は人間作業。README・アプリ内文言に「パワプロ」等を書かない(grep で検査)。
-- **本番にテスト用パラメータが残る**: `?seed=`/`fast=1` はCPU戦のみで実害が無いため許容(#8)。
 - **Knip**: vitest 追加で Knip の vitest プラグインが有効になり、`*.test.ts` が entry 扱いになる。barrel の過剰 export は未使用 export として報告されうるが、report-only のため判定に使わない。
 - **未実機検証**: タッチ操作は Playwright の `hasTouch` と viewport 縮小でしか確認しない。
 - **依存**: 新規依存は `vitest`(devDependency)のみ。lockfile 同期漏れは CI の `npm ci` で失敗するため、ステップ1で `npm ci --dry-run` 相当を確認する。
@@ -709,3 +770,12 @@ lint を踏まえたモジュール規約: 変数添字禁止(`Array.from`、`re
 ステップ1の eslint 試験実測の結果(スニペット・error/通過・ルール名)をここに転記する。
 
 ## 壁打ち(grilling)記録
+
+2026-10-11 に人間と壁打ちを行い、以下を確定した。承認ゲートの代替ではない(設計レビュー・人間確認ゲートは別途実施する)。
+
+| # | 論点 | 人間の回答 | 設計への反映 |
+| --- | --- | --- | --- |
+| Q1 | 打球の見せ方(論点 #14) | 簡易フィールド図を追加する。ダイヤモンド+外野フェンス弧のSVGに、直近のインプレー打球の方向・飛距離を点(+本塁からの線)で表示。守備モデルは持たず `BattedBall`/`InPlayResult` から決定論で逆算し、乱数は消費しない。ばらつきが要るなら `pitchSeq` 等の状態値から決定論的に作る | 「やること」、論点表 #14、型設計(`BattedLanding`・`InPlayRecord`・`GameState.lastInPlay`・`FieldMarkerView`・`FieldDiagramGeometry`・`GameView.fieldMarker`/`fieldDiagram`)、モデル設計「落下点」(`model/batting/batted-landing.ts`。DAG 上 batting に置き、game の `view.ts` から呼ぶ)、UI 設計(`ui/FieldDiagram.tsx`、testid `field-diagram`・`batted-ball-marker`)、ステップ2・4・5・8・9・11、テスト戦略(`batted-landing.test.ts`・`outcome`/`view`/`reducer` の追加基準・手動確認3)、リスク |
+| Q2 | 投球操作(論点 #5) | セル選択→投球ボタン。セルのクリックは選択(`aria-pressed`)、「投げる」ボタン(`throw-pitch`)で投球。選択は投球後も保持、初期選択は中央(2,2)。飛行中は `throw-pitch` が disabled | 「やること」、論点表 #5、UI 設計「守備側の選択」と testid、ステップ4(`PitchingControls`・`CourseGrid`・`PitchKindButtons`)・11・13、E2E の投球手順(`throw-pitch` をクリック)、手動確認2、リスク |
+| Q3 | テスト用起動パラメータ(論点 #8) | 開発ビルドのみ有効。`import.meta.env.DEV` のときだけ `?seed=`/`?innings=`/`?fast=1` を読み、本番ビルドでは無視。判定は hooks 側(`useLaunchParams`)で、model の `parseLaunchParams` は純粋関数のまま。Playwright の webServer は `npm run dev` なので e2e に影響しない | 「やること」、論点表 #8、「起動パラメータと再生速度」、hooks 設計、ステップ1(DEV 参照の試験実測)・10・13・14、テスト戦略(`launch-params.test.ts` の空文字入力、構造検査、手動確認5)、リスク |
+| Q4 | 名称(論点 #2) | 設計案のまま(「ブラウザ野球」「ルミナス」「ノーブルズ」) | 「やること」、論点表 #2、チームデータ、ステップ7。公開前の J-PlatPat 確認は人間作業として残る |
