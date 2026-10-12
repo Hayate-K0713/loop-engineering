@@ -3,7 +3,6 @@ import { createRandomSeed } from "../hooks/random-seed";
 import { useLaunchParams } from "../hooks/useLaunchParams";
 import type { GameConfig, Innings } from "../types/game";
 import "./baseball.css";
-import "./baseball-field.css";
 import { GameScreen } from "./GameScreen";
 import { TitleScreen } from "./TitleScreen";
 
