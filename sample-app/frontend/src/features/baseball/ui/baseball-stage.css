@@ -265,8 +265,8 @@ body:has(.bb-page) {
     "foot foot";
   align-items: center;
   gap: 4px 8px;
-  width: clamp(150px, 43vw, 168px);
-  padding: 8px 18px 9px 14px;
+  width: clamp(156px, 44vw, 168px);
+  padding: 8px 16px 9px 14px;
   font-size: 13px;
   line-height: 1.2;
   filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.4));
@@ -285,8 +285,9 @@ body:has(.bb-page) {
 .bb-hud__head {
   grid-area: head;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   min-width: 0;
 }
 
@@ -364,6 +365,16 @@ body:has(.bb-page) {
 
 .bb-hud__foot {
   grid-area: foot;
+}
+
+/* B/S/O: 狭い幅でも HUD に収まるよう、間隔を詰める(色・ランプの見た目は baseball.css)。ラベルはランプと同じ色 */
+.bb-hud .bb-count {
+  gap: 0.55em;
+  font-size: 0.92em;
+}
+
+.bb-hud .bb-count__row {
+  gap: 0.2em;
 }
 
 .bb-hud .bb-count__row--balls .bb-count__label {
@@ -445,6 +456,22 @@ body:has(.bb-page) {
   text-shadow: none;
 }
 
+/* 回別の表: 延長を含む 9 回ぶんでも、スマホ縦(幅 390px)で R/H/E まで横スクロールなしに収まるよう詰める */
+.bb-hud .bb-line-score {
+  font-size: 11.5px;
+}
+
+.bb-hud .bb-line-score th,
+.bb-hud .bb-line-score td {
+  min-width: 1.45em;
+  padding: 3px;
+}
+
+.bb-hud .bb-line-score__team {
+  min-width: 0;
+  padding-right: 8px;
+}
+
 /* ---- NamePlates(右上。ホームのピルの下) ---- */
 
 .bb-plates {
@@ -453,7 +480,8 @@ body:has(.bb-page) {
   box-sizing: border-box;
   display: grid;
   gap: 5px;
-  width: clamp(150px, 44vw, 172px);
+  grid-template-columns: minmax(0, 1fr);
+  width: clamp(150px, 42vw, 172px);
   margin-top: 34px;
   font-size: 13px;
   line-height: 1.25;
@@ -465,6 +493,7 @@ body:has(.bb-page) {
   isolation: isolate;
   display: grid;
   gap: 2px;
+  min-width: 0;
   padding: 6px 14px 7px 20px;
   filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.4));
 }
@@ -530,7 +559,9 @@ body:has(.bb-page) {
 
 .bb-plates .bb-stamina {
   display: block;
-  flex: 1 1 36px;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
   height: 8px;
   box-sizing: border-box;
   overflow: hidden;
@@ -795,6 +826,10 @@ body:has(.bb-page) {
     width: 60px;
   }
 
+  .bb-hud .bb-count {
+    gap: 0.8em;
+  }
+
   .bb-hud__chip {
     width: 11px;
     height: 22px;
@@ -802,6 +837,15 @@ body:has(.bb-page) {
 
   .bb-hud__more-summary {
     font-size: 13px;
+  }
+
+  .bb-hud .bb-line-score {
+    font-size: 14px;
+  }
+
+  .bb-hud .bb-line-score th,
+  .bb-hud .bb-line-score td {
+    padding: 3px 6px;
   }
 
   .bb-plates {
@@ -836,6 +880,27 @@ body:has(.bb-page) {
     width: fit-content;
     justify-self: end;
     padding: 16px 20px 12px;
+  }
+
+  /* 守備: グリッドを左(2行ぶん)、チップと「投げる」を右に縦に並べる */
+  .bb-bar--pitch {
+    gap: 10px 18px;
+  }
+
+  .bb-bar--pitch .bb-course-grid {
+    grid-row: 1 / 3;
+    align-self: end;
+  }
+
+  @supports (grid-template-columns: subgrid) {
+    .bb-bar--pitch .bb-pitching {
+      grid-area: 1 / 2 / 3 / 3;
+    }
+
+    .bb-bar--pitch .bb-pitch-kinds,
+    .bb-bar--pitch .bb-pitching__throw {
+      grid-column: 1;
+    }
   }
 
   .bb-stage__skip-hint {
