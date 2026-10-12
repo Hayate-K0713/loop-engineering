@@ -1,14 +1,17 @@
-import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useRef, useState } from "react";
 import { INITIAL_CURSOR } from "../model/batting/cursor";
 import type { CursorRadii, SwingInput, SwingKind } from "../types/batting";
 import type { ZonePoint } from "../types/common";
+import type { ScreenRect } from "../types/stage";
 import { useKeyboardInput } from "./useKeyboardInput";
 import { useLatest } from "./useLatest";
 import { usePointerInput, type PointerHandlers } from "./usePointerInput";
 
 type UseBattingControlsOptions = {
-  /** 人間打撃時(`showCursor`)のみ真。偽の間はポインタ・キー入力を無視する。 */
+  /** 人間打撃時のみ真。偽の間はポインタ・キー入力を無視する(スキップは `holding` で別に扱う)。 */
   readonly enabled: boolean;
+  /** 演出中(`isHolding`)。ポインタの振り分け(スキップ優先)に使う。 */
+  readonly holding: boolean;
   /** 人間がスイングできる(`GameView.swingReady`)。 */
   readonly swingReady: boolean;
   /** `GameView.batter.cursorRadii`。 */
@@ -16,51 +19,55 @@ type UseBattingControlsOptions = {
   /** `usePitchFlight` の `getElapsedMs`。スイング時刻(投球開始からの経過ゲーム時間)の算出に使う。 */
   readonly getElapsedMs: () => number;
   readonly onSwing: (input: SwingInput) => void;
+  /** 演出のスキップ(director の `skip`)。 */
+  readonly onSkip: () => void;
+  /** 画面座標(client)→ゾーン座標(`useStage3d`)。 */
+  readonly pickZone: (clientX: number, clientY: number) => ZonePoint | null;
+  /** 打撃カメラでのゾーン枠の画面矩形(`useStage3d`)。 */
+  readonly getZoneRect: () => ScreenRect | null;
+};
+
+/** director が毎フレーム読むカーソルの表示用データ(ゾーン座標と、現在のスイング種別の半径)。 */
+export type CursorView = {
+  readonly point: ZonePoint;
+  readonly radii: CursorRadii;
 };
 
 export type BattingControls = {
-  readonly svgRef: RefObject<SVGSVGElement | null>;
-  readonly cursorRef: RefObject<SVGEllipseElement | null>;
+  /** 現在のカーソル位置(ゾーン座標)。 */
+  readonly getCursor: () => ZonePoint;
+  /** 現在のカーソル位置と、`swingKind` に応じた半径。director が毎フレーム呼ぶ getter(安定した関数)。 */
+  readonly getCursorView: () => CursorView;
   readonly swingKind: SwingKind;
   readonly setSwingKind: (kind: SwingKind) => void;
-  /** `swingKind` に応じたカーソル半径。`StrikeZoneSvg` の `cursorRadii` に渡す。 */
+  /** `swingKind` に応じたカーソル半径。 */
   readonly currentRadii: CursorRadii;
   /** 現在のカーソル位置・スイング種別でスイングする(「スイング」ボタンの pointerdown 用。`swingReady` が偽なら何もしない)。 */
   readonly swingNow: () => void;
+  /** ステージの入力面(`bb-stage__input`)に展開するポインタ4ハンドラ。 */
   readonly pointerHandlers: PointerHandlers;
 };
 
-function applyCursor(ellipse: SVGEllipseElement | null, point: ZonePoint): void {
-  if (ellipse === null) {
-    return;
-  }
-  ellipse.setAttribute("cx", String(point.x));
-  ellipse.setAttribute("cy", String(point.y));
-}
-
 /**
  * 打撃操作(ポインタ・キーボード・ボタン)の合成。スイング種別(`swingKind`、初期 `"meet"`)の state もここに持つ。
- * カーソル位置は ref(`INITIAL_CURSOR` から開始)に保持し、SVG の楕円の `cx`/`cy`(ゾーン座標そのまま)を直接更新する。
- * 楕円は `enabled` の偽→真で再マウントされ `cx/cy` が (0, 0) に戻るため、`enabled` が変わるたびに ref の位置を再適用して、
- * 見た目とスイング時に送るカーソル位置を一致させる。
+ * カーソル位置は ref(`INITIAL_CURSOR` から開始)に保持し、描画は director が `getCursorView()` を毎フレーム読んで `SceneFrame` に載せる
+ * (DOM を直接更新しない)。ポインタは入力面の div に展開する。
  */
 export function useBattingControls(options: UseBattingControlsOptions): BattingControls {
-  const { enabled, swingReady, cursorRadii } = options;
+  const { enabled, holding, swingReady, cursorRadii, onSkip, pickZone, getZoneRect } = options;
   const [swingKind, setSwingKind] = useState<SwingKind>("meet");
   const latest = useLatest({ ...options, swingKind });
-  const svgRef = useRef<SVGSVGElement>(null);
-  const cursorRef = useRef<SVGEllipseElement>(null);
   const positionRef = useRef<ZonePoint>(INITIAL_CURSOR);
 
   const getCursor = useCallback((): ZonePoint => positionRef.current, []);
   const moveCursorTo = useCallback((point: ZonePoint): void => {
     positionRef.current = point;
-    applyCursor(cursorRef.current, point);
   }, []);
 
-  useLayoutEffect(() => {
-    applyCursor(cursorRef.current, positionRef.current);
-  }, [enabled]);
+  const getCursorView = useCallback((): CursorView => {
+    const current = latest.current;
+    return { point: positionRef.current, radii: current.swingKind === "meet" ? current.cursorRadii.meet : current.cursorRadii.power };
+  }, [latest]);
 
   const swingNow = useCallback((): void => {
     const current = latest.current;
@@ -70,9 +77,19 @@ export function useBattingControls(options: UseBattingControlsOptions): BattingC
     current.onSwing({ kind: current.swingKind, cursor: positionRef.current, atMs: current.getElapsedMs() });
   }, [latest]);
 
-  const pointerHandlers = usePointerInput({ enabled, svgRef, moveCursorTo, onSwing: swingNow });
+  const pointerHandlers = usePointerInput({
+    enabled,
+    holding,
+    swingReady,
+    onSkip,
+    pickZone,
+    getZoneRect,
+    getCursor,
+    moveCursorTo,
+    onSwing: swingNow,
+  });
   useKeyboardInput({ enabled, swingReady, getCursor, moveCursorTo, onSwing: swingNow, onSelectSwingKind: setSwingKind });
 
   const currentRadii = swingKind === "meet" ? cursorRadii.meet : cursorRadii.power;
-  return { svgRef, cursorRef, swingKind, setSwingKind, currentRadii, swingNow, pointerHandlers };
+  return { getCursor, getCursorView, swingKind, setSwingKind, currentRadii, swingNow, pointerHandlers };
 }
