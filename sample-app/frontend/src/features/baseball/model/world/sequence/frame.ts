@@ -134,10 +134,19 @@ function catcherFrame(ctx: FrameContext): CharacterPose {
   return placeCharacter(catcherPose(), ACTORS.catcher, ctx.chase !== null && ctx.chase.position >= CHASE.catcherVisibleBlend);
 }
 
+/**
+ * バット高さを、ワールドでの高さ(m)から打者ローカルの値に直す。motion は構え・接触(`swing.height`)・巻き上げをワールドの高さで返すが、
+ * バットは打者の root の子なので、描画では root の拡大率がかかり、足元の y が足される(ワールドの高さ = y + 拡大率 × ローカル値)。
+ * 打ち消さないと、拡大率 0.92 の打者ではバットがボールより低くなる。
+ */
+function batHeightInRoot(worldHeight: number): number {
+  return (worldHeight - ACTORS.batter.position.y) / ACTORS.batter.scale;
+}
+
 function batterFrame(ctx: FrameContext): BatterPose {
   const swing = ctx.plan?.swing ?? null;
   const joints = swing === null ? batterStancePose() : batterSwingPose(swingProgressAt(swing, ctx.tMs), swing.height);
-  return placeBatter(joints, ACTORS.batter);
+  return placeBatter({ ...joints, bat: { ...joints.bat, height: batHeightInRoot(joints.bat.height) } }, ACTORS.batter);
 }
 
 /** 打球を追う野手。走っている間は走りのポーズ、到着後は待機姿勢で、向きは目的地の方向。 */

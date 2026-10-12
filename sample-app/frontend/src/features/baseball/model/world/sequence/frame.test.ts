@@ -7,7 +7,8 @@ import { battingCamera, blendCamera, chaseBlendAt, chaseCamera } from "../camera
 import { batterStancePose, batterSwingPose } from "../motion/batter";
 import { catcherPose, fielderIdlePose } from "../motion/fielder";
 import { pitcherFollowPose, pitcherWindupPose } from "../motion/pitcher";
-import { placeBatter, placeCharacter } from "../motion/pose";
+import { type BatterJoints, placeBatter, placeCharacter } from "../motion/pose";
+import { BAT_FOLLOW_LIFT, BAT_STANCE_HEIGHT } from "../motion/rig";
 import { type BattedPlan, battedBallAt } from "../path/batted-path";
 import { FIELDER_SLOTS } from "../path/fielders";
 import { mittBallAt, pitchBallAt } from "../path/pitch-path";
@@ -365,27 +366,67 @@ describe("sceneFrameAt: 投手", () => {
   });
 });
 
+/** ワールドでのバットの高さ(m)。バットは打者の root の子なので、足元の y に「拡大率 × ローカルの高さ」を足した値になる。 */
+function worldBatHeight(pose: SceneFrame["batter"]): number {
+  return pose.position.y + pose.scale * pose.bat.height;
+}
+
+/**
+ * 打者が motion の `joints` どおりに配置されている: バットの高さ以外は `placeBatter(joints, ACTORS.batter)` と一致し、
+ * バットのワールドでの高さ(root の位置と拡大率を考慮)は motion が意図した高さ(`joints.bat.height`)と一致する。
+ */
+function expectBatterAt(actual: SceneFrame["batter"], joints: BatterJoints): void {
+  const withoutHeight = (pose: SceneFrame["batter"]): SceneFrame["batter"] => ({ ...pose, bat: { ...pose.bat, height: 0 } });
+  expect(withoutHeight(actual)).toEqual(withoutHeight(placeBatter(joints, ACTORS.batter)));
+  expect(worldBatHeight(actual)).toBeCloseTo(joints.bat.height, 9);
+}
+
 describe("sceneFrameAt: 打者", () => {
   it("plan が無い、または振らない(見逃し)ときは構え", () => {
-    const stance = placeBatter(batterStancePose(), ACTORS.batter);
-    expect(frameAt(null, 100, { phase: "flight" }).batter).toEqual(stance);
-    expect(frameAt(TAKE, 700).batter).toEqual(stance);
-    expect(frameAt(null, 0, { phase: "windup" }).batter).toEqual(stance);
+    expectBatterAt(frameAt(null, 100, { phase: "flight" }).batter, batterStancePose());
+    expectBatterAt(frameAt(TAKE, 700).batter, batterStancePose());
+    expectBatterAt(frameAt(null, 0, { phase: "windup" }).batter, batterStancePose());
   });
 
   it("スイング: swingProgressAt の進行でポーズが決まり、接触で 0.66、振り切りで 1.4", () => {
     const swing = swingOf(SINGLE);
-    const poseAt = (tMs: number): SceneFrame["batter"] => placeBatter(batterSwingPose(swingProgressAt(swing, tMs), swing.height), ACTORS.batter);
-    expect(frameAt(SINGLE, swing.contactAtMs).batter).toEqual(poseAt(swing.contactAtMs));
-    expect(frameAt(SINGLE, swing.contactAtMs).batter).toEqual(placeBatter(batterSwingPose(SWING.contactRatio, swing.height), ACTORS.batter));
-    expect(frameAt(SINGLE, swing.contactAtMs + 3000).batter).toEqual(placeBatter(batterSwingPose(SWING.followEndProgress, swing.height), ACTORS.batter));
-    expect(frameAt(SINGLE, swing.startMs - 10).batter).toEqual(placeBatter(batterStancePose(), ACTORS.batter));
+    const poseAt = (tMs: number): BatterJoints => batterSwingPose(swingProgressAt(swing, tMs), swing.height);
+    expectBatterAt(frameAt(SINGLE, swing.contactAtMs).batter, poseAt(swing.contactAtMs));
+    expectBatterAt(frameAt(SINGLE, swing.contactAtMs).batter, batterSwingPose(SWING.contactRatio, swing.height));
+    expectBatterAt(frameAt(SINGLE, swing.contactAtMs + 3000).batter, batterSwingPose(SWING.followEndProgress, swing.height));
+    expectBatterAt(frameAt(SINGLE, swing.startMs - 10).batter, batterStancePose());
   });
 
-  it("接触の瞬間のバットの高さは swing.height", () => {
+  it("接触の瞬間のバットの高さは(ワールドで)swing.height", () => {
     const swing = swingOf(SINGLE);
-    expect(frameAt(SINGLE, swing.contactAtMs).batter.bat.height).toBeCloseTo(swing.height, 9);
+    expect(worldBatHeight(frameAt(SINGLE, swing.contactAtMs).batter)).toBeCloseTo(swing.height, 9);
     expect(near(swing.height, zoneToWorld(FLIGHT.landing).y)).toBe(true);
+  });
+
+  it("打者の拡大率と足元の y を打ち消す: frame のバット高さは (ワールドの高さ − y) / 拡大率(打者ローカルの値)", () => {
+    const swing = swingOf(SINGLE);
+    const expectLocal = (worldHeight: number): number => (worldHeight - ACTORS.batter.position.y) / ACTORS.batter.scale;
+    expect(frameAt(SINGLE, swing.contactAtMs).batter.bat.height).toBeCloseTo(expectLocal(swing.height), 9);
+    expect(frameAt(null, 0, { phase: "windup" }).batter.bat.height).toBeCloseTo(expectLocal(BAT_STANCE_HEIGHT), 9);
+  });
+
+  it("構え(ワールドで BAT_STANCE_HEIGHT)・接触(swing.height)・振り切り(swing.height + BAT_FOLLOW_LIFT)の高さが、打者の拡大率によらず意図どおり", () => {
+    for (const plan of ALL_PLANS.filter((candidate) => candidate.swing !== null)) {
+      const swing = swingOf(plan);
+      expect(worldBatHeight(frameAt(plan, swing.startMs - 10).batter)).toBeCloseTo(BAT_STANCE_HEIGHT, 9);
+      expect(worldBatHeight(frameAt(plan, swing.contactAtMs).batter)).toBeCloseTo(swing.height, 9);
+      expect(worldBatHeight(frameAt(plan, swing.contactAtMs + 3000).batter)).toBeCloseTo(swing.height + BAT_FOLLOW_LIFT, 9);
+    }
+  });
+
+  it("全 plan・全時刻で、バットのワールドでの高さは motion が意図した高さ(batterSwingPose の bat.height)と一致する", () => {
+    for (const plan of ALL_PLANS) {
+      const swing = plan.swing;
+      for (const tMs of TIMES) {
+        const joints = swing === null ? batterStancePose() : batterSwingPose(swingProgressAt(swing, tMs), swing.height);
+        expect(worldBatHeight(frameAt(plan, tMs).batter)).toBeCloseTo(joints.bat.height, 9);
+      }
+    }
   });
 
   it("打者は常に表示", () => {

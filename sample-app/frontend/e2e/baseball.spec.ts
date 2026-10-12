@@ -23,6 +23,16 @@ const GAME_SEED = 47;
 // `data-play-kind` が `in-play` になる N を選ぶ(2026-10-12 の探索: 1〜24 のうち 2,4,5,7,8,11,15〜19,21,23 が in-play。7 を採用)。
 const SKIP_SEED = 7;
 
+// Space でスイングするテスト(テスト5)で使う seed。このテストは「飛行中に Space を押す → 早いスイングは必ず空振り(`swinging-strike`、
+// 振った演出が約 0.9 秒続く)」だけに依存し、投球の中身(コース・球速)には依らない(seed 1〜4 で同じ結果を確認)。1 球目が飛行中にテストが
+// 始まったときは次の投球で押す(`waitForNewFlight`)ので、試合の進行が少し変わっても壊れない。結果が変わるのは、早いスイングの判定
+// (model/batting/ の接触判定)を変えたときで、その場合は `?seed=N&innings=1#/baseball`(先攻のまま開始)で飛行中に Space を押して
+// `stage-3d` の `data-play-kind` が `swinging-strike` になることを確かめ直す。
+const SWING_SEED = 1;
+
+// Space でスイングしてから、`data-phase` が `play` のまま続いているべき時間(ms)。振った演出は約 0.9 秒続く。
+const SWING_PLAY_HOLD_MS = 300;
+
 // スキップ(pointerdown)から `data-phase="idle"` になるまでの許容時間(ms)。演出は最短でも約 2.5 秒続くので、これより十分短ければスキップが効いている。
 const SKIP_RESPONSE_MS = 300;
 
@@ -273,6 +283,116 @@ test("skips a play animation with a tap on the stage", async ({ page }) => {
   await expect(page.getByTestId("score-away")).toHaveText(awayBefore);
   await expect(page.getByTestId("score-home")).toHaveText(homeBefore);
   expect(await readFlightSeq(stage)).toBe(seqBefore);
+});
+
+const PHASE_TRACE_KEY = "__phaseTrace";
+
+/** `stage-3d` の `data-phase`・`data-play-kind` が変わった時点の値(新しい値と `performance.now()`)。 */
+type PhaseSnapshot = { phase: string; playKind: string | null; at: number };
+
+type PhaseTrace = {
+  /** 記録を始めたあとに、`data-phase` が `flight` 以外から `flight` になった(= 新しい投球が放たれた)時刻。まだ無ければ `null`。 */
+  flightStartedAt: number | null;
+  /** 最初の keydown が届いた時点(キャプチャ段階)の `data-phase`。まだ keydown が無ければ `null`。 */
+  phaseAtKeyDown: string | null;
+  keyDownAt: number | null;
+  /** 最初の keydown のあとの変化。 */
+  snapshots: PhaseSnapshot[];
+};
+
+/**
+ * ページ内で、`data-phase` が新しく `flight` になる時刻と、最初の keydown の時点の `data-phase`、そのあとの `data-phase`・`data-play-kind` の
+ * 変化を記録し始める。Playwright の往復遅延を含めず、「キーを押した直後に演出がどう遷移したか」だけを見るため(演出が終わると
+ * `data-play-kind` は消えるので、あとから読むのでは遅い)。結果は `readPhaseTraceAfterPlay` で受け取る。
+ */
+async function startPhaseTrace(page: Page): Promise<void> {
+  await page.evaluate((key) => {
+    const stage = document.querySelector('[data-testid="stage-3d"]');
+    const trace: PhaseTrace = { flightStartedAt: null, phaseAtKeyDown: null, keyDownAt: null, snapshots: [] };
+    Reflect.set(window, key, trace);
+    window.addEventListener(
+      "keydown",
+      () => {
+        if (trace.keyDownAt === null) {
+          trace.keyDownAt = performance.now();
+          trace.phaseAtKeyDown = stage?.getAttribute("data-phase") ?? null;
+        }
+      },
+      { capture: true },
+    );
+    if (stage !== null) {
+      let previous = stage.getAttribute("data-phase");
+      new MutationObserver(() => {
+        const phase = stage.getAttribute("data-phase") ?? "";
+        const now = performance.now();
+        if (trace.keyDownAt !== null) {
+          trace.snapshots.push({ phase, playKind: stage.getAttribute("data-play-kind"), at: now });
+        } else if (phase === "flight" && previous !== "flight") {
+          trace.flightStartedAt = now;
+        }
+        previous = phase;
+      }).observe(stage, { attributes: true, attributeFilter: ["data-phase", "data-play-kind"] });
+    }
+  }, PHASE_TRACE_KEY);
+}
+
+/**
+ * 記録を始めたあとに放たれた投球の飛行(`flight`)が始まるまで毎フレーム待つ。すでに飛行中の投球は対象にしない(試合開始時の 1 球目は
+ * 3D の初期化の間に飛び始めていることがあり、Space が飛行の終わりにずれ込むと見送り扱いになってスイングの検証にならないため)。
+ */
+async function waitForNewFlight(page: Page): Promise<void> {
+  await page.waitForFunction((key) => (Reflect.get(window, key) as PhaseTrace).flightStartedAt !== null, PHASE_TRACE_KEY, {
+    polling: "raf",
+    timeout: 30_000,
+  });
+}
+
+/**
+ * keydown のあと、(a) 最初に `play` になってから `holdMs` が経つ、または (b) `idle` になる、のどちらかが起きるまで毎フレーム待ち
+ * (最長 15 秒)、記録を返す。(b) は演出が飛ばされた(スキップされた)ことを表す。
+ */
+async function readPhaseTraceAfterPlay(page: Page, holdMs: number): Promise<PhaseTrace> {
+  await page.waitForFunction(
+    ({ key, hold }) => {
+      const trace = Reflect.get(window, key) as PhaseTrace;
+      const playedAt = trace.snapshots.find((snapshot) => snapshot.phase === "play")?.at ?? null;
+      return trace.snapshots.some((snapshot) => snapshot.phase === "idle") || (playedAt !== null && performance.now() - playedAt >= hold);
+    },
+    { key: PHASE_TRACE_KEY, hold: holdMs },
+    { polling: "raf", timeout: 15_000 },
+  );
+  return page.evaluate((key) => Reflect.get(window, key) as PhaseTrace, PHASE_TRACE_KEY);
+}
+
+// Space でスイングした keydown が、そのまま演出のスキップにならない(テスト5): Space を扱う window のリスナは複数あり、
+// スイング側が先に state を更新すると、ネイティブイベントのリスナ間のマイクロタスクで React が `holding = true` で再描画済みになる。
+// スキップ側が `holding` だけで判定すると、スイングに使った同じ keydown で演出が飛ばされる(`flight` から `play` を経ずに `idle` になる)。
+// 合成イベント(`dispatchEvent`)はリスナ間にマイクロタスクが挟まらず再現しないので、Playwright の実キー入力(`keyboard.down`)で送る。
+test("swinging with the Space key does not skip the play animation in the same keydown", async ({ page }) => {
+  test.setTimeout(60_000);
+
+  // 通常速度。先攻(既定)なので人間が打撃で、CPU の投球の飛行中(約 1.3〜1.4 秒)に Space を押す。
+  await page.goto(`/?seed=${SWING_SEED}&innings=1#/baseball`);
+  await expect(radioOf(page, "setting-side-away")).toBeChecked();
+  await startGame(page);
+  await expect(page.getByTestId("stage-3d")).toHaveAttribute("data-status", "ready");
+
+  await startPhaseTrace(page);
+  await waitForNewFlight(page);
+  await page.keyboard.down("Space");
+  await page.keyboard.up("Space");
+
+  const trace = await readPhaseTraceAfterPlay(page, SWING_PLAY_HOLD_MS);
+  // 前提: Space は飛行中に押された(飛行の終わりに間に合わないほど描画が遅いと、ここで失敗する)。
+  expect(trace.phaseAtKeyDown).toBe("flight");
+  // 飛行(flight)を抜けた最初の遷移は `play`(スキップされると `play` を経ずに `idle` になる)で、`play` に入ってからしばらくは
+  // `idle` に戻らない(`holding` の間は、スキップされない限り演出が続く)。
+  const left = trace.snapshots.find((snapshot) => snapshot.phase !== "flight");
+  expect(left?.phase).toBe("play");
+  const earlyIdle = trace.snapshots.filter((snapshot) => snapshot.phase === "idle" && snapshot.at - (left?.at ?? 0) < SWING_PLAY_HOLD_MS);
+  expect(earlyIdle).toEqual([]);
+  // その演出は Space のスイングによる空振りで(早いスイングは必ず空振り)、見逃し(CPU 任せの判定)ではない。
+  expect(trace.snapshots.map((snapshot) => snapshot.playKind).filter((kind) => kind !== null)).toContain("swinging-strike");
 });
 
 type Box = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
