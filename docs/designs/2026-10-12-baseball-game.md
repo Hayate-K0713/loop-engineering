@@ -661,7 +661,7 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 
 共通の完了条件(各ステップ): 担当ファイルが `cd sample-app && npx eslint <担当パス>` で0件。テストがあるステップは `cd sample-app/frontend && npx vitest run <担当パス>` が成功。`cd sample-app && npm run typecheck --workspace frontend` が成功(並列中は他タスクの未完成ファイル起因のエラーを無視し、完了報告に記す)。コミット・共有メモリへの書き込みは並列 dispatch 中は行わない(orchestrator が集約)。
 
-- [ ] **ステップ0: three の導入と試し打ち**(直列・前提)
+- [x] **ステップ0: three の導入と試し打ち**(直列・前提)
   - 依存: なし。担当ファイル: `sample-app/frontend/package.json`、`sample-app/package-lock.json`、(必要な場合のみ)`sample-app/frontend/vite.config.ts`。使い捨てのプローブは scratchpad に置き、リポジトリにはコミットしない。
   - やること:
     1. `npm view three version time` と `npm view @types/three versions` で three の最新版と公開日、同一リビジョンの `@types/three` を確定する。**想定: three 0.186.1(2026-09-24 公開、2週間以上経過)、`@types/three` 0.186.x。** 想定と異なる場合(その版が無い、公開から2週間未満、`@types/three` の同リビジョンが無い 等)は先に進まず報告する。
@@ -916,7 +916,23 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 
 ## ステップ0 試し打ち結果(実装時に記入)
 
-(ステップ0 の実測表を orchestrator が転記する。three の確定版・`@types/three` の版・WebGL の可否と必要な launchOptions・チャンクサイズ・eslint 実測・再最適化リロードの有無。)
+2026-10-12 実測(implementer、プローブは scratchpad。コミット対象外)。想定外なし。設計の見直しは不要。
+
+| # | 項目 | 結果 |
+| --- | --- | --- |
+| 版 | three / @types/three | `three ^0.186.1`(2026-09-24 公開)、`@types/three ^0.186.0`(@types に 0.186.1 は無い。同一 r186)。範囲の書き換えなし |
+| 1 | `npm ci --dry-run`・lockfile | 成功。追加は three・@types/three とその依存(@dimforge/rapier3d-compat、@tweenjs/tween.js、@types/stats.js、@types/webxr、fflate、meshoptimizer)のみ |
+| 2 | vitest(node)で three 生成 | 成功。Group/Mesh/DataTexture(RedFormat)/MeshToonMaterial/PerspectiveCamera#setViewOffset を生成・dispose。strict+exactOptionalPropertyTypes+noUncheckedIndexedAccess の tsc 0 エラー |
+| 3 | headless Chromium の WebGL2 | **launchOptions 追加不要**(Playwright 1.62 は常に `--enable-unsafe-swiftshader`)。SwiftShader で描画確認。ローカルは Chromium 141(回避構成)、CI の実挙動は PR の CI で確認 |
+| 3b | WebGL1 を渡した場合 | `WebGL 1 is not supported since r163.` で例外 → stage.ts は WebGL2 取得+例外捕捉(設計どおり) |
+| 4 | チャンクサイズ | three を含む遅延チャンク 524.3KB(gzip 131.7KB)。index チャンクの基準は 241.77KB / gzip 76.54KB(three 未 import の間は不変) |
+| 5 | eslint 実測 | 想定どおり。引数オブジェクトのプロパティ代入・`.set()`・Map・for...of・traverse 内 instanceof・Math.sin/cos/hypot は通過。変数添字・Math.random・ネスト三項・`!`・61行超・引数7個以上・未読の Map(no-unused-collection)は error |
+| 6 | vite dev + React.lazy の再最適化リロード | 発生せず(起動時スキャンで three が最適化済み)。`optimizeDeps.include` は不要 |
+
+実装上の注意(後続ステップへ):
+- `PCFSoftShadowMap` は r186 で削除扱い(警告のうえ PCFShadowMap に置換)。**`PCFShadowMap` を使う**。
+- SwiftShader の描画は重い(1280×720・影あり・pixelRatio1 で約50ms/フレーム、pixelRatio にほぼ比例、初回フレームはシェーダコンパイルで約200ms)。**low 品質/headless では pixelRatio を 1 に固定**し、E2E のビューポートを大きくしない。
+- Prettier の printWidth は 160。160桁以内の import は1行にする(prettier/prettier が error)。
 
 ## 壁打ち(grilling)記録
 
