@@ -39,26 +39,28 @@ function readConfig(form: FormData, defaultInnings: Innings): GameConfig {
   };
 }
 
-type SelectFieldProps<T extends string | number> = {
+type ChoiceFieldProps<T extends string | number> = {
   readonly name: string;
-  readonly label: string;
+  readonly legend: string;
   readonly testId: string;
   readonly options: readonly Option<T>[];
   readonly defaultValue: T;
 };
 
-function SelectField<T extends string | number>({ name, label, testId, options, defaultValue }: SelectFieldProps<T>) {
+/** ボタンに見せたラジオ群。`input[type=radio]` は視覚的に隠し、`label` の中の面(`bb-choice__text`)が選択状態を表す。 */
+function ChoiceField<T extends string | number>({ name, legend, testId, options, defaultValue }: ChoiceFieldProps<T>) {
   return (
-    <label className="bb-form-field">
-      <span className="bb-form-field__label">{label}</span>
-      <select className="bb-select" name={name} defaultValue={String(defaultValue)} data-testid={testId}>
+    <fieldset className="bb-choice" data-testid={testId}>
+      <legend className="bb-choice__legend">{legend}</legend>
+      <div className="bb-choice__options">
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
+          <label key={option.value} className="bb-choice__option" data-testid={`${testId}-${option.value}`}>
+            <input className="bb-choice__input" type="radio" name={name} value={option.value} defaultChecked={option.value === defaultValue} />
+            <span className="bb-choice__text">{option.label}</span>
+          </label>
         ))}
-      </select>
-    </label>
+      </div>
+    </fieldset>
   );
 }
 
@@ -67,25 +69,32 @@ type TitleScreenProps = {
   readonly onStart: (config: GameConfig) => void;
 };
 
-/** 試合設定のタイトル画面。非制御フォーム(state を持たず、送信時に FormData を読む)。 */
+/** 試合設定のタイトル画面。非制御フォーム(state を持たず、送信時に FormData を読む)。背景の球場は CSS だけで描く。 */
 export function TitleScreen({ defaultInnings, onStart }: TitleScreenProps) {
   return (
-    <section className="bb-title" data-testid="baseball-title">
-      <h2 className="bb-title__heading">試合設定</h2>
-      <form
-        className="bb-title__form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onStart(readConfig(new FormData(event.currentTarget), defaultInnings));
-        }}
-      >
-        <SelectField name="innings" label="イニング数" testId="setting-innings" options={INNINGS_OPTIONS} defaultValue={defaultInnings} />
-        <SelectField name="side" label="攻守" testId="setting-side" options={SIDE_OPTIONS} defaultValue="away" />
-        <SelectField name="difficulty" label="難易度" testId="setting-difficulty" options={DIFFICULTY_OPTIONS} defaultValue="normal" />
-        <button type="submit" className="bb-button bb-button--primary" data-testid="start-game">
-          試合開始
-        </button>
-      </form>
+    <section className="bb-title-screen" data-testid="baseball-title" aria-label="試合設定">
+      <div className="bb-title__body">
+        <p className="bb-logo" aria-hidden="true">
+          <span className="bb-logo__sub">ブラウザ</span>
+          <span className="bb-logo__main">野球</span>
+        </p>
+        <div className="bb-title__panel">
+          <form
+            className="bb-title__form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onStart(readConfig(new FormData(event.currentTarget), defaultInnings));
+            }}
+          >
+            <ChoiceField name="innings" legend="イニング数" testId="setting-innings" options={INNINGS_OPTIONS} defaultValue={defaultInnings} />
+            <ChoiceField name="side" legend="攻守" testId="setting-side" options={SIDE_OPTIONS} defaultValue="away" />
+            <ChoiceField name="difficulty" legend="難易度" testId="setting-difficulty" options={DIFFICULTY_OPTIONS} defaultValue="normal" />
+            <button type="submit" className="bb-start" data-testid="start-game">
+              試合開始
+            </button>
+          </form>
+        </div>
+      </div>
     </section>
   );
 }

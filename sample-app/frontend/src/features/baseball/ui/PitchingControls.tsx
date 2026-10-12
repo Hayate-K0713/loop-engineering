@@ -10,8 +10,9 @@ type PitchingControlsProps = {
 };
 
 /**
- * 投球操作(球種ボタンと「投げる」ボタン。制御コンポーネント)。
- * コースのグリッド(`CourseGrid`)は含まない(ゾーンに重ねるため `GameLayout` が別に渡す)。
+ * 投球操作(球種のチップと「投げる」ボタン。制御コンポーネント)。
+ * コースのグリッド(`CourseGrid`)は含まない。操作バーの中で `PitchingControls` の次に兄弟として置く
+ * (CSS では `.bb-pitching` を `display: contents` にして、チップ→グリッド→「投げる」の順にバーの子として並べる)。
  */
 export function PitchingControls({ ready, repertoire, selectedKind, onSelectKind, onThrow }: PitchingControlsProps) {
   return (

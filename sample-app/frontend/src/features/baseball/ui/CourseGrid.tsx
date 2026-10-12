@@ -32,7 +32,7 @@ type CourseGridProps = {
 };
 
 /**
- * 5×5 のコース選択グリッド(制御コンポーネント)。ゾーンの正方形に重ねて使う。
+ * 5×5 のコース選択グリッド(制御コンポーネント)。操作バーの中に通常フローで置く小型グリッド。
  * セルのクリックは選択するだけで投球はしない。選択中のセル1つが `aria-pressed="true"`。
  */
 export function CourseGrid({ selectedCell, onSelectCell }: CourseGridProps) {

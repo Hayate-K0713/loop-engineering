@@ -9,7 +9,7 @@ function LineScoreRow({ row }: { readonly row: ScoreRowView }) {
       {row.cells.map((cell, index) => (
         <td key={index}>{cell}</td>
       ))}
-      <td className="bb-line-score__total" data-testid={`score-${row.side}`}>
+      <td className="bb-line-score__total" data-testid={`line-score-runs-${row.side}`}>
         {row.runs}
       </td>
       <td>{row.hits}</td>
@@ -38,7 +38,9 @@ export function LineScore({ scoreboard }: LineScoreProps) {
                 {inning}
               </th>
             ))}
-            <th scope="col">R</th>
+            <th scope="col" className="bb-line-score__total">
+              R
+            </th>
             <th scope="col">H</th>
             <th scope="col">E</th>
           </tr>

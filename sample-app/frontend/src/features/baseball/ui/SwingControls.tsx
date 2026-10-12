@@ -24,7 +24,7 @@ export function SwingControls({ ready, swingKind, onSelectSwingKind, onSwing }: 
           <button
             key={item.kind}
             type="button"
-            className="bb-toggle"
+            className="bb-toggle bb-swing__kind"
             data-testid={`swing-kind-${item.kind}`}
             aria-pressed={swingKind === item.kind}
             onClick={() => onSelectSwingKind(item.kind)}

@@ -14,7 +14,7 @@ export function PitchKindButtons({ repertoire, selectedKind, onSelectKind }: Pit
         <button
           key={item.kind}
           type="button"
-          className="bb-toggle"
+          className="bb-toggle bb-pitch-kind"
           data-testid={`pitch-kind-${item.kind}`}
           aria-pressed={selectedKind === item.kind}
           onClick={() => onSelectKind(item.kind)}
