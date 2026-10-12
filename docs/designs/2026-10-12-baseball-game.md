@@ -981,6 +981,10 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - 判定: S1〜S10 は〇、S11(b)(結果画面の略称+色チップ)のみ未達。重なり実測は 390×844・1280×720 × 打撃・守備の4条件すべてゾーン/投手/打者とも 0。B2 と B1 の定数(`RELEASE_POINT`・`PITCHER_FOLLOW_MS`・`SWING_CONTACT_PROGRESS`・`SWING_FOLLOW_END_PROGRESS`)は全一致。
   - スクリーンショット28枚を `docs/tests/assets/2026-10-12-baseball-game/` に保存(仮想時計+手動 rAF の決定論的ハーネスで撮影。引き分けは `?seed=7&innings=1&fast=1`・後攻で再現)。
   - **G が見つけた不具合(修正タスクへ)**: (1) Space でスイングすると同じ keydown で `useSkipInput` が `holding=true` を見て演出を即スキップする(window のリスナ間にマイクロタスクが挟まり React が再描画済みになるため)。(2) 打者 scale 0.92 により、ワールドでのバット高さが `height × 0.92` になり、ゾーン外のコースで最大約 0.1m ボールより低くなる。(3) S11(b) 未達。
+- 修正 Fix1(`hooks/useSkipInput.ts`・`sequence/frame.ts`・`frame.test.ts`・`e2e/baseball.spec.ts`):
+  - Space スイングの即スキップ: `useSkipInput` の `onKeyDown` 先頭で `event.defaultPrevented` なら return(`useKeyboardInput` の `handleSwingKey` が `onSwing()` 前に `preventDefault()` 済み)。回帰 E2E「Space スイングで同じ keydown の演出がスキップされない」を追加(実キー入力 `keyboard.down` が必要。`dispatchEvent` では再現しない。`SWING_SEED = 1`。修正前は 3/3 失敗、修正後は 5/5 成功)。E2E は計 11 件。
+  - バット高さ: `frame.ts` に `batHeightInRoot(world) = (world − actors.batter.position.y) / actors.batter.scale` を追加し、motion の返す「ワールドの高さ」を打者ローカルに直す。構え・接触(= `swing.height`)・巻き上げがワールドで一致することを `frame.test.ts` で固定(補正を外すと 6 件失敗)。
+  - E2E の注意: 3D 初期化中に CPU の1球目が進むので、新しい飛行を狙う操作は MutationObserver で「flight 以外 → flight」の遷移を検出してから行う。
 - 修正 Fix2(S11(b) の解消。`ui/{ResultScreen,GameScreen}.tsx`・`ui/baseball.css`):
   - **設計からの変更**: `ResultScreen` の props に `teams: ResultTeams`(`{ away, home }`、各 `{ shortName, name, color: "#rrggbb" }`、`ResultScreen.tsx` から export)を追加した(当初の「props 不変」から変更)。`GameScreen` が表示用 view の `scoreboard.rows` と `teamColors` から純粋関数 `resultTeamsOf(view)` で作る。`types/`・`model/` は不変。
   - 表示はチーム色チップ+略称(`aria-label`/`title` に正式名)+小さな「先攻」「後攻」+得点。testid・`autoFocus`・`data-leader` の色分けは維持(強調は `.bb-result__team[data-side]` で指定)。
