@@ -1,6 +1,15 @@
 import type { Side } from "../../types/common";
 import type { GameState } from "../../types/game";
-import type { FieldDiagramGeometry, FieldGeometry, FieldMarkerView, GameView, ResultView, ScoreboardView, ScoreRowView } from "../../types/view";
+import type {
+  FieldDiagramGeometry,
+  FieldGeometry,
+  FieldMarkerView,
+  GameView,
+  PitchOutcomeView,
+  ResultView,
+  ScoreboardView,
+  ScoreRowView,
+} from "../../types/view";
 import { computeBattedLanding } from "../batting/batted-landing";
 import { cursorRadii } from "../batting/cursor";
 import { BATTING_PARAMS, LANDING_PARAMS } from "../batting/params";
@@ -59,6 +68,7 @@ function scoreRow(state: GameState, side: Side, columns: number): ScoreRowView {
   return {
     side,
     teamName: bySide(state.teams, side).name,
+    shortName: bySide(state.teams, side).shortName,
     cells: Array.from({ length: columns }, (_, index) => scoreCell(cells.at(index), gameOver)),
     runs: sumRuns(cells),
     hits: bySide(state.hits, side),
@@ -98,6 +108,36 @@ function fieldMarkerOf(state: GameState): FieldMarkerView | null {
     return null;
   }
   return { seq: record.seq, result: record.result, ...computeBattedLanding(record.ball, record.result, record.seq) };
+}
+
+/**
+ * 解決した直近の1球の事実(演出用)。`state.lastResult` が `null` の間は `null`。
+ * 次の投球が `in-flight` の間は `lastResult` が前の球のものなので、`seq` は `pitchSeq − 1`(それ以外は `pitchSeq`)。
+ * これにより、次の投球が始まっても `outcome.seq` は変わらない。
+ */
+function outcomeOf(state: GameState): PitchOutcomeView | null {
+  const result = state.lastResult;
+  if (result === null) {
+    return null;
+  }
+  return {
+    seq: state.phase.kind === "in-flight" ? state.pitchSeq - 1 : state.pitchSeq,
+    kind: result.kind,
+    inPlay: result.kind === "in-play" ? { result: result.result, ball: result.ball } : null,
+    plate: state.lastPlate,
+  };
+}
+
+/** チーム色。`teamColors` はサイド別(HUD のチップ用)、`uniforms` は攻撃側・守備側の役割別(描画用)。 */
+function colorsOf(state: GameState): Pick<GameView, "teamColors" | "uniforms"> {
+  const { away, home } = state.teams;
+  return {
+    teamColors: { away: away.uniformColor, home: home.uniformColor },
+    uniforms: {
+      offense: bySide(state.teams, offenseSide(state.half)).uniformColor,
+      defense: bySide(state.teams, defenseSide(state.half)).uniformColor,
+    },
+  };
 }
 
 /** 人間視点の勝敗。CPU 同士の試合では `null`。 */
@@ -185,5 +225,7 @@ export function toGameView(state: GameState): GameView {
     fieldMarker: fieldMarkerOf(state),
     fieldDiagram: FIELD_DIAGRAM,
     result: resultOf(state),
+    outcome: outcomeOf(state),
+    ...colorsOf(state),
   };
 }

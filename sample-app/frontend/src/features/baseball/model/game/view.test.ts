@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { InPlayResult } from "../../types/batting";
+import type { BattedBall, InPlayResult, PitchResult, PlateOutcome } from "../../types/batting";
 import type { Side } from "../../types/common";
 import type { GameConfig, GameState, InPlayRecord } from "../../types/game";
 import type { PitchFlight, PitchKind } from "../../types/pitch";
@@ -7,10 +7,11 @@ import type { BatterProfile } from "../../types/team";
 import { computeBattedLanding } from "../batting/batted-landing";
 import { cursorRadii } from "../batting/cursor";
 import { BATTING_PARAMS, LANDING_PARAMS } from "../batting/params";
+import { CPU_TEAM, PLAYER_TEAM } from "../data/teams";
 import { PITCH_PARAMS } from "../pitch/params";
 import { reduce } from "./reducer";
 import { createInitialState } from "./state";
-import { makeState } from "./test-fixtures";
+import { FIXTURE_AWAY_TEAM, FIXTURE_HOME_TEAM, makeState } from "./test-fixtures";
 import { toGameView } from "./view";
 
 const AWAY: GameConfig = { innings: 3, humanSide: "away", difficulty: "normal" };
@@ -329,6 +330,132 @@ describe("toGameView: field diagram", () => {
 describe("toGameView: purity", () => {
   it("does not change a deep-frozen state and returns equal views for equal input", () => {
     const state = deepFreeze(makeState({ lastInPlay: RECORD, log: [{ seq: 1, text: "ボール" }] }));
+    expect(toGameView(state)).toEqual(toGameView(state));
+  });
+});
+
+describe("toGameView: pitch outcome", () => {
+  const BALL: BattedBall = { type: "liner", strength: "medium", direction: "center" };
+
+  function resolvedState(result: PitchResult, plate: PlateOutcome | null, pitchSeq = 5): GameState {
+    return makeState({ pitchSeq, lastResult: result, lastPlate: plate });
+  }
+
+  it("is null before the first pitch has been resolved", () => {
+    expect(toGameView(makeState()).outcome).toBeNull();
+    expect(toGameView(createInitialState({ config: AWAY, seed: 1 })).outcome).toBeNull();
+  });
+
+  it.each(["ball", "called-strike", "swinging-strike", "foul"] as const)(
+    "describes a resolved %s with the current pitch sequence and no in-play detail",
+    (kind) => {
+      expect(toGameView(resolvedState({ kind }, null)).outcome).toEqual({ seq: 5, kind, inPlay: null, plate: null });
+    },
+  );
+
+  it("carries the in-play result and batted ball, and the plate outcome", () => {
+    const state = resolvedState({ kind: "in-play", result: "double", ball: BALL }, "double");
+    expect(toGameView(state).outcome).toEqual({ seq: 5, kind: "in-play", inPlay: { result: "double", ball: BALL }, plate: "double" });
+  });
+
+  it("reports how the plate appearance ended: a walk, a strikeout, or null while it goes on", () => {
+    expect(toGameView(resolvedState({ kind: "ball" }, "walk")).outcome?.plate).toBe("walk");
+    expect(toGameView(resolvedState({ kind: "called-strike" }, "strikeout")).outcome?.plate).toBe("strikeout");
+    expect(toGameView(resolvedState({ kind: "swinging-strike" }, "strikeout")).outcome?.plate).toBe("strikeout");
+    expect(toGameView(resolvedState({ kind: "foul" }, null)).outcome?.plate).toBeNull();
+  });
+
+  it("keeps the previous pitch's outcome, and its seq (pitchSeq - 1), while the next pitch is in flight", () => {
+    const next: PitchFlight = { ...flight("curve", 125, 1500), seq: 6 };
+    const state = makeState({ pitchSeq: 6, lastResult: { kind: "foul" }, lastPlate: null, phase: { kind: "in-flight", flight: next } });
+    expect(toGameView(state).outcome).toEqual({ seq: 5, kind: "foul", inPlay: null, plate: null });
+  });
+
+  it("uses the current pitch sequence once the game is over", () => {
+    const state = makeState({
+      pitchSeq: 9,
+      lastResult: { kind: "in-play", result: "homerun", ball: BALL },
+      lastPlate: "homerun",
+      phase: { kind: "game-over", winner: "home" },
+    });
+    expect(toGameView(state).outcome).toEqual({ seq: 9, kind: "in-play", inPlay: { result: "homerun", ball: BALL }, plate: "homerun" });
+  });
+
+  it("does not change the outcome seq when the next pitch starts (through the reducer)", () => {
+    const pitched = reduce(createInitialState({ config: AWAY, seed: 3 }), { type: "CPU_PITCH" });
+    const resolved = reduce(pitched, { type: "PITCH_ARRIVED" });
+    const resolvedOutcome = toGameView(resolved).outcome;
+    expect(resolvedOutcome?.seq).toBe(flightOf(pitched).seq);
+    expect(resolvedOutcome?.inPlay).toBeNull();
+
+    const inFlight = reduce(resolved, { type: "CPU_PITCH" });
+    expect(flightOf(inFlight).seq).toBe((resolvedOutcome?.seq ?? 0) + 1);
+    expect(toGameView(inFlight).outcome).toEqual(resolvedOutcome);
+  });
+
+  it("matches the in-play record through the reducer (seq, result and batted ball)", () => {
+    const pitched = reduce(createInitialState({ config: AWAY, seed: 3 }), { type: "CPU_PITCH" });
+    const pitch = flightOf(pitched);
+    const hit = reduce(pitched, { type: "SWING", swing: { kind: "power", cursor: pitch.landing, atMs: pitch.durationMs } });
+    const outcome = toGameView(hit).outcome;
+    expect(outcome?.seq).toBe(pitch.seq);
+    if (hit.lastResult?.kind === "in-play") {
+      expect(outcome).toEqual({ seq: pitch.seq, kind: "in-play", inPlay: { result: hit.lastResult.result, ball: hit.lastResult.ball }, plate: hit.lastPlate });
+    } else {
+      expect(outcome?.inPlay).toBeNull();
+    }
+  });
+});
+
+describe("toGameView: team colors and short names", () => {
+  it("passes each side's team color through teamColors, whichever half it is", () => {
+    const expected = { away: FIXTURE_AWAY_TEAM.uniformColor, home: FIXTURE_HOME_TEAM.uniformColor };
+    expect(toGameView(makeState()).teamColors).toEqual(expected);
+    expect(toGameView(makeState({ half: "bottom" })).teamColors).toEqual(expected);
+  });
+
+  it("uses the real teams' colors: Luminous blue, Nobles red (human away: Luminous is away)", () => {
+    expect(toGameView(createInitialState({ config: AWAY, seed: 1 })).teamColors).toEqual({ away: PLAYER_TEAM.uniformColor, home: CPU_TEAM.uniformColor });
+    expect(toGameView(createInitialState({ config: HOME, seed: 1 })).teamColors).toEqual({ away: CPU_TEAM.uniformColor, home: PLAYER_TEAM.uniformColor });
+  });
+
+  it("gives the offense the batting team's color and the defense the fielding team's color", () => {
+    expect(toGameView(makeState({ half: "top" })).uniforms).toEqual({ offense: FIXTURE_AWAY_TEAM.uniformColor, defense: FIXTURE_HOME_TEAM.uniformColor });
+    expect(toGameView(makeState({ half: "bottom" })).uniforms).toEqual({ offense: FIXTURE_HOME_TEAM.uniformColor, defense: FIXTURE_AWAY_TEAM.uniformColor });
+  });
+
+  it("does not change the uniforms while a pitch is in flight", () => {
+    const phase = { kind: "in-flight", flight: flight("straight", 140, 1357) } as const;
+    expect(toGameView(makeState({ half: "bottom", phase })).uniforms).toEqual(toGameView(makeState({ half: "bottom" })).uniforms);
+  });
+
+  it("swaps the uniforms across the change of sides, and not before the third out is resolved", () => {
+    let state = createInitialState({ config: CPU_ONLY, seed: 7 });
+    let before = toGameView(state);
+    for (let step = 0; step < 400 && state.half === "top"; step += 1) {
+      before = toGameView(state);
+      state = reduce(state, state.phase.kind === "in-flight" ? { type: "PITCH_ARRIVED" } : { type: "CPU_PITCH" });
+    }
+    const after = toGameView(state);
+    expect(state.half).toBe("bottom");
+    expect(before.uniforms).toEqual({ offense: PLAYER_TEAM.uniformColor, defense: CPU_TEAM.uniformColor });
+    expect(after.uniforms).toEqual({ offense: CPU_TEAM.uniformColor, defense: PLAYER_TEAM.uniformColor });
+    expect(after.teamColors).toEqual(before.teamColors);
+  });
+
+  it("adds each team's short name to the scoreboard rows and keeps the team names", () => {
+    const rows = toGameView(makeState()).scoreboard.rows;
+    expect(rows.map((row) => row.shortName)).toEqual([FIXTURE_AWAY_TEAM.shortName, FIXTURE_HOME_TEAM.shortName]);
+    expect(rows.map((row) => row.teamName)).toEqual([FIXTURE_AWAY_TEAM.name, FIXTURE_HOME_TEAM.name]);
+    const real = toGameView(createInitialState({ config: AWAY, seed: 1 })).scoreboard.rows;
+    expect(real.map((row) => [row.teamName, row.shortName])).toEqual([
+      ["ルミナス", "ルミ"],
+      ["ノーブルズ", "ノブ"],
+    ]);
+  });
+
+  it("does not change a deep-frozen state when building the outcome and the colors", () => {
+    const state = deepFreeze(makeState({ pitchSeq: 3, lastResult: { kind: "in-play", result: "single", ball: RECORD.ball }, lastPlate: "single" }));
     expect(toGameView(state)).toEqual(toGameView(state));
   });
 });

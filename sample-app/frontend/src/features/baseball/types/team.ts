@@ -19,10 +19,17 @@ export type PitcherProfile = {
   readonly repertoire: readonly PitchKind[];
 };
 
-/** チーム。batters は 9 人。 */
+/**
+ * チーム。batters は 9 人。
+ * `uniformColor`・`shortName` は描画・表示専用で、判定・乱数・バランスには影響しない。
+ */
 export type Team = {
   readonly id: string;
   readonly name: string;
+  /** ユニフォームの色(24bit RGB。例: 青 `0x2f63c8`)。 */
+  readonly uniformColor: number;
+  /** HUD 用の略称(全角1〜3文字)。 */
+  readonly shortName: string;
   readonly batters: readonly BatterProfile[];
   readonly pitcher: PitcherProfile;
 };

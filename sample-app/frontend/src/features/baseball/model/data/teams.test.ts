@@ -4,6 +4,16 @@ import { CPU_TEAM, getTeam, PLAYER_TEAM } from "./teams";
 
 const ALL_TEAMS: readonly Team[] = [PLAYER_TEAM, CPU_TEAM];
 const KATAKANA_NAME = /^[ァ-ヶー]+$/u;
+const MAX_RGB = 0xffffff;
+const MAX_SHORT_NAME_LENGTH = 3;
+/** 半角(ASCII・半角カナ)でない文字か。 */
+const isFullWidthChar = (char: string): boolean => /[^\u0020-\u007e\uff61-\uff9f]/u.test(char);
+
+const channelsOf = (color: number): { readonly r: number; readonly g: number; readonly b: number } => ({
+  r: Math.floor(color / 0x10000) % 0x100,
+  g: Math.floor(color / 0x100) % 0x100,
+  b: color % 0x100,
+});
 
 function average(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -70,6 +80,39 @@ describe("teams", () => {
       }
       expect(new Set(names).size).toBe(names.length);
     }
+  });
+});
+
+describe("teams: uniform color and short name", () => {
+  it("uniformColor は 0〜0xffffff の整数", () => {
+    for (const team of ALL_TEAMS) {
+      expect(Number.isInteger(team.uniformColor)).toBe(true);
+      expect(team.uniformColor).toBeGreaterThanOrEqual(0);
+      expect(team.uniformColor).toBeLessThanOrEqual(MAX_RGB);
+    }
+  });
+
+  it("2チームの色は RGB 各成分の差の合計が 200 以上(見分けがつく)", () => {
+    const a = channelsOf(PLAYER_TEAM.uniformColor);
+    const b = channelsOf(CPU_TEAM.uniformColor);
+    expect(Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b)).toBeGreaterThanOrEqual(200);
+  });
+
+  it("ルミナスは青系(B 成分が最大)、ノーブルズは赤系(R 成分が最大)", () => {
+    const luminous = channelsOf(PLAYER_TEAM.uniformColor);
+    const nobles = channelsOf(CPU_TEAM.uniformColor);
+    expect(luminous.b).toBeGreaterThan(Math.max(luminous.r, luminous.g));
+    expect(nobles.r).toBeGreaterThan(Math.max(nobles.g, nobles.b));
+  });
+
+  it("shortName は全角1〜3文字で、2チームで異なる", () => {
+    for (const team of ALL_TEAMS) {
+      const chars = [...team.shortName];
+      expect(chars.length).toBeGreaterThanOrEqual(1);
+      expect(chars.length).toBeLessThanOrEqual(MAX_SHORT_NAME_LENGTH);
+      expect(chars.every(isFullWidthChar)).toBe(true);
+    }
+    expect(new Set(ALL_TEAMS.map((team) => team.shortName)).size).toBe(ALL_TEAMS.length);
   });
 });
 

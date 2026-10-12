@@ -9,18 +9,20 @@ function makeBatter(teamId: string, index: number): BatterProfile {
   return { id: `${teamId}-b${index + 1}`, name: `${teamId}-打者${index + 1}`, meet: 50, power: 50, trajectory: 2 };
 }
 
-/** 能力が全員同じ最小のチーム(打者9人、持ち球はストレートのみ)。 */
-export function makeTeam(id: string, name: string): Team {
+/** 能力が全員同じ最小のチーム(打者9人、持ち球はストレートのみ)。`look` はユニフォームの色と略称(描画・表示専用)。 */
+export function makeTeam(id: string, name: string, look: Pick<Team, "uniformColor" | "shortName">): Team {
   return {
     id,
     name,
+    uniformColor: look.uniformColor,
+    shortName: look.shortName,
     batters: Array.from({ length: LINEUP_SIZE }, (_, index) => makeBatter(id, index)),
     pitcher: { id: `${id}-p`, name: `${name}-投手`, speedKmh: 140, control: 50, stamina: 100, repertoire: ["straight"] },
   };
 }
 
-export const FIXTURE_AWAY_TEAM: Team = makeTeam("fx-away", "テスト先攻");
-export const FIXTURE_HOME_TEAM: Team = makeTeam("fx-home", "テスト後攻");
+export const FIXTURE_AWAY_TEAM: Team = makeTeam("fx-away", "テスト先攻", { uniformColor: 0x3a5fa8, shortName: "先攻" });
+export const FIXTURE_HOME_TEAM: Team = makeTeam("fx-home", "テスト後攻", { uniformColor: 0xb8613a, shortName: "後攻" });
 
 /**
  * 1回表・無死・0-0・走者なし・得点なしの `GameState`(3回制、人間は先攻)。`overrides` で一部を差し替える。

@@ -676,7 +676,7 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
     4. 想定外の結果(版・公開日の不一致、lockfile 差分の肥大、フラグを付けても WebGL2 を作れない、vitest で three を import できない、eslint 規約が本書の規約と矛盾 等)が出たら、先のステップに進まずその場で orchestrator に報告する(設計の見直しが必要になる)。
   - 完了条件: ルートで `npm run typecheck`・`npm run lint`・`npm run build`・`npm run test` が成功。`npm ci --dry-run` が成功。(1)〜(6) の実測表を報告。
 
-- [ ] **ステップ A: 契約(`types/`、`outcome`、チーム色・略称)**(直列)
+- [x] **ステップ A: 契約(`types/`、`outcome`、チーム色・略称)**(直列)
   - 依存: ステップ0。担当ファイル: `features/baseball/types/{scene,stage}.ts`(新規)、`types/team.ts`、`types/view.ts`、`model/data/teams.ts`、`model/data/teams.test.ts`、`model/game/view.ts`、`model/game/view.test.ts`、`model/game/test-fixtures.ts`
   - やること: 本書「型契約」のとおり型を定義する(実行時コードなし)。`StageGeometry`(`zone`・`ballRadius` を含む)のフィールド名はモックの寸法に沿ってここで定義する。`Team.uniformColor`・`Team.shortName` を加算し、`data/teams.ts` にルミナス=`0x2f63c8`(青)・「ルミ」、ノーブルズ=`0xe8473c`(赤)・「ノブ」を設定、`test-fixtures.ts` の `makeTeam` に固定の色と略称を足す(2チームで別の値)。`outcomeOf(state)` と `colorsOf(state)` を `model/game/view.ts` に追加し、`toGameView` の戻り値に `outcome`・`teamColors`・`uniforms` を加え、`scoreRow` に `shortName` を加える(**`phase` が `in-flight` のときの `outcome.seq` は `pitchSeq − 1`**)。`view.test.ts`・`teams.test.ts` に追記する(テスト戦略の該当項)。
   - 完了条件: `npm run typecheck --workspace frontend` 成功、lint 0件、**既存749件のアサーションが無改変で成功**(`view.test.ts`・`teams.test.ts` は追記のみ)。`types/` が他セグメントを import していない(`scene.ts`/`stage.ts` は `types/` 内と DOM 型のみ)。`balance.test.ts` の結果が変わらない(色・略称は判定に影響しない)。
@@ -933,6 +933,14 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 - `PCFSoftShadowMap` は r186 で削除扱い(警告のうえ PCFShadowMap に置換)。**`PCFShadowMap` を使う**。
 - SwiftShader の描画は重い(1280×720・影あり・pixelRatio1 で約50ms/フレーム、pixelRatio にほぼ比例、初回フレームはシェーダコンパイルで約200ms)。**low 品質/headless では pixelRatio を 1 に固定**し、E2E のビューポートを大きくしない。
 - Prettier の printWidth は 160。160桁以内の import は1行にする(prettier/prettier が error)。
+
+## 実装時の申し送り(orchestrator 記録)
+
+- ステップA:
+  - `outcomeOf`/`colorsOf` は `model/game/view.ts` の非 export 関数(`toGameView` 経由でテスト)。`outcome.seq` は in-flight 中 `pitchSeq − 1`、それ以外(game-over 含む)は `pitchSeq`。3アウト目の解決直後は `uniforms` が新しい攻守で入れ替わるので、旧配色の保持は `useHeldView` の責務。
+  - `makeTeam(id, name, look)`(test-fixtures)。チーム: ルミナス `0x2f63c8`/「ルミ」、ノーブルズ `0xe8473c`/「ノブ」。
+  - `StageGeometry` のフィールド: `zone{halfWidth,bottom,top,planeZ}`、`ballRadius`、`groundSize`、`infield{dirtRadius,dirtCenterZ,dirtY,grassSide,grassCenterZ,grassY,homeDirtRadius,homeDirtY}`、`mound{radiusTop,radiusBottom,height,y,z}`、`rubber{width,height,depth,y,z}`、`bases{size,height,first,second,third}`(Vec3, y=0.05, 一塁は +x)、`homePlate{points: GroundPoint[], y}`(尖りは捕手側 +z、ShapeGeometry を x 軸 −π/2 で寝かせるとシェイプの y が世界の −z)、`foulLines{length,width,height,y,centerOffset}`(中心 (±centerOffset, y, −centerOffset)、右は yaw −π/4・左は +π/4)、`batterBoxes{innerX,outerX,halfDepth,y}`、`fence{radius,height,y,spreadRad,cap{radius,height,y}}`、`stands{innerRadius(109),outerRadius(147),height,y,spreadRad}`、`roof{radius,height,y,spreadRad}`。円弧は CylinderGeometry 開口・両面、`thetaStart = π − spreadRad`、`thetaLength = 2·spreadRad`。初期値と意味は `types/stage.ts` の JSDoc。
+  - 守備位置は `StageGeometry` に含めない(`WORLD_PARAMS` のみ。render は `SceneFrame.fielders` の座標を使う)。ライト・フォグ・空・芝の縞は look(render/look.ts)の領分。
 
 ## 壁打ち(grilling)記録
 

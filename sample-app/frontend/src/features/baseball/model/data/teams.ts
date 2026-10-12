@@ -1,6 +1,7 @@
 import type { Team } from "../../types/team";
 
 // 固定プリセットの架空2チーム。チーム名・選手名はすべて架空(実在の球団・選手とは無関係)で、選手は名のみ。
+// ユニフォームの色(uniformColor)と略称(shortName)は描画・表示専用で、判定・乱数・バランスには影響しない。
 // 能力値は仮値。2チームの打者能力(meet・power の平均)と投手能力が同程度になるよう揃えてあり、
 // 先攻/後攻・チームによる有利不利を作らない(バランス調整は数値のみで行う)。
 
@@ -8,6 +9,8 @@ import type { Team } from "../../types/team";
 export const PLAYER_TEAM: Team = {
   id: "luminous",
   name: "ルミナス",
+  uniformColor: 0x2f63c8,
+  shortName: "ルミ",
   batters: [
     { id: "luminous-b1", name: "カイト", meet: 66, power: 40, trajectory: 1 },
     { id: "luminous-b2", name: "ミナト", meet: 64, power: 46, trajectory: 2 },
@@ -33,6 +36,8 @@ export const PLAYER_TEAM: Team = {
 export const CPU_TEAM: Team = {
   id: "nobles",
   name: "ノーブルズ",
+  uniformColor: 0xe8473c,
+  shortName: "ノブ",
   batters: [
     { id: "nobles-b1", name: "ソラト", meet: 68, power: 42, trajectory: 1 },
     { id: "nobles-b2", name: "ユーマ", meet: 60, power: 52, trajectory: 2 },
