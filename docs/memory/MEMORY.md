@@ -12,6 +12,7 @@
 - [eslint-strictness-ratchet](entries/eslint-strictness-ratchet.md) — (superseded, [[eslint-strictness-ratchet-v2]]参照) sample-appのサイズ/複雑さ/型ルールはwarnで導入し、drainしてからerrorに昇格させる
 - [eslint-strictness-ratchet-v2](entries/eslint-strictness-ratchet-v2.md) — sample-appのサイズ/複雑さ/型/sonarjs/security/prettierルールはdrain確認済みで全てerrorに昇格済み(既存コード修正不要)
 - [knip-dead-code-detection](entries/knip-dead-code-detection.md) — sample-appへのKnip導入はレポートのみ・非ブロッキングから始め、CI組み込みは既存の`checks`/`e2e`ジョブと分離した独立ジョブにする
+- [frontend-3d-three-in-render-segment](entries/frontend-3d-three-in-render-segment.md) — sample-app frontend の3D描画は Three.js(npm)を `render/` セグメントに閉じ、`model/world/` は three 非依存の純粋関数にする(つなぐのは hooks のみ)
 
 ## convention(命名・実装・テストの規約)
 
@@ -36,3 +37,4 @@
 
 <!-- 例: - [auth-strategy](entries/auth-strategy.md) — 認証方式が未決定。複数topicに影響するため要人間判断 -->
 - [react-hooks-lint-not-installed](entries/react-hooks-lint-not-installed.md) — sample-appに`eslint-plugin-react-hooks`が未導入で、hooksの依存配列・cleanup漏れがlintで検出されない。導入するかは要人間判断
+- [feature-segment-import-boundaries-not-enforced](entries/feature-segment-import-boundaries-not-enforced.md) — feature内セグメント(types/model/render/hooks/ui)のimport方向がESLintで機械強制されず、grepの構造検査頼み。強制するかは要人間判断
