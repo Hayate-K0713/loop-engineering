@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useCpuTurn } from "../hooks/useCpuTurn";
 import { useGame } from "../hooks/useGame";
+import { useGameStage } from "../hooks/useGameStage";
 import type { GameConfig, PlaybackSpeed } from "../types/game";
 import type { CourseCell, PitchCommand, PitchKind } from "../types/pitch";
 import { GameLayout } from "./GameLayout";
@@ -18,13 +18,15 @@ type GameScreenProps = {
 };
 
 /**
- * 1試合分の画面。`useGame`・`useCpuTurn` を結線し、人間守備時の投球の選択状態 `{ kind, cell }` を持つ。
- * 試合が終わると `view.result` があるので `ResultScreen` を重ねる(「もう一度」は親が `key` を変えて再マウントする)。
+ * 1試合分の画面。`useGame`(試合の状態)と `useGameStage`(3D ステージ・演出・入力・CPU の手番)を結線し、人間守備時の投球の選択状態 `{ kind, cell }` を持つ。
+ * 試合が終わると `view.result` があるが、`ResultScreen` は最後の演出が終わってから重ねる(「もう一度」は親が `key` を変えて再マウントする)。
+ * `stage.view` は演出が終わるまで更新されない表示用の view。操作の可否は `stage.pitchReady`・`stage.swingReady` を使う。
  */
 export function GameScreen({ config, seed, speed, onRestart, onBackToTitle }: GameScreenProps) {
-  const { view, throwPitch, swing, cpuPitch, pitchArrived } = useGame(config, seed);
+  const game = useGame(config, seed);
   const [selection, setSelection] = useState<PitchCommand>(INITIAL_SELECTION);
-  useCpuTurn({ cpuPitchPending: view.cpuPitchPending, turnKey: view.turnKey, cpuWaitMs: speed.cpuWaitMs, onCpuPitch: cpuPitch });
+  const stage = useGameStage({ game, speed, selection });
+  const { view, holding } = stage;
 
   const selectKind = (kind: PitchKind): void => setSelection((current) => ({ ...current, kind }));
   const selectCell = (cell: CourseCell): void => setSelection((current) => ({ ...current, cell }));
@@ -33,15 +35,18 @@ export function GameScreen({ config, seed, speed, onRestart, onBackToTitle }: Ga
     <>
       <GameLayout
         view={view}
-        timeScale={speed.timeScale}
+        pitchReady={stage.pitchReady}
+        swingReady={stage.swingReady}
         selection={selection}
         onSelectKind={selectKind}
         onSelectCell={selectCell}
-        onThrow={() => throwPitch(selection)}
-        onSwing={swing}
-        onPitchArrived={pitchArrived}
+        onThrow={stage.onThrow}
+        swingKind={stage.swingKind}
+        onSelectSwingKind={stage.setSwingKind}
+        onSwing={stage.swingNow}
+        stageProps={stage.stageProps}
       />
-      {view.result === null ? null : <ResultScreen result={view.result} onRestart={onRestart} onBackToTitle={onBackToTitle} />}
+      {view.result === null || holding ? null : <ResultScreen result={view.result} onRestart={onRestart} onBackToTitle={onBackToTitle} />}
     </>
   );
 }

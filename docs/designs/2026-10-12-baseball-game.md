@@ -976,6 +976,13 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - `dispose()` の順序は設計どおり(`disposed` → context リスナ解除 → `disconnect()` → `disposeObject3D(scene)` と sky・gradient・チーム材質の直接 dispose → `renderer.dispose()` → `forceContextLoss()` → `canvas.remove()`)。`WebGLRenderer` の例外時は `WEBGL_lose_context` で解放してから canvas を外して `null`。
   - 型の差: `@types/three` r186 の `WebGLRenderer#outputColorSpace` が `string` のため、`applyRendererLook(renderer as RendererLookTarget, …)` のキャストが stage.ts に1箇所ある。**G で `look.ts` の `RendererLookTarget.outputColorSpace` を `string` にしてキャストを外す。**
   - 既知の警告: context lost → restored → dispose の順だと three の旧リスナで `delete: object does not belong to this context` の warning が大量に出る(実害なし。restore しないまま dispose なら出ない)。手動確認7の判定に警告の有無を使わない方針と整合。
+- ステップE(`ui/{StageView,GameLayout,GameScreen,BaseballGamePage}.tsx`、旧3部品の削除):
+  - `GameLayout` の props は `ActionBarProps & { stageProps }` のフラット構成(`throwing` は `pitchReady` に含まれるので渡さない)。CPU 打撃(`cpu-only`)ではバーを描かない。`back-home`(`a.bb-home-link`)は `BaseballGamePage` の **DOM の最後**に置き、z-index を足さずにタイトルの上で押せるようにした。
+  - 契約外の追加: フォールバックに `data-testid="stage-fallback"`(F の WebGL 非対応テスト用)。`data-play-kind`・`data-flight-seq`・`data-landing-*`・`data-duration-ms`・`data-zone-rect` は値が無いとき属性ごと出さない。Suspense の fallback は `p.bb-page__loading`(CSS 未定義。G で中央寄せを足すか外す)。
+  - チャンク: `index` は 201.04KB / gzip 63.51KB(旧 UI が遅延チャンクへ移ったため基準 241.77KB より減少。**以後の基準はこの値**)。`GameScreen` チャンクは 635.36KB / gzip 168.33KB(three はこちら)。
+  - 動作確認(dev + Playwright): タイトル → 開始 → ステージ+オーバーレイ表示、コンソールエラー0、先攻・後攻 × 390×844・1280×720 で `fast=1` により結果画面まで到達、再開始でも canvas は1つ、WebGL 非対応スタブでフォールバック表示のまま結果まで進行、通常速度の in-play 中のクリックで 21ms 後に `idle`。
+  - **F への連絡**: 3D 画面では `locator.click()` が約 2.9 秒かかり演出が先に終わるので、スキップは `page.mouse.click(x, y)`(ステージの空き領域、例 (640, 250))を使う。`locator.isEnabled()` は要素が無いと 30 秒待つので、ループ内は `page.evaluate`・`count()` で DOM を見る。in-play の検出は `page.waitForFunction(..., { polling: "raf" })` で `data-phase="play"`。seed=7・後攻・中央ストレートの1球目は in-play(要再確認)。
+  - **G で直す点(E の実測)**: (1) デスクトップ 1280×720 でティッカーと操作バーがゾーン枠(x 549–731、y 427–635)を覆う(守備バーはゾーンの下半分以上)。(2) スマホ縦は重なり無しだが、ネームプレートが `back-home` のピル直下に詰まる。(3) 打者が非常に大きく、左上の HUD が打者の頭に重なる(承認済みモックも同程度の大きさ。打撃カメラ・ゾーン実寸は不変なので見た目の範囲で調整)。(4) スキップのヒント(`top: 62%`)がスマホ縦の守備バー上端に隠れる。(5) `bb-page__loading` の CSS。
 - ステップD(`hooks/{useStageDirector,useHeldView,useGameStage}.ts`):
   - 呼び出し: `const stage = useGameStage({ game, speed, selection })`(`game` は `useGame` の戻り値、`speed` は `useLaunchParams().speed`、`selection` は `GameScreen` の `useState` の `PitchCommand`)。**E は `GameScreen` から `useCpuTurn`・`usePitchFlight` の呼び出しを外す**(`useGameStage` 内で呼ぶ)。`useCpuTurn` は無改変(`cpuPitchPending: view.cpuPitchPending && !holding` を渡す)。
   - 戻り値 `UseGameStageResult`:
