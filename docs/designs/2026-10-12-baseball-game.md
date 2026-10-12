@@ -976,6 +976,11 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - `dispose()` の順序は設計どおり(`disposed` → context リスナ解除 → `disconnect()` → `disposeObject3D(scene)` と sky・gradient・チーム材質の直接 dispose → `renderer.dispose()` → `forceContextLoss()` → `canvas.remove()`)。`WebGLRenderer` の例外時は `WEBGL_lose_context` で解放してから canvas を外して `null`。
   - 型の差: `@types/three` r186 の `WebGLRenderer#outputColorSpace` が `string` のため、`applyRendererLook(renderer as RendererLookTarget, …)` のキャストが stage.ts に1箇所ある。**G で `look.ts` の `RendererLookTarget.outputColorSpace` を `string` にしてキャストを外す。**
   - 既知の警告: context lost → restored → dispose の順だと three の旧リスナで `delete: object does not belong to this context` の warning が大量に出る(実害なし。restore しないまま dispose なら出ない)。手動確認7の判定に警告の有無を使わない方針と整合。
+- ステップG(見た目の調整):
+  - 変更: 打者 x −0.85→−0.8・scale 1→0.92(`params.ts`)、`PORTRAIT_LIFT` 0.16→0.2、観客席を赤系中心の点描に(`look.ts`)、`RendererLookTarget.outputColorSpace` を `string` にして `stage.ts` のキャストを削除、横長では操作バー+ティッカーを右下ドック(幅 `clamp(306px, 50vw − 12.6vh − 34px, 440px)`)に集約、スキップのヒントを `top: 50%` の暗いピルに、ネームプレートとピルの間隔、`bb-page__loading` の中央寄せ、`.bb-bar--pitch` の配置を `baseball-stage.css` に一本化、`NamePlates` の球速なし表示を「球速 ---」に。禁止リストの値・キーフレーム表は不変。
+  - 判定: S1〜S10 は〇、S11(b)(結果画面の略称+色チップ)のみ未達。重なり実測は 390×844・1280×720 × 打撃・守備の4条件すべてゾーン/投手/打者とも 0。B2 と B1 の定数(`RELEASE_POINT`・`PITCHER_FOLLOW_MS`・`SWING_CONTACT_PROGRESS`・`SWING_FOLLOW_END_PROGRESS`)は全一致。
+  - スクリーンショット28枚を `docs/tests/assets/2026-10-12-baseball-game/` に保存(仮想時計+手動 rAF の決定論的ハーネスで撮影。引き分けは `?seed=7&innings=1&fast=1`・後攻で再現)。
+  - **G が見つけた不具合(修正タスクへ)**: (1) Space でスイングすると同じ keydown で `useSkipInput` が `holding=true` を見て演出を即スキップする(window のリスナ間にマイクロタスクが挟まり React が再描画済みになるため)。(2) 打者 scale 0.92 により、ワールドでのバット高さが `height × 0.92` になり、ゾーン外のコースで最大約 0.1m ボールより低くなる。(3) S11(b) 未達。
 - ステップF(`e2e/baseball.spec.ts`・README・`docs/process/sample-app-dev.md`):
   - E2E は 10 件(ホーム遷移・1イニング通し・WebGL 不可でも進行・タップで演出スキップ・レイアウト幾何検証 4 通り)が 3 回連続で成功(各 1.0〜1.2 分、2 workers)。`playwright.config.ts`・`home.spec.ts` は無改変(`launchOptions.args` 不要)。
   - seed: スキップ用 `SKIP_SEED = 7`(後攻・中央ストレートの1球目が in-play。fast=1 で seed 1〜24 を探索し、in-play は 2,4,5,7,8,11,15〜19,21,23。通常速度で再確認)。試合通し用 `GAME_SEED = 47`(延長なし。設計の seed 42 は延長に入り、3D では1ターン 30 秒の待ちが足りず失敗したため変更。1ターンの待ちは 60 秒、test timeout は 120 秒のまま)。**ロジックを変えたら両方とも再探索**(spec のコメントに手順あり)。
