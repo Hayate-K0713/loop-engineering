@@ -976,6 +976,11 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - `dispose()` の順序は設計どおり(`disposed` → context リスナ解除 → `disconnect()` → `disposeObject3D(scene)` と sky・gradient・チーム材質の直接 dispose → `renderer.dispose()` → `forceContextLoss()` → `canvas.remove()`)。`WebGLRenderer` の例外時は `WEBGL_lose_context` で解放してから canvas を外して `null`。
   - 型の差: `@types/three` r186 の `WebGLRenderer#outputColorSpace` が `string` のため、`applyRendererLook(renderer as RendererLookTarget, …)` のキャストが stage.ts に1箇所ある。**G で `look.ts` の `RendererLookTarget.outputColorSpace` を `string` にしてキャストを外す。**
   - 既知の警告: context lost → restored → dispose の順だと three の旧リスナで `delete: object does not belong to this context` の warning が大量に出る(実害なし。restore しないまま dispose なら出ない)。手動確認7の判定に警告の有無を使わない方針と整合。
+- ステップF(`e2e/baseball.spec.ts`・README・`docs/process/sample-app-dev.md`):
+  - E2E は 10 件(ホーム遷移・1イニング通し・WebGL 不可でも進行・タップで演出スキップ・レイアウト幾何検証 4 通り)が 3 回連続で成功(各 1.0〜1.2 分、2 workers)。`playwright.config.ts`・`home.spec.ts` は無改変(`launchOptions.args` 不要)。
+  - seed: スキップ用 `SKIP_SEED = 7`(後攻・中央ストレートの1球目が in-play。fast=1 で seed 1〜24 を探索し、in-play は 2,4,5,7,8,11,15〜19,21,23。通常速度で再確認)。試合通し用 `GAME_SEED = 47`(延長なし。設計の seed 42 は延長に入り、3D では1ターン 30 秒の待ちが足りず失敗したため変更。1ターンの待ちは 60 秒、test timeout は 120 秒のまま)。**ロジックを変えたら両方とも再探索**(spec のコメントに手順あり)。
+  - スキップのテストは、`mouse.move` を演出開始前に済ませ、スキップの瞬間は down/up のみ送り、反応時間はページ内の `performance.now()` で測る(3D 画面では `locator.click()` 1〜3 秒・`mouse.click` 1〜2 秒かかるため)。「何も起きない」の確認は rAF 2 フレーム待ち。
+  - テスト5は違反を全件集めて `toEqual([])` で報告する。負の対照(バーをゾーン上へずらす一時 spec)で正しく失敗することを確認済み。
 - ステップE(`ui/{StageView,GameLayout,GameScreen,BaseballGamePage}.tsx`、旧3部品の削除):
   - `GameLayout` の props は `ActionBarProps & { stageProps }` のフラット構成(`throwing` は `pitchReady` に含まれるので渡さない)。CPU 打撃(`cpu-only`)ではバーを描かない。`back-home`(`a.bb-home-link`)は `BaseballGamePage` の **DOM の最後**に置き、z-index を足さずにタイトルの上で押せるようにした。
   - 契約外の追加: フォールバックに `data-testid="stage-fallback"`(F の WebGL 非対応テスト用)。`data-play-kind`・`data-flight-seq`・`data-landing-*`・`data-duration-ms`・`data-zone-rect` は値が無いとき属性ごと出さない。Suspense の fallback は `p.bb-page__loading`(CSS 未定義。G で中央寄せを足すか外す)。

@@ -8,7 +8,7 @@
 - Lint: `cd sample-app && npm run lint`(サイズ/複雑さ/型/`sonarjs`/`security`/フォーマット(`prettier`)のルールは全て`error`まで昇格済み。詳細は「静的解析・自動チェックの考え方」)
 - 自動テスト(backend+frontendの純粋関数): `cd sample-app && npm run test`
 - ビルド: `cd sample-app && npm run build`
-- E2E(frontend+backendを自動起動、要 `npx playwright install chromium`。ブラウザ野球の e2e(`e2e/baseball.spec.ts`)を含む): `cd sample-app && npm run test:e2e --workspace frontend`
+- E2E(frontend+backendを自動起動、要 `npx playwright install chromium`。ブラウザ野球の e2e(`e2e/baseball.spec.ts`)を含む): `cd sample-app && npm run test:e2e --workspace frontend`(ブラウザ野球の画面は WebGL2 の 3D 描画で、headless Chromium では SwiftShader のソフトウェア描画になるため、1試合を通すテストは数十秒かかる。詳細は「手動確認の使い分け」の WebGL の注意)
 - 手動確認: API は `curl`、画面は Playwright CLI(「手動確認の使い分け」参照)
 
 同じチェックは `.github/workflows/ci.yml` がpush/PRごとにも実行する(CIは人間の直pushに対する最後の砦。「静的解析・自動チェックの考え方」の「壊れたら赤くなる」層の一部)。
@@ -21,6 +21,8 @@
 
 - **API・バックエンド**: `curl` で実際にエンドポイントを叩いて確認する。
 - **フロントエンド(画面・UI)**: Playwright CLI(`npx playwright test` 等)で確認する。ブラウザ野球の画面は `npm run dev:frontend` で起動して `/#/baseball` を開き、`?seed=<uint32>&innings=1&fast=1` を付けて決定論的・高速に確認する(これらのパラメータは開発サーバーでのみ有効で、本番ビルドでは無視される)。
+  - **ゲーム画面は Three.js の 3D 描画なので、見た目は必ずスクリーンショットで確認する**(DOM の存在やテキストだけでは、ステージが映っているか・HUD や操作バーがゾーン枠・投手・打者を覆っていないかが分からない)。使い捨てのスクリプトで `page.screenshot()` を撮り、画像として読んで判定する(スクリプトとスクリーンショットはコミットしない。残す場合は `docs/tests/assets/<topic>/` に 1 枚 500KB 以下で)。デスクトップ(1280×720)とスマホ縦(390×844、`hasTouch`)の両方で、タイトル・人間打撃・人間守備・結果画面を確認する。オーバーレイの幾何(ゾーン枠を覆わない等)は `e2e/baseball.spec.ts` のレイアウト検証が機械的に確認する。
+  - **WebGL の注意**: (1) WebGL2 が必要(three r163 以降は WebGL1 不可)。Playwright 1.62 の headless Chromium は追加の起動引数なしで WebGL2 を作れるが SwiftShader のソフトウェア描画で重く(1280×720 で 1 フレーム約 50ms)、3D 画面では `locator.click()` が数秒かかることがある。(2) 短い演出区間を狙う操作は、先に `page.mouse.move()` で位置を決めてから `page.mouse.down()`/`up()` だけを送る。ループ内の状態確認は `page.evaluate`・`count()` を使い、`isEnabled()` など要素が無いと既定のタイムアウトまで待つ API を避ける。短い区間の検出は `page.waitForFunction(..., { polling: "raf" })`(`toHaveAttribute` のポーリングでは取り逃す)。(3) `stage-3d` の `data-status`(`loading`/`ready`/`unsupported`/`lost`)・`data-phase`・`data-play-kind`・`data-zone-rect` 等の `data-*` を読むと、描画結果を見なくても状態を確認できる。(4) WebGL が使えない場合の進行は、`page.addInitScript` で `HTMLCanvasElement.prototype.getContext` が `webgl`/`webgl2` に `null` を返すようにして確認する(このときブラウザが出す WebGL 生成失敗のログは想定内)。(5) クラウド実行環境では Playwright のブラウザ revision が合わないことがある(`docs/memory/entries/playwright-browser-revision-mismatch.md`)。
 - どちらにも当てはまらない対象(バッチ処理・スクリプト等)は、妥当な方法(直接実行など)で確認する。
 
 `/test` および `tester` はこの使い分けに従うこと。

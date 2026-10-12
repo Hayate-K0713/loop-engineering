@@ -30,19 +30,26 @@ sample-app/
       resolve-route.ts       hash から "home" | "baseball" を決める純粋関数(resolve-route.test.ts でテスト)
       use-hash-route.ts      hashchange を購読して現在のルートを返す hook
       AppRoutes.tsx          ルートに応じて App か BaseballGamePage を描画する
-    src/features/baseball/  ブラウザ野球(1試合モード・CPU対戦)。外部へは index.ts 経由で BaseballGamePage だけを公開
-      types/                 ゲームで使う型定義(GameState・GameAction・PitchCommand・BattedBall・GameView 等)
-      model/                 React 非依存の純粋関数。ゲームロジックのすべて(下記サブディレクトリ。各モジュールに同居する *.test.ts でテスト)
+    src/features/baseball/  ブラウザ野球(1試合モード・CPU対戦。画面は Three.js の 3D ステージ)。外部へは index.ts 経由で BaseballGamePage だけを公開
+      types/                 ゲームと 3D 画面で使う型定義(GameState・GameAction・PitchCommand・GameView・SceneFrame・StageHandle 等)。他セグメントを import しない
+      model/                 React・three 非依存の純粋関数。ゲームロジックと 3D 画面の「何をどこに出すか」のすべて(各モジュールに同居する *.test.ts でテスト)
         rng/                   シード付きPRNG(mulberry32)とサンプリング
         pitch/                 球種・コース・球速・投球の軌道
         batting/               スイングカーソル判定・接触・打球・結果表・1球の解決(resolve-pitch)
         cpu/                   難易度・CPU投手の配球・CPU打者の擬似入力
         game/                  GameState・reducer・カウント/走者/イニング/得点・実況ログ・起動パラメータ解釈・表示用 view
-        data/                  架空の固定プリセット2チーム
-      hooks/                 React との橋渡し(useReducer による状態保持、rAF による投球アニメ、ポインタ/キー入力、CPU の手番、起動パラメータ)
-      ui/                    描画のみ(タイトル/試合/結果画面、スコアボード、ストライクゾーン、フィールド図、操作パネル、CSS)
+        data/                  架空の固定プリセット2チーム(チーム色・略称を含む)
+        world/                 3D 空間の計算(three 非依存の純粋関数。三角関数は可、乱数・時刻・DOM は不可)
+          space/                 ワールド座標・ゾーン座標の変換、球場の寸法(StageGeometry)、数値パラメータ(WORLD_PARAMS)
+          path/                  投球・打球の軌道、野手の動き
+          motion/                キャラクターのポーズ(キーフレーム補間・順運動学)
+          camera/                打撃カメラと、打球を追う中継カメラ
+          sequence/              1球の演出の進行(時刻表・フレーム合成・テロップ・入力の振り分け・演出の状態判断)
+      render/                three を使う唯一の層(`three` の import はここだけ)。球場・キャラクター・マーカーのビルダー、見た目(look)、破棄、ステージ生成(stage.ts)
+      hooks/                 React との橋渡し(useReducer による状態保持、演出の時計と進行(useStageDirector・useGameStage)、WebGL ステージの生成、ポインタ/キー入力、CPU の手番、起動パラメータ)。model と render をつなぐのは hooks だけ
+      ui/                    描画のみ(タイトル/試合/結果画面、ステージ全面(StageView)、その上に重ねる HUD・ネームプレート・ティッカー・操作バー、CSS)
     e2e/home.spec.ts        Playwright CLIでの確認例(backend/frontend 両方を実際に起動して検証)
-    e2e/baseball.spec.ts    ブラウザ野球のE2E(`?seed=&innings=&fast=1` で決定論的に1試合を最後まで通す)
+    e2e/baseball.spec.ts    ブラウザ野球のE2E(`?seed=&innings=&fast=1` で決定論的に1試合を最後まで通す、WebGL 非対応でも進行する、演出スキップ、オーバーレイがゾーンを隠さない幾何検証)
 ```
 
 ## 実行方法
@@ -57,7 +64,7 @@ npm run knip:report           # デッドコード・未使用依存の検出(Kn
 npm run knip                  # 同上だが指摘があれば非0で終了する版。ローカルで今すぐ確認したい時用(CIはknip:reportを使う)
 npm run dev:backend          # http://localhost:3001 でAPI起動(nest start --watch)
 npm run dev:frontend          # 別ターミナルで http://localhost:5173 起動(/api は3001にproxy)。ブラウザ野球は http://localhost:5173/#/baseball
-npm run test:e2e --workspace frontend   # Playwright(要 npx playwright install chromium)。backend/frontendを自動起動する
+npm run test:e2e --workspace frontend   # Playwright(要 npx playwright install chromium)。backend/frontendを自動起動する。ブラウザ野球は WebGL2(headless Chromium では SwiftShader のソフトウェア描画)で描くため、1試合を通すテストは数十秒かかる
 ```
 
 手動確認する場合、APIは `curl`、画面は Playwright CLI を使う(`CLAUDE.md`の「手動確認の使い分け」参照)。
@@ -79,5 +86,8 @@ curl "http://localhost:3001/api/quote?amount=-1&taxRate=0.1"
 5. **デッドコード・未使用依存の検出(Knip)もレポートのみ・非ブロッキングから始める。** `knip.jsonc` の設定で `sample-app`(npm workspaces構成)を解析し、`npm run knip:report` は指摘があっても常にexit code 0で終わる。CIの `knip` ジョブも `continue-on-error: true` で独立実行し、既存の `checks`/`e2e` ジョブをブロックしない。**Knipの指摘(件数・内容)は `/test` の合否判定にも `code-reviewer` の判定材料にも使わない。** report-only運用である限り、CLAUDE.mdの「構成されているチェックは必須で実行する…失敗はそのまま不合格/MAJORの理由になる」という原則(`error`まで昇格したチェックが対象)の対象外として扱う。詳細は `docs/memory/entries/knip-dead-code-detection.md` を参照。
 6. **フロントエンドのゲーム(ブラウザ野球)もロジックは純粋関数、乱数はシード付きPRNG。** `frontend/src/features/baseball/model/` のロジック(判定・CPU・進行・走者・得点)はすべて React 非依存の純粋関数で、`GameState` を受け取って次の `GameState` を返す reducer が中心になる。`hooks/` は React との橋渡し、`ui/` は描画だけに徹する。乱数は `Math.random` を使わず、`GameState` 内に持つシード付きPRNG(mulberry32)の状態を reducer 内で明示的に受け渡す(lintで `Math.random` が error のため。`docs/memory/entries/sample-app-lint-random-and-index-access.md`)。同じシード・同じ入力なら必ず同じ試合になるので、単体テスト(`model/` 配下に同居する `*.test.ts`、vitest・jsdom不使用)もE2Eも決定論的に書ける。frontend の vitest は Playwright の `e2e/*.spec.ts` を拾わないよう `include` を限定している(`docs/memory/entries/vitest-include-picks-playwright-specs.md`)。
 7. **ブラウザ野球の起動方法と、テスト用の起動パラメータは開発サーバー限定。** `npm run dev:frontend` で起動して `http://localhost:5173/#/baseball` を開く(`/` は従来画面のまま、ハッシュで切り替える)。URLに `?seed=<uint32>&innings=<1|3|5|9>&fast=1`(例: `http://localhost:5173/?seed=42&innings=1&fast=1#/baseball`)を付けると、シード固定・イニング数固定・投球アニメとCPU待機の短縮ができる(不正値は無視して既定値)。この3つは**開発サーバー(`npm run dev:frontend`、`import.meta.env.DEV`)でのみ有効で、本番ビルドでは無視される**(判定は `hooks/useLaunchParams.ts` だけが行い、`model/game/launch-params.ts` の `parseLaunchParams` は渡された文字列を解釈するだけの純粋関数)。E2E(`e2e/baseball.spec.ts`)はPlaywrightの `webServer` が `npm run dev` を使うため、このパラメータで決定論的に試合を通せる。
+8. **ブラウザ野球の画面は Three.js の 3D ステージ全面+その上に重ねたオーバーレイ(WebGL2 が必要)。** 3D の描画は `three`(npm)を使い、`three` を import するのは `frontend/src/features/baseball/render/` だけ。3D 空間の計算(座標変換・投球/打球の軌道・キャラクターのポーズ・カメラ・1球の演出の時刻表)は `model/world/` に three 非依存の純粋関数として置き、単体テストできる。`model/world/` と `render/` をつなぐのは `hooks/` だけ(`docs/memory/entries/frontend-3d-three-in-render-segment.md`)。`three` を含む試合画面は `React.lazy` で遅延ロードされるので、ホーム(`/`)とタイトル画面のバンドルには入らない。WebGL2 を取得できない環境(WebGL1 のみ・無効化・生成失敗)では `render/` が `null` を返し、ステージ中央に「3D表示を使えません」と出すだけで、**操作と試合の進行は続けられる**(時計とゲートは renderer に依存しない)。描画が中断されたとき(context lost)は「描画が中断されました。ページを再読み込みしてください。」を出す。
+9. **画面構成はオーバーレイ型。** ステージ(`StageView`)が画面全面(`position: absolute; inset: 0`)で、その上の `bb-overlay` 層に、左上の HUD(`ScoreHud`: 回表裏・走者ダイヤモンド・得点・B/S/O・回別の `<details>`)、右上のネームプレート(`NamePlates`: 投手・打者)、下部のティッカー(`Ticker`: 実況1〜2行と全ログの `<details>`)と操作バー(`bb-bar`: 打撃時はスイングボタンとミート/強振の切替、守備時は球種チップ・5×5のコース格子・「投げる」)を重ねる。オーバーレイ層は `pointer-events: none` で、操作する部品(操作バー・「回別」・「ログ」・ホームへ戻るピル)だけ `auto`。デスクトップとスマホ縦(幅 640px 以下)で同じ構造にし、ゾーン枠を覆わないようシーンの位置を `framingLift` で調整する(`e2e/baseball.spec.ts` の幾何検証が機械的に確認する)。
+10. **演出のスキップ。** 1球ごとの演出(打球の追跡・テロップ)の最中は、ステージ上のクリック/タップ、または Space / Enter キーでスキップできる(最初の1回のみ。キーの長押し・リンクや入力欄でのキーは対象外)。スキップは表示だけを進め(ゲームの状態・結果は変えない)、演出中は HUD・実況も更新を待つ。人間打撃の待機中は、ステージ上のクリックがスイングになる(演出中のクリックはスキップで、スイングにはならない)。
 
 (元ネタ: https://zenn.dev/singularity/articles/stopped-reviewing-my-code )
