@@ -33,9 +33,13 @@ export function makeGeometry(zone: StageGeometry["zone"] = { halfWidth: 0.26, bo
   };
 }
 
-/** 32×16 セルの観客席(決定論の簡易パターン)。 */
+/** 32×16 セルの観客席(決定論の Park-Miller 法。列・行に規則的な縞が出ないようにする)。 */
 export function makeCrowd(): CrowdCell[] {
-  return Array.from({ length: 32 * 16 }, (_, i) => ({ col: i % 32, row: Math.floor(i / 32), paletteIndex: (i * 7 + 3) % 8 }));
+  let seed = 1;
+  return Array.from({ length: 32 * 16 }, (_, i) => {
+    seed = (seed * 48271) % 2147483647;
+    return { col: i % 32, row: Math.floor(i / 32), paletteIndex: Math.floor(seed / 7) % 8 };
+  });
 }
 
 export function makePose(overrides: Partial<CharacterPose> = {}): CharacterPose {
