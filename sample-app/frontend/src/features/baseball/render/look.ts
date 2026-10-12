@@ -6,7 +6,7 @@
 // - シャドウ: r186 は PCFSoftShadowMap が削除済みなので PCFShadowMap を使う。
 // 見た目が合わなければステップ G でこのファイルの値を調整する。
 import { ColorManagement, DataTexture, LinearSRGBColorSpace, NearestFilter, PCFShadowMap, RedFormat } from "three";
-import type { ColorSpace, ShadowMapType } from "three";
+import type { ShadowMapType } from "three";
 import type { UniformColors } from "../types/scene";
 import type { StageQuality } from "../types/stage";
 
@@ -49,7 +49,7 @@ export const LIGHT_LOOK = {
 export const DEFAULT_UNIFORMS: UniformColors = { offense: 0x2f63c8, defense: 0xe8473c };
 
 /** 観客席の点の色(`CrowdCell.paletteIndex` 0〜7)。 */
-export const CROWD_PALETTE: readonly number[] = [0xb8433a, 0xd9cdb4, 0x3d64a8, 0xc9a63a, 0x6a9a5e, 0x5b6573, 0x5b6573, 0x5b6573];
+export const CROWD_PALETTE: readonly number[] = [0xd24a3e, 0xd24a3e, 0xb8433a, 0xf0e3c4, 0xe3b43c, 0xd24a3e, 0xb8433a, 0x8a3a3a];
 
 /** 球場・キャラクター・マーカーの色(モックから転記)。 */
 export const PALETTE = {
@@ -79,7 +79,7 @@ const TOON_STEPS: readonly number[] = [110, 190, 255];
 /** ゾーン平面での画面の半幅に相当する `tan` の下限。縦長の画面で縦 FOV を広げる基準。 */
 export const MIN_HALF_WIDTH_TAN = 0.37;
 /** 縦長の画面でシーンを上へずらす最大量(画面高に対する比)。 */
-export const PORTRAIT_LIFT = 0.16;
+export const PORTRAIT_LIFT = 0.2;
 /** この縦横比以下で `PORTRAIT_LIFT` を最大にする。 */
 export const LIFT_FULL_ASPECT = 0.6;
 /** この縦横比以上でずらし量を 0 にする。 */
@@ -109,7 +109,8 @@ export function pixelRatioFor(quality: StageQuality, devicePixelRatio: number): 
 
 /** `WebGLRenderer` のうち見た目に関わる設定の最小の型(node で `WebGLRenderer` を作れないため構造的に受ける)。 */
 export type RendererLookTarget = {
-  outputColorSpace: ColorSpace;
+  // `@types/three` の `WebGLRenderer#outputColorSpace` は `string`。`ColorSpace` にすると `WebGLRenderer` を渡せないので `string` で受ける。
+  outputColorSpace: string;
   shadowMap: { enabled: boolean; type: ShadowMapType };
 };
 

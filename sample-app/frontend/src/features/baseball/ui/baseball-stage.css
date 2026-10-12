@@ -91,6 +91,20 @@ body:has(.bb-page) {
   outline-offset: 2px;
 }
 
+/* 試合画面(three を含む遅延チャンク)の読み込み中。ページ中央に出す */
+.bb-page__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--bs-text);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-shadow: var(--bs-stroke);
+}
+
 /* ---- 試合画面のルートとステージ ---- */
 
 .bb-game {
@@ -141,7 +155,7 @@ body:has(.bb-page) {
   z-index: 2;
   left: 0;
   right: 0;
-  top: 62%;
+  top: 50%;
   margin: 0;
   color: rgba(255, 255, 255, 0.78);
   font-size: 12px;
@@ -482,7 +496,7 @@ body:has(.bb-page) {
   gap: 5px;
   grid-template-columns: minmax(0, 1fr);
   width: clamp(150px, 42vw, 172px);
-  margin-top: 34px;
+  margin-top: 46px;
   font-size: 13px;
   line-height: 1.25;
   pointer-events: none;
@@ -752,8 +766,9 @@ body:has(.bb-page) {
 }
 
 /* 守備: 球種チップ(1段目)、5x5 のグリッド(2段目の左)、投げる(2段目の右)。バー直下に [PitchingControls, CourseGrid] の順で置く。
+   スマホ縦とデスクトップで同じ構造(幅とセルの大きさだけが違う)。この配置は baseball-stage.css が一本で持つ(baseball.css は部品の中だけ)。
    「投げる」は pitch-controls の中にあるので、サブグリッドで同じ表に載せる(pitch-controls の箱は残す。E2E の可視判定のため display: contents は使わない)。
-   「投げる」の高さ(グリッドの高さいっぱい/残り)は baseball.css の .bb-bar--pitch .bb-pitching__throw が決める */
+   サブグリッド非対応の環境では、チップ・「投げる」・グリッドを縦に積む。「投げる」の高さは、グリッドの高さいっぱい(--bb-grid-size) */
 .bb-bar--pitch {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -762,7 +777,11 @@ body:has(.bb-page) {
   gap: 8px 10px;
 }
 
-.bb-bar--pitch .bb-course-grid {
+.bb-bar--pitch > .bb-pitching {
+  grid-column: 1 / -1;
+}
+
+.bb-bar--pitch > .bb-course-grid {
   position: relative;
   z-index: 1;
   grid-column: 1;
@@ -771,11 +790,11 @@ body:has(.bb-page) {
 }
 
 @supports (grid-template-columns: subgrid) {
-  .bb-bar--pitch .bb-pitching {
-    display: grid;
+  .bb-bar--pitch > .bb-pitching {
     grid-area: 1 / 1 / 3 / 3;
     grid-template-columns: subgrid;
     grid-template-rows: subgrid;
+    gap: normal;
     align-items: end;
   }
 
@@ -788,10 +807,15 @@ body:has(.bb-page) {
     grid-column: 2;
     grid-row: 2;
     align-self: end;
+    min-height: var(--bb-grid-size);
+    padding: 0 2px;
+    font-size: clamp(1.125rem, 5.4vw, 1.375rem);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
   }
 }
 
-/* ---- デスクトップ(幅 641px 以上): 文字を大きく、操作バーは下端中央に最大幅 720px ---- */
+/* ---- デスクトップ(幅 641px 以上): 文字を大きく ---- */
 
 @media (min-width: 641px) {
   .bb-overlay {
@@ -816,14 +840,14 @@ body:has(.bb-page) {
   }
 
   .bb-hud {
-    width: 236px;
-    gap: 6px 12px;
-    padding: 10px 24px 11px 18px;
-    font-size: 16px;
+    width: 218px;
+    gap: 5px 10px;
+    padding: 9px 22px 10px 16px;
+    font-size: 15px;
   }
 
   .bb-hud .bb-bases {
-    width: 60px;
+    width: 50px;
   }
 
   .bb-hud .bb-count {
@@ -831,8 +855,8 @@ body:has(.bb-page) {
   }
 
   .bb-hud__chip {
-    width: 11px;
-    height: 22px;
+    width: 10px;
+    height: 20px;
   }
 
   .bb-hud__more-summary {
@@ -849,19 +873,19 @@ body:has(.bb-page) {
   }
 
   .bb-plates {
-    width: 264px;
-    margin-top: 40px;
-    font-size: 16px;
+    width: 250px;
+    margin-top: 46px;
+    font-size: 15px;
   }
 
   .bb-plate {
-    padding: 8px 16px 9px 24px;
+    padding: 7px 16px 8px 24px;
   }
 
   .bb-ticker {
-    min-height: 44px;
-    padding: 8px 28px 9px 20px;
-    font-size: 17px;
+    min-height: 42px;
+    padding: 7px 28px 8px 18px;
+    font-size: 16px;
   }
 
   .bb-ticker__summary {
@@ -873,7 +897,7 @@ body:has(.bb-page) {
   }
 
   .bb-bar {
-    padding: 15px 18px 12px;
+    padding: 15px 16px 12px;
   }
 
   .bb-bar--swing {
@@ -882,25 +906,13 @@ body:has(.bb-page) {
     padding: 16px 20px 12px;
   }
 
-  /* 守備: グリッドを左(2行ぶん)、チップと「投げる」を右に縦に並べる */
   .bb-bar--pitch {
-    gap: 10px 18px;
+    gap: 10px 12px;
   }
 
-  .bb-bar--pitch .bb-course-grid {
-    grid-row: 1 / 3;
-    align-self: end;
-  }
-
-  @supports (grid-template-columns: subgrid) {
-    .bb-bar--pitch .bb-pitching {
-      grid-area: 1 / 2 / 3 / 3;
-    }
-
-    .bb-bar--pitch .bb-pitch-kinds,
-    .bb-bar--pitch .bb-pitching__throw {
-      grid-column: 1;
-    }
+  .bb-bar--pitch .bb-pitching__throw {
+    font-size: 1.75rem;
+    letter-spacing: 0.3em;
   }
 
   .bb-stage__skip-hint {
@@ -909,6 +921,16 @@ body:has(.bb-page) {
 
   .bb-stage__fallback {
     font-size: 17px;
+  }
+}
+
+/* 横長のデスクトップ: ティッカーと操作バーを右下に寄せる(幅は固定の上限)。
+   打撃カメラのゾーン枠・投手・打者は画面の中央〜左にあるので、右下を使えば隠れない。
+   幅はゾーン枠の右端(画面の半分 + 約 12.6vh)より右に収まる値(下限 330px は守備バーの最小幅) */
+@media (min-width: 641px) and (min-aspect-ratio: 1/1) {
+  .bb-overlay__bottom {
+    justify-self: end;
+    width: clamp(330px, calc(50vw - 12.6vh - 34px), 440px);
   }
 }
 

@@ -748,55 +748,8 @@ body:has(.bb-page) {
   letter-spacing: 0.2em;
 }
 
-/* 操作バー(守備)の並べ方(外枠のパネル・余白は baseball-stage.css)。
-   表: 1段目に球種チップ、2段目の左に 5×5 グリッド、右に「投げる」。バー(.bb-bar--pitch)の直下に [PitchingControls, CourseGrid] の順で置く。
-   「投げる」は pitch-controls の中にあるので、サブグリッドで同じ表に載せる(pitch-controls の箱は残るので、表示判定は変わらない)。
-   サブグリッド非対応の環境では、チップ・「投げる」・グリッドを縦に積む。 */
-.bb-bar.bb-bar--pitch {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  align-items: end;
-  gap: 8px 10px;
-}
-
-.bb-bar--pitch > .bb-pitching {
-  grid-column: 1 / -1;
-}
-
-.bb-bar--pitch > .bb-course-grid {
-  position: relative;
-  z-index: 1;
-  grid-column: 1;
-  grid-row: 2;
-  justify-self: start;
-}
-
-@supports (grid-template-columns: subgrid) {
-  .bb-bar--pitch > .bb-pitching {
-    grid-area: 1 / 1 / 3 / 3;
-    grid-template-columns: subgrid;
-    grid-template-rows: subgrid;
-    gap: normal;
-    align-items: end;
-  }
-
-  .bb-bar--pitch .bb-pitch-kinds {
-    grid-column: 1 / -1;
-    grid-row: 1;
-  }
-
-  .bb-bar--pitch .bb-pitching__throw {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: end;
-    min-height: var(--bb-grid-size);
-    padding: 0 2px;
-    font-size: clamp(1.125rem, 5.4vw, 1.375rem);
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-  }
-}
+/* 操作バー(守備)の並べ方(チップ・グリッド・「投げる」の配置と「投げる」の大きさ)は baseball-stage.css の .bb-bar--pitch が持つ。
+   ここには部品の中のスタイル(球種チップ・「投げる」の基本の寸法)だけを置く。 */
 
 /* ---- CourseGrid(通常フローの 5×5) ---- */
 
@@ -866,34 +819,7 @@ body:has(.bb-page) {
   }
 }
 
-/* デスクトップ: グリッドは左(2段ぶん)、右にチップと「投げる」を縦に並べる */
-@media (min-width: 641px) {
-  .bb-bar.bb-bar--pitch {
-    gap: 10px 18px;
-  }
-
-  .bb-bar--pitch > .bb-course-grid {
-    grid-row: 1 / 3;
-    align-self: end;
-  }
-
-  @supports (grid-template-columns: subgrid) {
-    .bb-bar--pitch > .bb-pitching {
-      grid-area: 1 / 2 / 3 / 3;
-    }
-
-    .bb-bar--pitch .bb-pitch-kinds {
-      grid-column: 1;
-    }
-
-    .bb-bar--pitch .bb-pitching__throw {
-      grid-column: 1;
-      min-height: calc(var(--bb-grid-size) - var(--bb-tap) - 10px);
-      font-size: 1.75rem;
-      letter-spacing: 0.3em;
-    }
-  }
-}
+/* デスクトップでの守備バーの並べ方は baseball-stage.css(スマホ縦と同じ構造)。 */
 
 /* ---- スマホ縦 ---- */
 

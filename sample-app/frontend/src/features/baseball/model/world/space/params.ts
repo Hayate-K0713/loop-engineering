@@ -31,7 +31,7 @@ const PARAMS = {
   actors: {
     pitcher: { position: { x: 0, y: 0.25, z: -18.4 }, yaw: 0, scale: 1 },
     catcher: { position: { x: 0, y: -0.25, z: 1.3 }, yaw: Math.PI, scale: 1 },
-    batter: { position: { x: -0.85, y: 0, z: 0.05 }, yaw: Math.PI / 2, scale: 1 },
+    batter: { position: { x: -0.8, y: 0, z: 0.05 }, yaw: Math.PI / 2, scale: 0.92 },
     fielderScale: 1.15,
   },
   /** 野手7人の守備位置(固定順: 一塁・二塁・遊撃・三塁・左・中・右。`FIELDER_SLOTS` が順序を決める)。 */

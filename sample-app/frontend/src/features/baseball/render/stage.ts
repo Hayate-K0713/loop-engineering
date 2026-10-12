@@ -10,7 +10,6 @@ import { applyUniforms, buildCharacter, createTeamMaterials } from "./character"
 import type { CharacterParts, TeamMaterials } from "./character";
 import { disposeObject3D } from "./dispose";
 import { CAMERA_FAR, CAMERA_NEAR, applyRendererLook, createToonGradient, fovFor, framingLift, pixelRatioFor } from "./look";
-import type { RendererLookTarget } from "./look";
 import { applyMarkers, buildMarkers } from "./markers";
 import type { Markers } from "./markers";
 import { applyBatterPose, applyPose } from "./pose-apply";
@@ -284,8 +283,7 @@ export function createStage(options: StageOptions): StageHandle | null {
   if (gl === null) return null;
   const renderer = createRenderer(canvas, gl, options.container);
   if (renderer === null) return null;
-  // @types/three の `WebGLRenderer#outputColorSpace` は `string` で、`RendererLookTarget`(`ColorSpace`)に代入できないため、型だけ合わせる。
-  applyRendererLook(renderer as RendererLookTarget, options.quality);
+  applyRendererLook(renderer, options.quality);
   renderer.setPixelRatio(pixelRatioFor(options.quality, window.devicePixelRatio));
   styleCanvas(canvas);
   const rt = createRuntime(options, canvas, renderer);
