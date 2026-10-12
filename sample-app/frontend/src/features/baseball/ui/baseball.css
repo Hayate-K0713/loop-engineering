@@ -175,11 +175,11 @@ body:has(.bb-page) {
   min-height: 120px;
   background:
     linear-gradient(180deg, #ffd23f 0 4px, #1e5a3c 4px 100%) bottom / 100% 26px no-repeat,
-    radial-gradient(circle, #b8433a 0 2.6px, transparent 3.2px) 0 0 / 15px 12px,
-    radial-gradient(circle, #d9cdb4 0 2.6px, transparent 3.2px) 7px 6px / 15px 12px,
-    radial-gradient(circle, #3d64a8 0 2.6px, transparent 3.2px) 3px 9px / 23px 12px,
-    radial-gradient(circle, #c9a63a 0 2.4px, transparent 3px) 11px 3px / 29px 12px,
-    linear-gradient(180deg, #9aa7b4 0 9px, #39434f 9px 100%);
+    radial-gradient(circle, #d24a3e 0 2.6px, transparent 3.2px) 0 0 / 15px 12px,
+    radial-gradient(circle, #f0e3c4 0 2.6px, transparent 3.2px) 7px 6px / 15px 12px,
+    radial-gradient(circle, #b8433a 0 2.6px, transparent 3.2px) 3px 9px / 23px 12px,
+    radial-gradient(circle, #e3b43c 0 2.4px, transparent 3px) 11px 3px / 29px 12px,
+    linear-gradient(180deg, #9aa7b4 0 9px, #4a2f37 9px 100%);
 }
 
 /* 縞の芝 + 内野の土 */

@@ -6,6 +6,9 @@ type NamePlatesProps = {
   readonly pitchSpeedLabel: string;
 };
 
+/** `GameView.pitchSpeedLabel` が飛行中でないときに返す値。読みやすい表示に置き換える。 */
+const NO_SPEED_LABEL = "-";
+
 function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, Math.round(value)));
 }
@@ -37,7 +40,7 @@ function PitcherPlate({ pitcher, pitchSpeedLabel }: Pick<NamePlatesProps, "pitch
         <span className="bb-plate__stat" data-testid="pitcher-stamina">{`${stamina}%`}</span>
       </p>
       <p className="bb-plate__meta bb-plate__speed" data-testid="pitch-speed">
-        {pitchSpeedLabel}
+        {pitchSpeedLabel === NO_SPEED_LABEL ? "球速 ---" : pitchSpeedLabel}
       </p>
     </div>
   );

@@ -135,6 +135,15 @@ body:has(.bb-page) {
   height: 100%;
 }
 
+/* 周辺をわずかに暗くして奥行きを出す(操作は受けない) */
+.bb-stage__canvas::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 85% 80% at 50% 46%, transparent 62%, rgba(8, 20, 34, 0.32) 100%);
+  pointer-events: none;
+}
+
 /* canvas 上の入力面。オーバーレイより下。タッチのスクロールを止めるのは人間打撃中だけ */
 .bb-stage__input {
   position: absolute;
@@ -153,12 +162,18 @@ body:has(.bb-page) {
 .bb-stage__skip-hint {
   position: absolute;
   z-index: 2;
-  left: 0;
-  right: 0;
+  left: 50%;
   top: 50%;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100% - 24px);
   margin: 0;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 12px;
+  padding: 4px 14px 5px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(8, 20, 34, 0.62);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-align: center;
@@ -836,7 +851,7 @@ body:has(.bb-page) {
 
   .bb-overlay__bottom {
     width: min(100%, 720px);
-    gap: 8px;
+    gap: 6px;
   }
 
   .bb-hud {
@@ -883,8 +898,8 @@ body:has(.bb-page) {
   }
 
   .bb-ticker {
-    min-height: 42px;
-    padding: 7px 28px 8px 18px;
+    min-height: 36px;
+    padding: 5px 28px 6px 18px;
     font-size: 16px;
   }
 
@@ -926,11 +941,32 @@ body:has(.bb-page) {
 
 /* 横長のデスクトップ: ティッカーと操作バーを右下に寄せる(幅は固定の上限)。
    打撃カメラのゾーン枠・投手・打者は画面の中央〜左にあるので、右下を使えば隠れない。
-   幅はゾーン枠の右端(画面の半分 + 約 12.6vh)より右に収まる値(下限 330px は守備バーの最小幅) */
+   幅はゾーン枠の右端(画面の半分 + 約 12.6vh)より右に収まる値(下限 306px は守備バーの最小幅) */
 @media (min-width: 641px) and (min-aspect-ratio: 1/1) {
   .bb-overlay__bottom {
     justify-self: end;
-    width: clamp(330px, calc(50vw - 12.6vh - 34px), 440px);
+    width: clamp(306px, calc(50vw - 12.6vh - 34px), 440px);
+  }
+
+  /* 幅の狭い横長ウィンドウ(〜900px): 守備バーを詰める(グリッド 188px + 「投げる」84px で 306px に収める) */
+  @media (max-width: 900px) {
+    .bb-bar {
+      padding-inline: 12px;
+    }
+
+    .bb-bar--pitch {
+      gap: 8px 10px;
+    }
+
+    .bb-bar--pitch .bb-pitching__throw {
+      font-size: 1.125rem;
+      letter-spacing: 0.05em;
+    }
+  }
+
+  /* 操作バーを上、ティッカーを最下段に(ティッカーの上端が二塁手などの足元にかからないよう、ドックの背を低く見せる) */
+  .bb-overlay__bottom .bb-bar {
+    order: -1;
   }
 }
 

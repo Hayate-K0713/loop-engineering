@@ -49,7 +49,7 @@ export const LIGHT_LOOK = {
 export const DEFAULT_UNIFORMS: UniformColors = { offense: 0x2f63c8, defense: 0xe8473c };
 
 /** 観客席の点の色(`CrowdCell.paletteIndex` 0〜7)。 */
-export const CROWD_PALETTE: readonly number[] = [0xd24a3e, 0xd24a3e, 0xb8433a, 0xf0e3c4, 0xe3b43c, 0xd24a3e, 0xb8433a, 0x8a3a3a];
+export const CROWD_PALETTE: readonly number[] = [0xd24a3e, 0xc9473d, 0xb8433a, 0xf0e3c4, 0xe3b43c, 0xd9594a, 0xb8433a, 0x8a3a3a];
 
 /** 球場・キャラクター・マーカーの色(モックから転記)。 */
 export const PALETTE = {
@@ -60,8 +60,8 @@ export const PALETTE = {
   fence: 0x1e5a3c,
   fenceCap: 0xffd23f,
   roof: 0x9aa7b4,
-  crowdBackground: 0x39434f,
-  crowdSeparator: 0x2f3842,
+  crowdBackground: 0x4a2f37,
+  crowdSeparator: 0x3a252c,
   skin: 0xffd9b5,
   uniformWhite: 0xf7f7f9,
   shoe: 0x2a2a2a,
