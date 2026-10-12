@@ -14,15 +14,18 @@
   --bb-out: #e8473c;
   --bb-ball-lamp: #3fcf6b;
   --bb-strike: #ffd23f;
-  --bb-font: ui-rounded, "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif;
+  --bb-font:
+    ui-rounded, "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif;
   --bb-tap: 44px;
   --bb-face: #24415c;
   --bb-face-hover: #2e5378;
 
   /* 白文字の縁取り(濃色の影を重ねる)。小: ボタン・ラベル、大: ロゴ・スコア */
-  --bb-outline: 2px 0 0 var(--bb-ink), -2px 0 0 var(--bb-ink), 0 -2px 0 var(--bb-ink), 2px 2px 0 var(--bb-ink), -2px 2px 0 var(--bb-ink), 2px -2px 0 var(--bb-ink),
+  --bb-outline:
+    2px 0 0 var(--bb-ink), -2px 0 0 var(--bb-ink), 0 -2px 0 var(--bb-ink), 2px 2px 0 var(--bb-ink), -2px 2px 0 var(--bb-ink), 2px -2px 0 var(--bb-ink),
     -2px -2px 0 var(--bb-ink), 0 3px 0 var(--bb-ink);
-  --bb-outline-lg: 4px 0 0 var(--bb-ink), -4px 0 0 var(--bb-ink), 0 -4px 0 var(--bb-ink), 3px 3px 0 var(--bb-ink), -3px 3px 0 var(--bb-ink), 3px -3px 0 var(--bb-ink),
+  --bb-outline-lg:
+    4px 0 0 var(--bb-ink), -4px 0 0 var(--bb-ink), 0 -4px 0 var(--bb-ink), 3px 3px 0 var(--bb-ink), -3px 3px 0 var(--bb-ink), 3px -3px 0 var(--bb-ink),
     -3px -3px 0 var(--bb-ink), 0 4px 0 var(--bb-ink), 0 7px 0 var(--bb-ink), 3px 7px 0 var(--bb-ink), -3px 7px 0 var(--bb-ink);
 
   /* 通常フローの 5×5 コースグリッド(スマホ縦・タッチは 44px、細かいポインタの広い画面は 36px) */
@@ -156,7 +159,8 @@ body:has(.bb-page) {
   inset: 0;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 150px 26px at 14% 13%, rgba(255, 255, 255, 0.8), transparent 72%), radial-gradient(ellipse 190px 30px at 84% 21%, rgba(255, 255, 255, 0.65), transparent 72%),
+    radial-gradient(ellipse 150px 26px at 14% 13%, rgba(255, 255, 255, 0.8), transparent 72%),
+    radial-gradient(ellipse 190px 30px at 84% 21%, rgba(255, 255, 255, 0.65), transparent 72%),
     radial-gradient(ellipse 110px 20px at 58% 6%, rgba(255, 255, 255, 0.55), transparent 72%), linear-gradient(180deg, #3a7bd5 0%, #8cc5f2 30%, #f3e7c9 47%);
   color: var(--bb-text);
   font-family: var(--bb-font);
@@ -170,9 +174,12 @@ body:has(.bb-page) {
   height: 24%;
   min-height: 120px;
   background:
-    linear-gradient(180deg, #ffd23f 0 4px, #1e5a3c 4px 100%) bottom / 100% 26px no-repeat, radial-gradient(circle, #b8433a 0 2.6px, transparent 3.2px) 0 0 / 15px 12px,
-    radial-gradient(circle, #d9cdb4 0 2.6px, transparent 3.2px) 7px 6px / 15px 12px, radial-gradient(circle, #3d64a8 0 2.6px, transparent 3.2px) 3px 9px / 23px 12px,
-    radial-gradient(circle, #c9a63a 0 2.4px, transparent 3px) 11px 3px / 29px 12px, linear-gradient(180deg, #9aa7b4 0 9px, #39434f 9px 100%);
+    linear-gradient(180deg, #ffd23f 0 4px, #1e5a3c 4px 100%) bottom / 100% 26px no-repeat,
+    radial-gradient(circle, #b8433a 0 2.6px, transparent 3.2px) 0 0 / 15px 12px,
+    radial-gradient(circle, #d9cdb4 0 2.6px, transparent 3.2px) 7px 6px / 15px 12px,
+    radial-gradient(circle, #3d64a8 0 2.6px, transparent 3.2px) 3px 9px / 23px 12px,
+    radial-gradient(circle, #c9a63a 0 2.4px, transparent 3px) 11px 3px / 29px 12px,
+    linear-gradient(180deg, #9aa7b4 0 9px, #39434f 9px 100%);
 }
 
 /* 縞の芝 + 内野の土 */
@@ -220,7 +227,7 @@ body:has(.bb-page) {
 .bb-logo__main {
   margin-top: 4px;
   color: var(--bb-accent);
-  font-size: clamp(4.5rem, 23vw, 8rem);
+  font-size: clamp(4.75rem, 26vw, 8.5rem);
   letter-spacing: 0.06em;
   text-shadow: var(--bb-outline-lg);
 }
@@ -236,7 +243,8 @@ body:has(.bb-page) {
   border: 3px solid var(--bb-ink);
   border-radius: 50%;
   background:
-    radial-gradient(circle at -18% 50%, transparent 52%, var(--bb-out) 54% 62%, transparent 64%), radial-gradient(circle at 118% 50%, transparent 52%, var(--bb-out) 54% 62%, transparent 64%), #ffffff;
+    radial-gradient(circle at -18% 50%, transparent 52%, var(--bb-out) 54% 62%, transparent 64%),
+    radial-gradient(circle at 118% 50%, transparent 52%, var(--bb-out) 54% 62%, transparent 64%), #ffffff;
   box-shadow: 0 4px 0 var(--bb-ink);
 }
 
@@ -694,8 +702,8 @@ body:has(.bb-page) {
 
 .bb-swing__button {
   flex: none;
-  width: 88px;
-  height: 88px;
+  width: 92px;
+  height: 92px;
   min-height: 0;
   padding: 0;
   border-width: 4px;
@@ -703,8 +711,8 @@ body:has(.bb-page) {
   box-shadow:
     0 6px 0 var(--bb-ink),
     inset 0 5px 0 rgba(255, 255, 255, 0.55);
-  font-size: 1.0625rem;
-  letter-spacing: 0.02em;
+  font-size: 1rem;
+  letter-spacing: 0;
 }
 
 .bb-swing__button:active:not(:disabled) {
@@ -728,9 +736,10 @@ body:has(.bb-page) {
 
 .bb-pitch-kind {
   flex: 1 1 auto;
-  padding: 0 8px;
-  font-size: 0.9375rem;
+  padding: 0 clamp(3px, 1.6vw, 8px);
+  font-size: clamp(0.75rem, 3.6vw, 0.9375rem);
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .bb-pitching__throw {
@@ -739,15 +748,54 @@ body:has(.bb-page) {
   letter-spacing: 0.2em;
 }
 
-/* 操作バー(守備)の中の寸法。バーの表(球種チップ → グリッド+「投げる」)の配置は baseball-stage.css(.bb-bar--pitch)が持つ。
-   サブグリッドの間隔は親(バー)のものをそのまま使う。 */
-.bb-bar--pitch > .bb-pitching {
-  gap: normal;
+/* 操作バー(守備)の並べ方(外枠のパネル・余白は baseball-stage.css)。
+   表: 1段目に球種チップ、2段目の左に 5×5 グリッド、右に「投げる」。バー(.bb-bar--pitch)の直下に [PitchingControls, CourseGrid] の順で置く。
+   「投げる」は pitch-controls の中にあるので、サブグリッドで同じ表に載せる(pitch-controls の箱は残るので、表示判定は変わらない)。
+   サブグリッド非対応の環境では、チップ・「投げる」・グリッドを縦に積む。 */
+.bb-bar.bb-bar--pitch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: end;
+  gap: 8px 10px;
 }
 
-/* スマホ縦: 「投げる」はグリッドの右で、グリッドと同じ高さいっぱいに出す */
-.bb-bar--pitch .bb-pitching__throw {
-  min-height: var(--bb-grid-size);
+.bb-bar--pitch > .bb-pitching {
+  grid-column: 1 / -1;
+}
+
+.bb-bar--pitch > .bb-course-grid {
+  position: relative;
+  z-index: 1;
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+}
+
+@supports (grid-template-columns: subgrid) {
+  .bb-bar--pitch > .bb-pitching {
+    grid-area: 1 / 1 / 3 / 3;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    gap: normal;
+    align-items: end;
+  }
+
+  .bb-bar--pitch .bb-pitch-kinds {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .bb-bar--pitch .bb-pitching__throw {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+    min-height: var(--bb-grid-size);
+    padding: 0 2px;
+    font-size: clamp(1.125rem, 5.4vw, 1.375rem);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
 }
 
 /* ---- CourseGrid(通常フローの 5×5) ---- */
@@ -818,10 +866,32 @@ body:has(.bb-page) {
   }
 }
 
-/* デスクトップ: 「投げる」はチップの下(グリッドの右)で、グリッドの残りの高さに合わせる */
+/* デスクトップ: グリッドは左(2段ぶん)、右にチップと「投げる」を縦に並べる */
 @media (min-width: 641px) {
-  .bb-bar--pitch .bb-pitching__throw {
-    min-height: calc(var(--bb-grid-size) - var(--bb-tap) - 10px);
+  .bb-bar.bb-bar--pitch {
+    gap: 10px 18px;
+  }
+
+  .bb-bar--pitch > .bb-course-grid {
+    grid-row: 1 / 3;
+    align-self: end;
+  }
+
+  @supports (grid-template-columns: subgrid) {
+    .bb-bar--pitch > .bb-pitching {
+      grid-area: 1 / 2 / 3 / 3;
+    }
+
+    .bb-bar--pitch .bb-pitch-kinds {
+      grid-column: 1;
+    }
+
+    .bb-bar--pitch .bb-pitching__throw {
+      grid-column: 1;
+      min-height: calc(var(--bb-grid-size) - var(--bb-tap) - 10px);
+      font-size: 1.75rem;
+      letter-spacing: 0.3em;
+    }
   }
 }
 
