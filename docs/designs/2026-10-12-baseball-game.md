@@ -981,6 +981,10 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - 判定: S1〜S10 は〇、S11(b)(結果画面の略称+色チップ)のみ未達。重なり実測は 390×844・1280×720 × 打撃・守備の4条件すべてゾーン/投手/打者とも 0。B2 と B1 の定数(`RELEASE_POINT`・`PITCHER_FOLLOW_MS`・`SWING_CONTACT_PROGRESS`・`SWING_FOLLOW_END_PROGRESS`)は全一致。
   - スクリーンショット28枚を `docs/tests/assets/2026-10-12-baseball-game/` に保存(仮想時計+手動 rAF の決定論的ハーネスで撮影。引き分けは `?seed=7&innings=1&fast=1`・後攻で再現)。
   - **G が見つけた不具合(修正タスクへ)**: (1) Space でスイングすると同じ keydown で `useSkipInput` が `holding=true` を見て演出を即スキップする(window のリスナ間にマイクロタスクが挟まり React が再描画済みになるため)。(2) 打者 scale 0.92 により、ワールドでのバット高さが `height × 0.92` になり、ゾーン外のコースで最大約 0.1m ボールより低くなる。(3) S11(b) 未達。
+- 修正 Fix2(S11(b) の解消。`ui/{ResultScreen,GameScreen}.tsx`・`ui/baseball.css`):
+  - **設計からの変更**: `ResultScreen` の props に `teams: ResultTeams`(`{ away, home }`、各 `{ shortName, name, color: "#rrggbb" }`、`ResultScreen.tsx` から export)を追加した(当初の「props 不変」から変更)。`GameScreen` が表示用 view の `scoreboard.rows` と `teamColors` から純粋関数 `resultTeamsOf(view)` で作る。`types/`・`model/` は不変。
+  - 表示はチーム色チップ+略称(`aria-label`/`title` に正式名)+小さな「先攻」「後攻」+得点。testid・`autoFocus`・`data-leader` の色分けは維持(強調は `.bb-result__team[data-side]` で指定)。
+  - `toCssColor` は `ScoreHud.tsx` の同名関数の複製(`ScoreHud` が export していないため)。共通化はコードレビューで扱う。結果画面のスクリーンショット5枚を差し替え。
 - ステップF(`e2e/baseball.spec.ts`・README・`docs/process/sample-app-dev.md`):
   - E2E は 10 件(ホーム遷移・1イニング通し・WebGL 不可でも進行・タップで演出スキップ・レイアウト幾何検証 4 通り)が 3 回連続で成功(各 1.0〜1.2 分、2 workers)。`playwright.config.ts`・`home.spec.ts` は無改変(`launchOptions.args` 不要)。
   - seed: スキップ用 `SKIP_SEED = 7`(後攻・中央ストレートの1球目が in-play。fast=1 で seed 1〜24 を探索し、in-play は 2,4,5,7,8,11,15〜19,21,23。通常速度で再確認)。試合通し用 `GAME_SEED = 47`(延長なし。設計の seed 42 は延長に入り、3D では1ターン 30 秒の待ちが足りず失敗したため変更。1ターンの待ちは 60 秒、test timeout は 120 秒のまま)。**ロジックを変えたら両方とも再探索**(spec のコメントに手順あり)。

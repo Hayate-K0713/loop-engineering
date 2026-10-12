@@ -490,17 +490,45 @@ body:has(.bb-page) {
 .bb-result__team {
   display: grid;
   justify-items: center;
-  gap: 4px;
+  gap: 2px;
   min-width: 4.2em;
 }
 
-.bb-result__label {
-  padding: 2px 14px;
-  background: rgba(255, 255, 255, 0.14);
+/* チーム色チップ+略称(ScoreHud と同じ表現。放送画面風に斜めに傾けたチップ) */
+.bb-result__badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bb-result__chip {
+  flex: none;
+  width: 18px;
+  height: 34px;
+  box-sizing: border-box;
+  border: 3px solid var(--bb-ink);
+  border-radius: 3px;
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  transform: skewX(-12deg);
+}
+
+.bb-result__abbr {
+  color: #ffffff;
+  font-size: 1.75rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: var(--bb-outline);
+}
+
+/* 先攻/後攻の小さな添え字 */
+.bb-result__order {
   color: var(--bb-muted);
   font-size: 0.8125rem;
   font-weight: 800;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
 }
 
 .bb-result__runs {
@@ -512,8 +540,8 @@ body:has(.bb-page) {
   text-shadow: var(--bb-outline-lg);
 }
 
-.bb-result__score[data-leader="away"] .bb-result__team:first-child .bb-result__runs,
-.bb-result__score[data-leader="home"] .bb-result__team:last-child .bb-result__runs {
+.bb-result__score[data-leader="away"] .bb-result__team[data-side="away"] .bb-result__runs,
+.bb-result__score[data-leader="home"] .bb-result__team[data-side="home"] .bb-result__runs {
   color: var(--bb-accent);
 }
 
