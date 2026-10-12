@@ -13,7 +13,7 @@ export function fielderIdlePose(): JointPose {
  * 前傾は走り出しから `leanRampMs` かけて入る(待機姿勢からの飛びを避ける)。
  */
 export function fielderRunPose(timeMs: number): JointPose {
-  const t = Math.max(0, timeMs);
+  const t = timeMs > 0 ? timeMs : 0;
   const swing = Math.sin((t / 1000) * RUN_MOTION.cycleRadPerSec);
   const lean = mix(0, RUN_MOTION.lean, Math.min(1, t / RUN_MOTION.leanRampMs));
   return {
@@ -22,7 +22,8 @@ export function fielderRunPose(timeMs: number): JointPose {
     armL: { x: IDLE_POSE.armL.x - RUN_MOTION.armSwing * swing, y: IDLE_POSE.armL.y, z: IDLE_POSE.armL.z },
     armR: { x: IDLE_POSE.armR.x + RUN_MOTION.armSwing * swing, y: IDLE_POSE.armR.y, z: IDLE_POSE.armR.z },
     legL: { x: RUN_MOTION.legSwing * swing, y: 0, z: 0 },
-    legR: { x: -RUN_MOTION.legSwing * swing, y: 0, z: 0 },
+    // 0 − x(−x にすると swing = 0 のとき −0 になり、待機姿勢と deep equal にならない)
+    legR: { x: 0 - RUN_MOTION.legSwing * swing, y: 0, z: 0 },
   };
 }
 

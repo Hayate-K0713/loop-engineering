@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { catcherPose, fielderIdlePose, fielderRunPose } from "./fielder";
 import { IDLE_POSE, RUN_MOTION } from "./rig";
-import { adjacentPairs, expectValidPose, FRAME_MS, grid, MAX_JOINT_STEP, maxJointDelta } from "./test-helpers";
+import { adjacentPairs, isValidPose, FRAME_MS, grid, MAX_JOINT_STEP, maxJointDelta } from "./test-helpers";
 
 const RUN_GRID = grid(0, 6000, FRAME_MS);
 
 describe("fielderIdlePose", () => {
   it("有効なポーズ(有限・±2π 以内)で、呼ぶたびに同じ", () => {
-    expectValidPose(fielderIdlePose());
+    expect(isValidPose(fielderIdlePose())).toBe(true);
     expect(fielderIdlePose()).toEqual(fielderIdlePose());
   });
 
@@ -29,7 +29,7 @@ describe("fielderRunPose", () => {
 
   it("全関節の角度が有限で ±2π 以内(長時間でも)", () => {
     for (const ms of [...RUN_GRID, 1e6, 3.6e6]) {
-      expectValidPose(fielderRunPose(ms));
+      expect(isValidPose(fielderRunPose(ms))).toBe(true);
     }
   });
 
@@ -67,7 +67,7 @@ describe("fielderRunPose", () => {
 describe("catcherPose", () => {
   it("有効なポーズで、待機姿勢とは異なる(前かがみ)", () => {
     const catcher = catcherPose();
-    expectValidPose(catcher);
+    expect(isValidPose(catcher)).toBe(true);
     expect(catcher.torso.x).toBeGreaterThan(IDLE_POSE.torso.x);
     expect(maxJointDelta(catcher, fielderIdlePose())).toBeGreaterThan(0);
     expect(catcherPose()).toEqual(catcher);

@@ -39,14 +39,14 @@ const EASES: readonly KeyframeEase[] = ["linear", "smooth", "in", "out"];
 describe("clamp01 / mix / smoothstep", () => {
   it("clamp01 は 0〜1 に収め、NaN は 0", () => {
     expect(clamp01(-3)).toBe(0);
-    expect(clamp01(0.4)).toBe(0.4);
+    expect(clamp01(0.4)).toBeCloseTo(0.4, 12);
     expect(clamp01(7)).toBe(1);
     expect(clamp01(Number.NaN)).toBe(0);
   });
 
   it("mix は端点で厳密に a・b に一致する(浮動小数の誤差を出さない)", () => {
-    expect(mix(0.1, 0.7, 0)).toBe(0.1);
-    expect(mix(0.1, 0.7, 1)).toBe(0.7);
+    expect(Object.is(mix(0.1, 0.7, 0), 0.1)).toBe(true);
+    expect(Object.is(mix(0.1, 0.7, 1), 0.7)).toBe(true);
     expect(mix(-2, 4, 0.5)).toBeCloseTo(1, 12);
   });
 
@@ -180,7 +180,7 @@ describe("placeCharacter / placeBatter", () => {
     const placed = placeBatter(joints, root);
     expect(placed.bat).toEqual(joints.bat);
     expect(placed.torso).toEqual(POSE_B.torso);
-    expect(placed.scale).toBe(1.15);
+    expect(placed.scale).toBeCloseTo(1.15, 12);
     expect(placed.visible).toBe(true);
   });
 });

@@ -1,5 +1,4 @@
 // テスト専用のヘルパー。本番コードからは import しない(motion/ の各 *.test.ts が共有する)。
-import { expect } from "vitest";
 import type { Rot3 } from "../../../types/scene";
 import type { JointPose } from "./pose";
 
@@ -23,16 +22,14 @@ export function jointAngles(pose: JointPose): readonly number[] {
   return [pose.torso, pose.head, pose.armL, pose.armR, pose.legL, pose.legR].flatMap(rotAngles);
 }
 
-/** 全関節の角度が有限で ±2π 以内。 */
-export function expectValidAngles(angles: readonly number[]): void {
-  for (const angle of angles) {
-    expect(Number.isFinite(angle)).toBe(true);
-    expect(Math.abs(angle)).toBeLessThanOrEqual(TWO_PI);
-  }
+/** すべての角度が有限で ±2π 以内。 */
+export function isValidAngles(angles: readonly number[]): boolean {
+  return angles.every((angle) => Number.isFinite(angle) && Math.abs(angle) <= TWO_PI);
 }
 
-export function expectValidPose(pose: JointPose): void {
-  expectValidAngles(jointAngles(pose));
+/** 全関節の角度が有限で ±2π 以内。 */
+export function isValidPose(pose: JointPose): boolean {
+  return isValidAngles(jointAngles(pose));
 }
 
 /** 2つのポーズの、関節角ごとの差の最大値(rad)。 */

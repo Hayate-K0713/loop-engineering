@@ -4,7 +4,7 @@ import { handPosition } from "./fk";
 import { pitcherFollowPose, pitcherWindupPose } from "./pitcher";
 import type { PoseRoot } from "./pose";
 import { CHARACTER_RIG, IDLE_POSE, PITCHER_FOLLOW_MS } from "./rig";
-import { adjacentPairs, expectValidPose, FRAME_MS, grid, MAX_JOINT_STEP, maxJointDelta, NOMINAL_WINDUP_MS } from "./test-helpers";
+import { adjacentPairs, isValidPose, FRAME_MS, grid, MAX_JOINT_STEP, maxJointDelta, NOMINAL_WINDUP_MS } from "./test-helpers";
 
 // リリース点は B1 の `WORLD_PARAMS` の値と同じ(motion は space を import できないので、テストで同値を持つ。統合確認はステップ G)。
 const RELEASE_POINT: Vec3 = { x: -0.3, y: 1.65, z: -18.1 };
@@ -36,7 +36,7 @@ describe("pitcherWindupPose", () => {
 
   it("全関節の角度が有限で ±2π 以内(u 全域)", () => {
     for (const u of WINDUP_GRID) {
-      expectValidPose(pitcherWindupPose(u));
+      expect(isValidPose(pitcherWindupPose(u))).toBe(true);
     }
   });
 
@@ -59,7 +59,7 @@ describe("pitcherWindupPose", () => {
 describe("pitcherFollowPose", () => {
   it("全関節の角度が有限で ±2π 以内", () => {
     for (const ms of FOLLOW_GRID) {
-      expectValidPose(pitcherFollowPose(ms));
+      expect(isValidPose(pitcherFollowPose(ms))).toBe(true);
     }
   });
 

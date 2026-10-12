@@ -95,7 +95,7 @@ export function lerpPose(a: JointPose, b: JointPose, k: number): JointPose {
  */
 export function sampleKeyframes<T>(frames: Keyframes<T>, at: number, lerp: Lerp<T>): T {
   const [first, ...rest] = frames;
-  if (!(at > first.at)) {
+  if (Number.isNaN(at) || at <= first.at) {
     return first.pose;
   }
   let prev = first;

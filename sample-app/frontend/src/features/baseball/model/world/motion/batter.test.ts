@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { batterStancePose, batterSwingPose } from "./batter";
 import { BAT_FOLLOW_LIFT, BAT_STANCE_HEIGHT, SWING_CONTACT_PROGRESS, SWING_FOLLOW_END_PROGRESS } from "./rig";
-import { adjacentPairs, expectValidAngles, expectValidPose, FRAME_MS, grid, MAX_JOINT_STEP, maxJointDelta } from "./test-helpers";
+import { adjacentPairs, isValidAngles, isValidPose, FRAME_MS, grid, MAX_JOINT_STEP, maxJointDelta } from "./test-helpers";
 
 // 標準のスイングは全体 200ms(progress 0→1)。16ms 刻みの progress の刻み幅。
 const NOMINAL_SWING_MS = 200;
@@ -49,19 +49,22 @@ describe("範囲と連続性(progress 全域)", () => {
   it.each(HEIGHTS)("高さ %d: 全関節とバットの角度が有限で ±2π 以内、バットの高さが有限", (height) => {
     for (const progress of PROGRESS_GRID) {
       const pose = batterSwingPose(progress, height);
-      expectValidPose(pose);
-      expectValidAngles([pose.bat.sweepYaw, pose.bat.tilt]);
+      expect(isValidPose(pose)).toBe(true);
+      expect(isValidAngles([pose.bat.sweepYaw, pose.bat.tilt])).toBe(true);
       expect(Number.isFinite(pose.bat.height)).toBe(true);
     }
   });
 
-  it.each(HEIGHTS)("高さ %d: 標準の200msスイングを16ms刻みに走査して、隣接サンプルの各関節・バットの角度の差が 0.5rad 以下(接触・振り切りの切替点を含む)", (height) => {
-    for (const [a, b] of adjacentPairs(PROGRESS_GRID.map((progress) => batterSwingPose(progress, height)))) {
-      expect(maxJointDelta(a, b)).toBeLessThanOrEqual(MAX_JOINT_STEP);
-      expect(Math.abs(a.bat.sweepYaw - b.bat.sweepYaw)).toBeLessThanOrEqual(MAX_JOINT_STEP);
-      expect(Math.abs(a.bat.tilt - b.bat.tilt)).toBeLessThanOrEqual(MAX_JOINT_STEP);
-    }
-  });
+  it.each(HEIGHTS)(
+    "高さ %d: 標準の200msスイングを16ms刻みに走査して、隣接サンプルの各関節・バットの角度の差が 0.5rad 以下(接触・振り切りの切替点を含む)",
+    (height) => {
+      for (const [a, b] of adjacentPairs(PROGRESS_GRID.map((progress) => batterSwingPose(progress, height)))) {
+        expect(maxJointDelta(a, b)).toBeLessThanOrEqual(MAX_JOINT_STEP);
+        expect(Math.abs(a.bat.sweepYaw - b.bat.sweepYaw)).toBeLessThanOrEqual(MAX_JOINT_STEP);
+        expect(Math.abs(a.bat.tilt - b.bat.tilt)).toBeLessThanOrEqual(MAX_JOINT_STEP);
+      }
+    },
+  );
 
   it.each(HEIGHTS)("高さ %d: バットの高さは1フレームで 0.2m 以上飛ばない", (height) => {
     for (const [a, b] of adjacentPairs(PROGRESS_GRID.map((progress) => batterSwingPose(progress, height)))) {
