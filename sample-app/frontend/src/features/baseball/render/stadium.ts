@@ -1,5 +1,5 @@
 // 球場の生成(芝・内野・塁・ライン・フェンス・スタンド・屋根・ライト)。寸法はすべて StageGeometry から読む。
-// テクスチャは DataTexture のみ(CanvasTexture・document を使わず、node でも生成できる)。
+// テクスチャは DataTexture のみ(DOM の canvas を使わず、node でも生成できる)。
 import {
   BoxGeometry,
   BufferGeometry,

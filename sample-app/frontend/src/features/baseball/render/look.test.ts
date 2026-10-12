@@ -1,4 +1,4 @@
-import { ColorManagement, Color, LinearSRGBColorSpace, NearestFilter, PCFShadowMap, RedFormat } from "three";
+import { BasicShadowMap, ColorManagement, Color, LinearSRGBColorSpace, NearestFilter, PCFShadowMap, RedFormat } from "three";
 import { describe, expect, it } from "vitest";
 import {
   LIFT_FULL_ASPECT,
@@ -90,7 +90,7 @@ describe("pixelRatioFor", () => {
 });
 
 describe("applyRendererLook", () => {
-  const makeTarget = (): RendererLookTarget => ({ outputColorSpace: "srgb", shadowMap: { enabled: false, type: 3 } });
+  const makeTarget = (): RendererLookTarget => ({ outputColorSpace: "srgb", shadowMap: { enabled: false, type: BasicShadowMap } });
 
   it("線形出力と PCFShadowMap に設定し、影は normal のときだけ有効", () => {
     const normal = makeTarget();
@@ -132,6 +132,6 @@ describe("createToonGradient", () => {
     expect(texture.magFilter).toBe(NearestFilter);
     expect(texture.image.width).toBe(3);
     expect(texture.image.height).toBe(1);
-    expect(Array.from(texture.image.data)).toEqual([110, 190, 255]);
+    expect(Array.from(texture.image.data ?? [])).toEqual([110, 190, 255]);
   });
 });

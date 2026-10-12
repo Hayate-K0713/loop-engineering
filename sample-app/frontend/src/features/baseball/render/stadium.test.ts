@@ -1,4 +1,4 @@
-import { CanvasTexture, CylinderGeometry, DataTexture, DirectionalLight, Fog, Group, Material, Mesh, Texture } from "three";
+import { CylinderGeometry, DataTexture, DirectionalLight, Fog, Group, Material, Mesh, Texture } from "three";
 import type { Object3D } from "three";
 import { describe, expect, it } from "vitest";
 import { disposeObject3D } from "./dispose";
@@ -34,12 +34,12 @@ describe("buildStadium", () => {
     expect(stadium.children.length).toBeLessThan(60);
   });
 
-  it("テクスチャはすべて DataTexture(CanvasTexture を使わない)", () => {
+  it("テクスチャはすべて DataTexture(canvas 由来のテクスチャを使わない)", () => {
     const textures = texturesOf(stadium);
     expect(textures.length).toBeGreaterThanOrEqual(2);
     for (const texture of textures) {
       expect(texture).toBeInstanceOf(DataTexture);
-      expect(texture).not.toBeInstanceOf(CanvasTexture);
+      expect("isCanvasTexture" in texture).toBe(false);
     }
   });
 
