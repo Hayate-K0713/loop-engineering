@@ -570,7 +570,7 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 | `Ticker` | B4a | `lastEvent`、`log`。ルートが `data-testid="ticker"`。`last-event`(`aria-live="polite"`、最大2行)と、`<details>`(見出し `log-toggle`、中に `commentary-log`(新しい順))。旧 `CommentaryLog` の置き換え |
 | `StageTelop` | B4a | `text`(文字列または `null`)。`data-testid="stage-telop"`、`aria-hidden="true"`。表示/非表示は CSS クラス(`--show`)とトランジション |
 | `TitleScreen` | B4b | props 不変(`defaultInnings`・`onStart(config)`)。**非制御フォーム**(`useState` なし)で、イニング数・先攻/後攻・難易度は `fieldset` の中の `input[type=radio]`(ボタンに見せる)。`FormData` から `onStart` に変換する |
-| `ResultScreen` | B4b | props 不変。ぼかし背景、大きなスコア(略称+色チップは `result` に無いため、`awayRuns`/`homeRuns` と勝敗の文言・色のみ)、「もう一度」(主)・「タイトルへ」(従) |
+| `ResultScreen` | B4b(Fix2 で props 追加) | ぼかし背景、大きなスコア、「もう一度」(主)・「タイトルへ」(従)。**Fix2 で `teams: ResultTeams`(略称・正式名・`#rrggbb`)を追加し、チーム色チップ+略称を表示**(`GameScreen` が表示用 view から作る。`types/`・`model/` は不変) |
 | `SwingControls`・`PitchingControls`・`PitchKindButtons`・`CourseGrid` | B4b | props・testid 不変。操作バー向けのマークアップ・クラスに作り直す(`CourseGrid` は通常フローの5×5) |
 | `LineScore`・`CountLamps`・`BaseDiamond` | B4b | props 不変。HUD 向けのマークアップ・クラス。`LineScore` の合計セルの testid を `score-<side>` から `line-score-runs-<side>` に改名(`score-<side>` は `ScoreHud` が持つ) |
 | `GameLayout` | A2(暫定)→ E(最終形) | 最終形: 表示用 `view`、`pitchReady`、`swingReady`、`throwing`、`selection`、スイング操作(`swingKind`・`onSelectSwingKind`・`onSwing`)、`stageProps`、各コールバック。上記構成の配線のみ。暫定版(A2): 現行の props 型のまま、`Scoreboard`・`MatchupPanel`・(人間守備のとき)`PitchingControls`→`CourseGrid`・`CommentaryLog` だけを縦に並べる(ステージなし。試合は進行しない) |
@@ -723,7 +723,7 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 
 - [ ] **ステップ C3: hooks の部品**(並列: C1, C2)
   - 依存: A、A2、B1、B2(`createStage` のシグネチャは本書が契約。typecheck は C2 完了後に最終確認。`routeStagePointer`・`isSkipKey` のシグネチャは本書が契約で、C1 完了後に最終確認)。担当ファイル: `hooks/{useStage3d,usePitchFlight,usePointerInput,useBattingControls,useSkipInput}.ts`
-  - やること: 本書「hooks 設計」のとおり実装・変更する(pointerdown は `routeStagePointer` の結果で分岐、`useSkipInput` はキーのスキップ)。`useStage3d` の生成 effect の deps は `quality` のみ。全ての effect に cleanup を付け、ref ガードで StrictMode を回避しない。
+  - やること: 本書「hooks 設計」のとおり実装・変更する(pointerdown は `routeStagePointer` の結果で分岐、`useSkipInput` はキーのスキップ)。`useStage3d` の生成 effect の deps は `quality` のみ。全ての effect に cleanup を付け、ref ガードで StrictMode を回避しない(**例外: 資源を持たない ref 代入・冪等な更新だけの layout effect は cleanup 不要**。cleanup で値を戻すと規約1の「開始時刻・flight の保持」が壊れるため。コードレビュー ラウンド1で妥当と判断。該当: `usePitchFlight`・`useFlightSession`・`useHeldView`・`useBindCursorSource`。理由はコードコメントに書く)。
   - 完了条件: lint・typecheck 通過(**旧 ui を A2 で撤去済みのため、プロジェクト全体の typecheck も成功する**)。`hooks/` から `three` を import していない。`Math.random`・`Date` が無い。`usePointerInput` が `holding` を直接分岐せず `routeStagePointer` を経由している。`useStage3d` の生成 effect の deps に `uniforms` 等の半イニングで変わる値が入っていない。
 
 - [ ] **ステップ D: hooks の統合**(直列)
@@ -903,10 +903,10 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 
 | ラウンド | 判定 | 主な指摘 |
 | --- | --- | --- |
-| 1 | PASS / MAJOR |  |
-| 2(ラウンド1がMAJORの場合のみ) | PASS / MAJOR |  |
+| 1 | **PASS**(2026-10-12、MAJOR なし) | 規約・hooks・`stage.ts` のリソース管理・依存方向・入力の排他・E2E のいずれも問題なし。cleanup の無い layout effect 4つは妥当(例外規則をステップ C3 に追記)。MINOR 4件: M1 最後の打席の演出を Enter/Space 長押しでスキップすると repeat の keydown が結果画面の autoFocus された「もう一度」に届き意図せず再試合になる、M2 `toCssColor` の重複(`GameScreen`・`ScoreHud`)、M3 B1/B2 の同値定数の重複(`WORLD_PARAMS.pitcherFollowMs` は未参照、`RELEASE_POINT` の一致を確かめるテストが無い)、M4 `stage.ts` で `new WebGLRenderer` 以降の初期化が例外を投げると canvas・コンテキストが残り画面全体が落ちる。NIT 5件: N1 knip の未使用 export、N2 `GAME_SEED` のコメント(延長でタイムアウトしうる)、N3 `dispose.ts` の material キャスト、N4 未使用のグローブ・バット材質の生成、N5 演出中の `<summary>` 上の Space/Enter がスキップになる |
+| 2(ラウンド1がMAJORの場合のみ) | 実施せず |  |
 
-未解決のMAJORが残った場合: (なければ「なし」。テストレポートにも引き継ぐこと)
+未解決のMAJORが残った場合: なし。MINOR M1〜M4 と NIT N1〜N3 は修正タスク(Fix3)で対応する。N4(実害なし)・N5(演出中のスキップを優先)は許容する。
 
 ## 人間確認ゲート記録
 
