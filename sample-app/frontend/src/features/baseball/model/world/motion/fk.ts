@@ -6,7 +6,7 @@ import type { JointPose, PoseRoot } from "./pose";
 // three の階層(root → torso → arm → 手先)と同じ変換を、純関数で再現する。`types/` だけに依存する。
 
 /** どちらの手か。`armL` はキャラクターの左(+x 側、グローブ側)、`armR` は右(−x 側、投げる手)。 */
-export type HandSide = "armL" | "armR";
+type HandSide = "armL" | "armR";
 
 function rotateX(v: Vec3, angle: number): Vec3 {
   const c = Math.cos(angle);

@@ -1,6 +1,6 @@
 // ステージの生成・描画・破棄。`document`・`window`・`ResizeObserver`・`WebGLRenderer`・`getContext` を使うのは render/ ではこのファイルだけ。
 // canvas と WebGL2 コンテキストを自前で作る(three r163 以降は WebGL2 専用なので、WebGL1 にはフォールバックしない)。
-// コンテキストが取れなければ three を呼ばずに `null` を返し、`WebGLRenderer` の生成に失敗したときは canvas を外して `null` を返す。
+// コンテキストが取れなければ three を呼ばずに `null` を返し、`WebGLRenderer` の生成やその後の初期化に失敗したときは、作った資源を手放し canvas を外して `null` を返す。
 // 寸法(ゾーン・ボール・球場)は StageOptions の StageGeometry から読み、直書きしない。
 import { PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from "three";
 import type { DataTexture } from "three";
@@ -148,7 +148,7 @@ function layout(rt: Runtime, size: Size): void {
   rt.zoneRect = projectZone(rt.zoneCamera, rt.options.geometry.zone, size);
 }
 
-function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, renderer: WebGLRenderer): Runtime {
+function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, renderer: WebGLRenderer, world: World): Runtime {
   const { container, battingCamera, geometry } = options;
   const size = { width: Math.max(1, container.clientWidth), height: Math.max(1, container.clientHeight) };
   const makeCamera = (): PerspectiveCamera => new PerspectiveCamera(battingCamera.fovDeg, aspectOf(size), CAMERA_NEAR, CAMERA_FAR);
@@ -156,7 +156,7 @@ function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, rendere
     options,
     canvas,
     renderer,
-    world: buildWorld(options),
+    world,
     camera: makeCamera(),
     zoneCamera: makeCamera(),
     raycaster: new Raycaster(),
@@ -257,6 +257,13 @@ function disposeWorld(world: World): void {
   world.teams.defense.dispose();
 }
 
+/** レンダラの破棄 → コンテキストの手放し → canvas の取り外し。`disposeStage` と、初期化の失敗時の後始末で共有する。 */
+function releaseRenderer(renderer: WebGLRenderer, canvas: HTMLCanvasElement): void {
+  renderer.dispose();
+  renderer.forceContextLoss();
+  canvas.remove();
+}
+
 /**
  * 破棄。順序は固定: ①`disposed` → ②context リスナ解除(後続の `forceContextLoss` が `"lost"` を通知しないため)→ ③`disconnect()`
  * → ④geometry/material/texture → ⑤`renderer.dispose()` → `forceContextLoss()` → ⑥canvas を外す。冪等。以後コールバックは呼ばない。
@@ -268,13 +275,53 @@ function disposeStage(rt: Runtime, listeners: ContextListeners, observer: Resize
   rt.canvas.removeEventListener("webglcontextrestored", listeners.restored);
   observer.disconnect();
   disposeWorld(rt.world);
-  rt.renderer.dispose();
-  rt.renderer.forceContextLoss();
-  rt.canvas.remove();
+  releaseRenderer(rt.renderer, rt.canvas);
 }
 
 /**
- * ステージを作って `container` に canvas を追加する。WebGL2 が取れない・`WebGLRenderer` の生成に失敗したときは `null`(呼び出し側がフォールバック表示にする)。
+ * 容器のリサイズ監視と context lost/restored のリスナを結び、ステージのハンドルを返す。
+ * 例外を投げうる処理(`ResizeObserver` の生成・監視開始)を先に済ませ、リスナは最後に登録する
+ * (途中で失敗しても、後始末の `forceContextLoss` が `"lost"` を通知しないようにするため)。
+ */
+function wireStage(rt: Runtime): StageHandle {
+  const observer = new ResizeObserver((entries) => {
+    const entry = entries.at(-1);
+    if (entry) resizeStage(rt, entry.contentRect.width, entry.contentRect.height);
+  });
+  observer.observe(rt.options.container);
+  const listeners = createContextListeners(rt);
+  rt.canvas.addEventListener("webglcontextlost", listeners.lost);
+  rt.canvas.addEventListener("webglcontextrestored", listeners.restored);
+  return {
+    apply: (frame) => applyStage(rt, frame),
+    resize: (width, height) => resizeStage(rt, width, height),
+    pickPlane: (clientX, clientY) => pickPlane(rt, clientX, clientY),
+    zoneScreenRect: () => (rt.disposed ? null : rt.zoneRect),
+    dispose: () => disposeStage(rt, listeners, observer),
+  };
+}
+
+/**
+ * `WebGLRenderer` の生成後の初期化(見た目の設定・シーンの構築・ランタイムの組み立て・結線)。例外を投げうる。
+ * シーンの構築後に失敗したときは、そのシーンを破棄してから例外を投げ直す(`renderer`・canvas の後始末は呼び出し側)。
+ * シーン構築の途中で失敗した分は、最初の `apply` まで描画しないので GPU 資源を持たず、ガベージコレクションに任せる。
+ */
+function assembleStage(options: StageOptions, canvas: HTMLCanvasElement, renderer: WebGLRenderer): StageHandle {
+  applyRendererLook(renderer, options.quality);
+  renderer.setPixelRatio(pixelRatioFor(options.quality, window.devicePixelRatio));
+  styleCanvas(canvas);
+  const world = buildWorld(options);
+  try {
+    return wireStage(createRuntime(options, canvas, renderer, world));
+  } catch (error) {
+    disposeWorld(world);
+    throw error;
+  }
+}
+
+/**
+ * ステージを作って `container` に canvas を追加する。WebGL2 が取れない・`WebGLRenderer` の生成や、その後の初期化に失敗したときは
+ * 作った資源(シーン・レンダラ・コンテキスト・canvas)を手放して `null` を返す(呼び出し側がフォールバック表示にする)。例外は投げない。
  * 初期状態の通知はしない(生成の成功は戻り値で分かる)。`onStatusChange` は context lost で `"lost"`、復帰で `"ready"`、`onResize` は容器のサイズ変化のたびに呼ぶ。
  */
 export function createStage(options: StageOptions): StageHandle | null {
@@ -283,23 +330,10 @@ export function createStage(options: StageOptions): StageHandle | null {
   if (gl === null) return null;
   const renderer = createRenderer(canvas, gl, options.container);
   if (renderer === null) return null;
-  applyRendererLook(renderer, options.quality);
-  renderer.setPixelRatio(pixelRatioFor(options.quality, window.devicePixelRatio));
-  styleCanvas(canvas);
-  const rt = createRuntime(options, canvas, renderer);
-  const listeners = createContextListeners(rt);
-  canvas.addEventListener("webglcontextlost", listeners.lost);
-  canvas.addEventListener("webglcontextrestored", listeners.restored);
-  const observer = new ResizeObserver((entries) => {
-    const entry = entries.at(-1);
-    if (entry) resizeStage(rt, entry.contentRect.width, entry.contentRect.height);
-  });
-  observer.observe(options.container);
-  return {
-    apply: (frame) => applyStage(rt, frame),
-    resize: (width, height) => resizeStage(rt, width, height),
-    pickPlane: (clientX, clientY) => pickPlane(rt, clientX, clientY),
-    zoneScreenRect: () => (rt.disposed ? null : rt.zoneRect),
-    dispose: () => disposeStage(rt, listeners, observer),
-  };
+  try {
+    return assembleStage(options, canvas, renderer);
+  } catch {
+    releaseRenderer(renderer, canvas);
+    return null;
+  }
 }

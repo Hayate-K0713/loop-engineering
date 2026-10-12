@@ -2,7 +2,7 @@
 import type { Rot3 } from "../../../types/scene";
 import type { JointPose } from "./pose";
 
-export const TWO_PI = Math.PI * 2;
+const TWO_PI = Math.PI * 2;
 
 /** 投手の windup の標準の長さ(`WORLD_PARAMS` の cpuWaitMs と同値。motion は space を import できないのでテストで持つ)。 */
 export const NOMINAL_WINDUP_MS = 700;
@@ -18,7 +18,7 @@ function rotAngles(r: Rot3): readonly number[] {
 }
 
 /** 6関節 × 3軸 = 18個の角度。 */
-export function jointAngles(pose: JointPose): readonly number[] {
+function jointAngles(pose: JointPose): readonly number[] {
   return [pose.torso, pose.head, pose.armL, pose.armR, pose.legL, pose.legR].flatMap(rotAngles);
 }
 

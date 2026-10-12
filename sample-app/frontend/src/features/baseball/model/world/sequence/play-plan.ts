@@ -53,7 +53,7 @@ export type PlayPlan = {
   readonly endMs: number;
 };
 
-export type PlanInput = {
+type PlanInput = {
   readonly flight: PitchFlight;
   readonly outcome: PitchOutcomeView;
   /** 人間のスイング入力。CPU 打者・見逃しでは `null`。 */

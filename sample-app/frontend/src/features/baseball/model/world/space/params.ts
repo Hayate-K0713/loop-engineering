@@ -25,7 +25,7 @@ const PARAMS = {
   pitch: { bendGain: 2.5, arcHeight: 0.12 },
   /** 捕手ミット。`z` はミットの位置、`yOffset` は着弾点の y からのずれ、`travelMs` は着弾点からミットまで進む時間(固定)。 */
   mitt: { z: 1.6, yOffset: -0.2, travelMs: 150 },
-  /** 投手のフォロースルーの長さ(`t = 0` から)。 */
+  /** 投手のフォロースルーの長さ(`t = 0` から)。実際の動きは `motion/rig.ts` の `PITCHER_FOLLOW_MS` で決まり、この値は参照されない(同値は `sequence/world-consistency.test.ts` が固定)。 */
   pitcherFollowMs: 400,
   /** 投手・捕手・打者の足元の位置と向き(yaw)・大きさ。 */
   actors: {
@@ -123,6 +123,6 @@ const PARAMS = {
   },
 };
 
-export type WorldParams = DeepReadonly<typeof PARAMS>;
+type WorldParams = DeepReadonly<typeof PARAMS>;
 
 export const WORLD_PARAMS: WorldParams = PARAMS;

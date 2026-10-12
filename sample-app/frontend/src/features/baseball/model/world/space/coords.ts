@@ -10,7 +10,7 @@ import { WORLD_PARAMS } from "./params";
 const { halfWidth, bottom, top, planeZ } = WORLD_PARAMS.zone;
 
 /** ゾーン中心の高さ(m)。 */
-export const ZONE_CENTER_Y = (top + bottom) / 2;
+const ZONE_CENTER_Y = (top + bottom) / 2;
 
 /** ゾーンの半高(m)。 */
 export const ZONE_HALF_HEIGHT = (top - bottom) / 2;

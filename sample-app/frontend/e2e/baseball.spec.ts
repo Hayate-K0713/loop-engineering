@@ -13,8 +13,9 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
 const MAX_PITCH_TURNS = 300;
 
 // 試合を結果画面まで通すテスト(テスト2・3・5)で使う seed。先攻・全球見送り・守備は中央ストレートで、延長に入らず 1 イニングで終わる
-// (3D 画面は 1 球ごとに 1〜2 秒かかるので、延長に入ると所要時間が倍になる)。試合ロジックを変えると延長に入ることがあるが、
-// その場合もテストは壊れず遅くなるだけなので、遅いと感じたら探し直す(2026-10-12 の探索: 40〜48 のうち 43,44,47,48 が延長なし。47 を採用)。
+// (3D 画面は 1 球ごとに 1〜2 秒かかるので、延長に入ると所要時間が倍になる)。試合ロジックを変えると延長に入ることがあり、
+// その場合はテストのタイムアウト(120 秒)や 1 ターンの待ち(60 秒)を超えて失敗しうるので、延長なしの seed を探し直す
+// (2026-10-12 の探索: 40〜48 のうち 43,44,47,48 が延長なし。47 を採用)。
 const GAME_SEED = 47;
 
 // 演出スキップのテスト(テスト4)で使う seed。「後攻・中央(2,2)+ストレート」で投げた 1 球目が `in-play`(滞空+余韻で 2.5〜3 秒続く演出)になる。
@@ -394,6 +395,85 @@ test("swinging with the Space key does not skip the play animation in the same k
   // その演出は Space のスイングによる空振りで(早いスイングは必ず空振り)、見逃し(CPU 任せの判定)ではない。
   expect(trace.snapshots.map((snapshot) => snapshot.playKind).filter((kind) => kind !== null)).toContain("swinging-strike");
 });
+
+// 結果画面が出る前から押しっぱなしの Enter/Space が、結果画面の「もう一度」を押さない(テスト6): 最後の打席の演出を Enter/Space の長押しで
+// スキップすると、結果画面が出て `autoFocus` された「もう一度」に、押しっぱなしのキーの repeat(Enter は keydown、Space は repeat のあとの keyup が
+// 既定動作でクリックになる)が届き、意図せず再試合になっていた。ここでは速い `fast=1` で、人間守備に入ってからキーを押しっぱなしにして結果画面が
+// 自然に出るのを待つ(押されていたキーの repeat が結果画面に届く点はスキップ経由と同じ。スキップ経由は通常速度で手動確認した)。
+// repeat は実キー入力でしか届かない: 押したままの同じキーに `keyboard.down` を繰り返すと `repeat: true` の keydown になる(合成イベントはボタンの
+// 既定動作を起こさない)。
+
+// 結果画面が出るまでキーを押し続けるときの上限(フレーム数)。人間守備の 1 イニングは、通常 150 フレーム前後で終わる。
+const MAX_HELD_KEY_FRAMES = 1500;
+
+// 結果画面が出たあとに送る repeat の回数。
+const REPEATS_AFTER_RESULT = 8;
+
+/** ページ内で毎フレーム、「投げる」が押せるなら押す。Playwright の往復遅延のせいで、最後の投球が終わったあとにキーを押し始めることを避ける。 */
+async function autoThrowWhenReady(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const tick = (): void => {
+      if (document.querySelector('[data-testid="pitch-controls"][data-ready="true"]') !== null) {
+        document.querySelector<HTMLElement>('[data-testid="throw-pitch"]')?.click();
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+/** 押しっぱなしのキーの repeat を `times` 回、1 フレームおきに送る。 */
+async function repeatKey(page: Page, key: string, times: number): Promise<void> {
+  for (let count = 0; count < times; count += 1) {
+    await page.keyboard.down(key);
+    await nextFrame(page);
+  }
+}
+
+/** `target` が現れるまで、押しっぱなしのキーの repeat を 1 フレームおきに送る。 */
+async function repeatKeyUntilVisible(page: Page, key: string, target: Locator): Promise<void> {
+  for (let frame = 0; frame < MAX_HELD_KEY_FRAMES; frame += 1) {
+    if ((await target.count()) > 0) {
+      return;
+    }
+    await repeatKey(page, key, 1);
+  }
+  throw new Error(`${key} was held for ${MAX_HELD_KEY_FRAMES} frames but the target did not appear`);
+}
+
+for (const key of ["Enter", "Space"] as const) {
+  test(`holding ${key} until the result screen appears does not restart the game`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = collectPageErrors(page);
+
+    await page.goto(`/?seed=${GAME_SEED}&innings=1&fast=1#/baseball`);
+    await startGame(page);
+    await expect(page.getByTestId("stage-3d")).toHaveAttribute("data-status", "ready");
+
+    // 攻撃中(全球見送り)は Enter/Space がスイングになるので押さない。人間守備になってから押しっぱなしにし、投球はページ内で自動化する。
+    await expect(page.locator('[data-testid="pitch-controls"][data-ready="true"]')).toBeVisible({ timeout: 60_000 });
+    await autoThrowWhenReady(page);
+    await page.keyboard.down(key);
+    const result = page.getByTestId("result-screen");
+    await repeatKeyUntilVisible(page, key, result);
+
+    // 前提: 結果画面が出た時点で「もう一度」にフォーカスがあり、キーは押されたまま(ここから先の repeat がこのボタンに届く)。
+    await expect(page.getByTestId("restart-game")).toBeFocused();
+    await repeatKey(page, key, REPEATS_AFTER_RESULT);
+    await page.keyboard.up(key);
+    await nextFrame(page);
+    await nextFrame(page);
+
+    // 再試合になっていない: 結果画面が残り、最終スコアも表示されたまま。
+    await expect(result).toBeVisible();
+    await expectScoresShown(page);
+
+    // 通常の操作は妨げない: 離したあとに押し直せば、フォーカス中の「もう一度」が押されて再試合になる(結果画面が消える)。
+    await page.keyboard.press(key);
+    await expect(result).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+}
 
 type Box = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 type Viewport = { readonly width: number; readonly height: number };

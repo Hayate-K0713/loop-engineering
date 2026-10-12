@@ -3,14 +3,10 @@ import type { Bases } from "../types/game";
 import type { GameView, ScoreRowView, ScoreboardView } from "../types/view";
 import { BaseDiamond } from "./BaseDiamond";
 import { CountLamps } from "./CountLamps";
+import { toCssColor } from "./css-color";
 import { LineScore } from "./LineScore";
 
 type TeamColors = GameView["teamColors"];
-
-/** 24bit RGB の数値を CSS の色(`#rrggbb`)にする。 */
-function toCssColor(rgb: number): string {
-  return `#${rgb.toString(16).padStart(6, "0")}`;
-}
 
 function colorOf(teamColors: TeamColors, side: Side): string {
   return toCssColor(side === "away" ? teamColors.away : teamColors.home);

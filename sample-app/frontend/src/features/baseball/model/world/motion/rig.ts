@@ -42,7 +42,7 @@ export const PITCHER_FOLLOW_MS = 400;
  * 右腕(`armR`)は肩の真上〜わずかに前へ伸び、`fk.ts` で求めた手先が `RELEASE_POINT`(−0.30, 1.65, −18.1)の 0.15m 以内に来る
  * (投手の足元 (0, 0.25, −18.4)・yaw 0・scale 1 のとき)。
  */
-export const PITCHER_RELEASE_POSE: JointPose = {
+const PITCHER_RELEASE_POSE: JointPose = {
   torso: rot(0.25, 0.3, 0),
   head: rot(0.1, 0, 0),
   armL: rot(-0.9, 0, 0.4),

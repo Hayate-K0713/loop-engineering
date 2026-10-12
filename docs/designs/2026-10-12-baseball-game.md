@@ -981,6 +981,12 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - 判定: S1〜S10 は〇、S11(b)(結果画面の略称+色チップ)のみ未達。重なり実測は 390×844・1280×720 × 打撃・守備の4条件すべてゾーン/投手/打者とも 0。B2 と B1 の定数(`RELEASE_POINT`・`PITCHER_FOLLOW_MS`・`SWING_CONTACT_PROGRESS`・`SWING_FOLLOW_END_PROGRESS`)は全一致。
   - スクリーンショット28枚を `docs/tests/assets/2026-10-12-baseball-game/` に保存(仮想時計+手動 rAF の決定論的ハーネスで撮影。引き分けは `?seed=7&innings=1&fast=1`・後攻で再現)。
   - **G が見つけた不具合(修正タスクへ)**: (1) Space でスイングすると同じ keydown で `useSkipInput` が `holding=true` を見て演出を即スキップする(window のリスナ間にマイクロタスクが挟まり React が再描画済みになるため)。(2) 打者 scale 0.92 により、ワールドでのバット高さが `height × 0.92` になり、ゾーン外のコースで最大約 0.1m ボールより低くなる。(3) S11(b) 未達。
+- 修正 Fix3(コードレビュー ラウンド1 の MINOR M1〜M4・NIT N1〜N3):
+  - M1: `ResultScreen` のルートに `useHeldKeyGuard()`(Enter/Space の repeat keydown と、この画面で keydown を見ていない Space の keyup を `preventDefault`)。押しっぱなしの Enter/Space による意図しない再試合を防ぐ回帰 E2E を2件追加(各約36秒。修正前は2件とも失敗)。keyup 側のガードは Chromium では単独で効果を再現できず、他ブラウザへの予防。
+  - M2: `toCssColor` を `ui/css-color.ts` に共通化。M3: `WORLD_PARAMS.pitcherFollowMs` は未参照だが残し、`sequence/world-consistency.test.ts`(4件)で `RELEASE_POINT`(0.15m 以内)と B1/B2 の同値定数の一致を固定。
+  - M4: `createStage` の renderer 生成後の初期化を try/catch で囲み、失敗時はシーン破棄 → `renderer.dispose()` → `forceContextLoss()` → `canvas.remove()` で `null`。ResizeObserver を先に、context リスナ登録を最後に置く。4種の例外注入で、修正前は例外が外へ出て canvas とコンテキストが残り、修正後は `null`・canvas 0・コンテキスト解放を確認。
+  - N1: 未使用 export 8件を外した(knip の残り11件は 2D 残置分などで対象外)。N2: `GAME_SEED` のコメント修正。N3: `dispose.ts` は `instanceof Material` で絞り込み。
+  - E2E は計13件(baseball 11・home 2)が2回連続成功。**注意**: 全件並列実行中に「Space でスイング」の E2E が1回だけ見逃し扱い(`called-strike`)で失敗した(飛行終了間際に Space が届くレースとみられる。単独12回・全件3回は成功)。テストで再現頻度を確認する。
 - 修正 Fix1(`hooks/useSkipInput.ts`・`sequence/frame.ts`・`frame.test.ts`・`e2e/baseball.spec.ts`):
   - Space スイングの即スキップ: `useSkipInput` の `onKeyDown` 先頭で `event.defaultPrevented` なら return(`useKeyboardInput` の `handleSwingKey` が `onSwing()` 前に `preventDefault()` 済み)。回帰 E2E「Space スイングで同じ keydown の演出がスキップされない」を追加(実キー入力 `keyboard.down` が必要。`dispatchEvent` では再現しない。`SWING_SEED = 1`。修正前は 3/3 失敗、修正後は 5/5 成功)。E2E は計 11 件。
   - バット高さ: `frame.ts` に `batHeightInRoot(world) = (world − actors.batter.position.y) / actors.batter.scale` を追加し、motion の返す「ワールドの高さ」を打者ローカルに直す。構え・接触(= `swing.height`)・巻き上げがワールドで一致することを `frame.test.ts` で固定(補正を外すと 6 件失敗)。

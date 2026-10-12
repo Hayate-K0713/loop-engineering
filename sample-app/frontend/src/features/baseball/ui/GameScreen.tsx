@@ -5,16 +5,12 @@ import type { Side } from "../types/common";
 import type { GameConfig, PlaybackSpeed } from "../types/game";
 import type { CourseCell, PitchCommand, PitchKind } from "../types/pitch";
 import type { GameView, ScoreRowView } from "../types/view";
+import { toCssColor } from "./css-color";
 import { GameLayout } from "./GameLayout";
 import { ResultScreen, type ResultTeam, type ResultTeams } from "./ResultScreen";
 
 // 投球の初期選択はストレート+中央(2,2)。選択は投球後も保持する。
 const INITIAL_SELECTION: PitchCommand = { kind: "straight", cell: { col: 2, row: 2 } };
-
-/** 24bit RGB の数値を CSS の色(`#rrggbb`)にする(ScoreHud のチップと同じ変換)。 */
-function toCssColor(rgb: number): string {
-  return `#${rgb.toString(16).padStart(6, "0")}`;
-}
 
 /** 得点欄の1行(略称・正式名)とチーム色(24bit RGB)から、結果画面に出す1チーム分を作る。 */
 function resultTeamOf(row: ScoreRowView | undefined, rgb: number): ResultTeam {

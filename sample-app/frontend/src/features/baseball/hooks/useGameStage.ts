@@ -47,7 +47,7 @@ export type GameStageViewProps = {
   readonly marker: FieldMarkerView | null;
 };
 
-export type UseGameStageResult = {
+type UseGameStageResult = {
   /** **表示用**の view(演出中は直前のまま保持)。`ScoreHud`・`NamePlates`・`Ticker`・操作バーの種類・`ResultScreen` の判定に使う。 */
   readonly view: GameView;
   /** 演出中。真の間は次の投球を始めず、`ResultScreen` も出さない(`view.result !== null && !holding` のとき表示)。 */

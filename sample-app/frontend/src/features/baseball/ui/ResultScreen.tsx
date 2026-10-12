@@ -1,3 +1,4 @@
+import { useRef, type KeyboardEvent } from "react";
 import type { Side } from "../types/common";
 import type { ResultView } from "../types/view";
 
@@ -50,10 +51,60 @@ function TeamScore({ side, team, runs, testId }: TeamScoreProps) {
   );
 }
 
+const SPACE = " ";
+
+type HeldKeyGuard = {
+  readonly onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  readonly onKeyUp: (event: KeyboardEvent<HTMLElement>) => void;
+};
+
+/**
+ * 結果画面が出る前から押されていた Enter/Space(最後の演出のスキップに使ったキーの長押し)が、`autoFocus` された「もう一度」を押さないようにする。
+ * スキップの keydown は結果画面が出る前に window で消費されるので、その後の repeat の keydown と keyup が、フォーカスされたボタンに届いてしまう。
+ * - keydown: Enter/Space の長押しの repeat(`event.repeat`)は `preventDefault()` する(Enter はこの keydown の既定動作でクリックになり、
+ *   Space は repeat の keydown でボタンが押下状態になって keyup でクリックになる)。
+ * - keyup: Space は keyup の既定動作でクリックになる。この画面で Space の keydown を見ていない keyup は、画面が出る前から押されていたキーなので
+ *   `preventDefault()` する(ブラウザによっては、別の要素への keydown のあとでフォーカスが移ったボタンが、その keyup でクリックされる)。
+ * 画面が出たあとに押し始めたキーは、最初の keydown(repeat でない)と対の keyup が通るので、通常どおりボタンを押せる。
+ */
+function useHeldKeyGuard(): HeldKeyGuard {
+  const spaceDownSeen = useRef(false);
+  return {
+    onKeyDown: (event) => {
+      if (event.key !== "Enter" && event.key !== SPACE) {
+        return;
+      }
+      if (event.repeat) {
+        event.preventDefault();
+      } else if (event.key === SPACE) {
+        spaceDownSeen.current = true;
+      }
+    },
+    onKeyUp: (event) => {
+      if (event.key !== SPACE) {
+        return;
+      }
+      if (!spaceDownSeen.current) {
+        event.preventDefault();
+      }
+      spaceDownSeen.current = false;
+    },
+  };
+}
+
 /** 試合結果。`GameLayout` に重ねる全面オーバーレイ(背後の試合画面は CSS でぼかす)。 */
 export function ResultScreen({ result, teams, onRestart, onBackToTitle }: ResultScreenProps) {
+  const heldKeyGuard = useHeldKeyGuard();
   return (
-    <div className="bb-result" data-testid="result-screen" role="dialog" aria-modal="true" aria-labelledby="bb-result-headline">
+    <div
+      className="bb-result"
+      data-testid="result-screen"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="bb-result-headline"
+      onKeyDown={heldKeyGuard.onKeyDown}
+      onKeyUp={heldKeyGuard.onKeyUp}
+    >
       <div className="bb-result__panel" data-outcome={result.humanOutcome ?? "none"}>
         <div className="bb-result__card">
           <p className="bb-result__kicker">試合終了</p>

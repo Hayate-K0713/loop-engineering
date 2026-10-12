@@ -4,8 +4,10 @@ import type { Object3D } from "three";
 
 type Disposable = BufferGeometry | Material | Texture | LightShadow;
 
-function materialsOf(material: Material | Material[]): Material[] {
-  return Array.isArray(material) ? material : [material];
+/** `Mesh` などの `material`(単体または配列)から `Material` だけを取り出す。それ以外の値(未設定など)は空。 */
+function materialsOf(value: unknown): Material[] {
+  if (value instanceof Material) return [value];
+  return Array.isArray(value) ? value.filter((item): item is Material => item instanceof Material) : [];
 }
 
 function texturesOf(material: Material): Texture[] {
@@ -14,8 +16,8 @@ function texturesOf(material: Material): Texture[] {
 
 function collect(object: Object3D, found: Set<Disposable>): void {
   if ("geometry" in object && object.geometry instanceof BufferGeometry) found.add(object.geometry);
-  if ("material" in object && (object.material instanceof Material || Array.isArray(object.material))) {
-    for (const material of materialsOf(object.material as Material | Material[])) {
+  if ("material" in object) {
+    for (const material of materialsOf(object.material)) {
       found.add(material);
       for (const texture of texturesOf(material)) found.add(texture);
     }
