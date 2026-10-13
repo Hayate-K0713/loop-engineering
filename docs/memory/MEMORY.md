@@ -29,6 +29,10 @@
 - [playwright-browser-revision-mismatch](entries/playwright-browser-revision-mismatch.md) — クラウド環境の /opt/pw-browsers と @playwright/test 1.62 のブラウザrevisionが不一致。symlink+PLAYWRIGHT_BROWSERS_PATH で回避(install はしない)
 - [visual-scope-must-be-shown-at-gate1](entries/visual-scope-must-be-shown-at-gate1.md) — 「〇〇みたいな」要望や見た目が価値の中心の機能では、描画・演出をスコープ外にする判断をゲート1でモック等により見える形で確認する
 - [three-r186-pitfalls](entries/three-r186-pitfalls.md) — three r186 は PCFSoftShadowMap 廃止・WebGL1 不可。headless Chromium で WebGL2 は使えるが重いので E2E は pixelRatio 1・低品質
+- [game-feel-needs-playability-check](entries/game-feel-needs-playability-check.md) — タイミング判定のゲームは自動テスト合格でも操作できないことがある。見た目の到達と判定のずれ・入力遅延の補正(event.timeStamp)・人間を模したボット試算を設計とテストで数値確認する
+- [swiftshader-playwright-input-latency](entries/swiftshader-playwright-input-latency.md) — SwiftShader の WebGL 画面では Playwright の実入力が 0.2〜1 秒以上遅れる。時間窓を狙う E2E はページ内で計測し、連写は仮想時計+手動 rAF で撮る
+- [dom-key-input-exclusivity](entries/dom-key-input-exclusivity.md) — 同じキーを複数機能が使うときは state ではなく preventDefault/defaultPrevented で排他する。autoFocus の確定ボタンは押しっぱなしの repeat で押される
+- [worktree-session-shell-restrictions](entries/worktree-session-shell-restrictions.md) — worktree 隔離セッションでは変数・ループ・ヒアドキュメントを含む複合コマンドが拒否される。スクリプトは Write で作り、プロセスは PID で止める(`pkill -f` は自分を殺す)
 
 ## glossary(プロジェクト固有の用語集)
 
