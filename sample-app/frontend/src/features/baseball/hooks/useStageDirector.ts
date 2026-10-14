@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { scaleRadiiForPitch } from "../model/batting/contact";
 import { sceneFrameAt, type SceneFrameInput } from "../model/world/sequence/frame";
 import { planPlay, type PlayPlan } from "../model/world/sequence/play-plan";
 import { isPlayFinished, phaseOf, swingForOutcome, windupProgress, type SwingRecord } from "../model/world/sequence/session";
 import { telopAt } from "../model/world/sequence/telop";
+import { timingAt } from "../model/world/sequence/timing-cue";
+import type { SwingInput, TimingCue } from "../types/batting";
 import type { PlaybackSpeed } from "../types/game";
 import type { CourseCell, PitchFlight } from "../types/pitch";
-import type { ScenePhase, UniformColors } from "../types/scene";
+import type { SafeArea, SceneLayout, ScenePhase, UniformColors } from "../types/scene";
 import type { StageHandle } from "../types/stage";
 import type { GameView, PitchOutcomeView } from "../types/view";
 import { useAnimationFrame, type FrameResult } from "./useAnimationFrame";
@@ -25,6 +28,10 @@ type UseStageDirectorOptions = {
   readonly onFinished: (seq: number) => void;
   /** `usePitchFlight` の `getElapsedMs`。演出の時計(リリースからの経過ゲーム時間)。 */
   readonly getElapsedMs: () => number;
+  /** `useStage3d` の `getAspect`。ステージの現在の縦横比(幅 ÷ 高さ)。毎フレーム読んで `SceneFrameInput.aspect` に渡す。 */
+  readonly getAspect: () => number;
+  /** `useSafeArea` の `getSafeArea`。空き領域の実測値(測れなければ `null` = model が既定値を使う)。毎フレーム読んで `SceneFrameInput.safeArea` に渡す。 */
+  readonly getSafeArea: () => SafeArea | null;
   /** スイングカーソルの位置と半径の getter(安定した関数)。`useBattingControls` との循環を避けるため ref 経由で受ける。 */
   readonly getCursorView: () => CursorView;
   /** 人間のスイング記録(`useGameStage` が `onSwing` で書き込む)。plan 作成時に読み、作成後に `null` へ戻す。 */
@@ -48,6 +55,10 @@ export type StageDirector = {
   readonly playKind: PlayKind | null;
   /** 最後に見た `flight`(`data-*` ミラー用。飛行が短くても E2E が取り逃さない)。 */
   readonly lastFlight: PitchFlight | null;
+  /** 表示中のタイミング表示(`plan.timing` の区間内だけ。スキップで消える)。なければ `null`。 */
+  readonly timingCue: TimingCue | null;
+  /** 直近のスイングのタイミング(`data-timing` ミラー用)。plan ができたとき設定し、次の `flight` が出るまで保持する(スキップでは消さない)。 */
+  readonly lastTiming: TimingCue | null;
   /** 人間守備: windup を始め、`cpuWaitMs` 後に `onRelease()`(投球の dispatch)を呼ぶ。投げられない状況では何もしない。 */
   readonly startThrow: (onRelease: () => void) => void;
   /** 演出のスキップ。`holding` 中だけ有効で、表示だけを飛ばす(reducer・`GameState` に触れない。冪等)。 */
@@ -71,14 +82,29 @@ type Shown = {
   readonly phase: ScenePhase;
   readonly playKind: PlayKind | null;
   readonly lastFlight: PitchFlight | null;
+  readonly timingCue: TimingCue | null;
+  readonly lastTiming: TimingCue | null;
 };
 
 type PatchShown = (change: Partial<Shown>) => void;
 
-const INITIAL_SHOWN: Shown = { telop: null, throwing: false, phase: "idle", playKind: null, lastFlight: null };
+const INITIAL_SHOWN: Shown = { telop: null, throwing: false, phase: "idle", playKind: null, lastFlight: null, timingCue: null, lastTiming: null };
+
+/** タイミング表示の同値判定。`timingAt` は毎フレーム新しいオブジェクトを返すので、参照ではなく値で比べる(再描画を増やさない)。 */
+function sameCue(a: TimingCue | null, b: TimingCue | null): boolean {
+  return a === b || (a !== null && b !== null && a.label === b.label && a.dtMs === b.dtMs);
+}
 
 function sameShown(a: Shown, b: Shown): boolean {
-  return a.telop === b.telop && a.throwing === b.throwing && a.phase === b.phase && a.playKind === b.playKind && a.lastFlight === b.lastFlight;
+  return (
+    a.telop === b.telop &&
+    a.throwing === b.throwing &&
+    a.phase === b.phase &&
+    a.playKind === b.playKind &&
+    a.lastFlight === b.lastFlight &&
+    sameCue(a.timingCue, b.timingCue) &&
+    sameCue(a.lastTiming, b.lastTiming)
+  );
 }
 
 /**
@@ -111,13 +137,24 @@ function useFlightSession(sessionRef: RefObject<Session>, flight: PitchFlight | 
     }
     sessionRef.current.flight = flight;
     sessionRef.current.windupStartedAtMs = null;
-    patch({ lastFlight: flight, throwing: false });
+    patch({ lastFlight: flight, throwing: false, lastTiming: null });
     return undefined;
   }, [flight, sessionRef, patch]);
 }
 
 /**
+ * `planPlay` に渡す人間のスイング。結果が「ボール」「見逃しストライク」のときは、reducer がスイングを受理していない
+ * (到達通知が先に届き、同じ tick に来たスイング入力は無視された)ので、記録があっても渡さない
+ * (渡すと、見逃しの結果なのにバットを振る演出とタイミング表示が出る)。
+ */
+function acceptedSwing(record: SwingRecord | null, outcome: PitchOutcomeView): SwingInput | null {
+  return outcome.kind === "ball" || outcome.kind === "called-strike" ? null : swingForOutcome(record, outcome.seq);
+}
+
+/**
  * 解決した球(`outcome.seq` が変わる)ごとに演出の時刻表を作る。人間のスイング記録は `seq` が一致するときだけ渡し、作成後に `null` へ戻す。
+ * 時刻表の `resolvedAtMs`(受付時刻 = いまの経過ゲーム時間)は、スイングの判定時刻 `atMs`(遅延補正で過去になりうる)と区別して `planPlay` に渡す。
+ * 人間のスイングがあれば、`plan.timing` から `lastTiming`(`data-timing` ミラー)を設定する(スイングなしは `null`)。
  * 対応する `flight` が session に無い(想定外)ときは、演出なしで即座に終了して進行を止めない。
  * layout effect なので、結果が commit された同じ tick で plan ができる(次のフレームから `play`)。cleanup で plan を破棄する。
  */
@@ -140,9 +177,10 @@ function usePlanSession(
       finishPlay(outcome.seq);
       return undefined;
     }
-    session.plan = planPlay({ flight, outcome, swing: swingForOutcome(swingRecordRef.current, outcome.seq), resolvedAtMs: getElapsedMs() });
+    const plan = planPlay({ flight, outcome, swing: acceptedSwing(swingRecordRef.current, outcome), resolvedAtMs: getElapsedMs() });
+    session.plan = plan;
     swingRecordRef.current = null;
-    patch({ playKind: outcome.kind });
+    patch({ playKind: outcome.kind, lastTiming: plan.timing === null ? null : { label: plan.timing.label, dtMs: plan.timing.dtMs } });
     return () => {
       session.plan = null;
     };
@@ -200,6 +238,20 @@ function useThrowStarter(latest: RefObject<UseStageDirectorOptions>, sessionRef:
   );
 }
 
+/** 構図のレイアウト。人間守備(`aimCell` あり = 守備レイアウト)は `"pitching"`、それ以外は `"batting"`。 */
+function layoutOf(aimCell: CourseCell | null): SceneLayout {
+  return aimCell !== null ? "pitching" : "batting";
+}
+
+/**
+ * 描画するスイングカーソル。投球(`session.flight`)があるあいだは、判定(`effectiveRadii`)と同じ球種の打ちにくさ補正(`cursorScale`)を半径に掛ける。
+ * 投球がない間(待機中など)は補正なしの半径。
+ */
+function cursorOf(options: UseStageDirectorOptions, session: Session): SceneFrameInput["cursor"] {
+  const { point, radii } = options.getCursorView();
+  return { visible: options.cursorVisible, point, radii: session.flight === null ? radii : scaleRadiiForPitch(radii, session.flight.kind) };
+}
+
 /** 時刻 `tMs` の `sceneFrameAt` の入力を組み立てる。`play` 中も session に保持した `flight` を渡す(接触前の投球を描くため)。 */
 function frameInputOf(options: UseStageDirectorOptions, session: Session, phase: ScenePhase, tMs: number, nowMs: number): SceneFrameInput {
   const windupStartedAtMs = session.windupStartedAtMs;
@@ -209,8 +261,11 @@ function frameInputOf(options: UseStageDirectorOptions, session: Session, phase:
     windupU: windupStartedAtMs === null ? 0 : windupProgress(nowMs, windupStartedAtMs, options.speed.cpuWaitMs),
     flight: session.flight,
     plan: session.plan,
+    aspect: options.getAspect(),
+    layout: layoutOf(options.aimCell),
+    safeArea: options.getSafeArea(),
     uniforms: options.uniforms,
-    cursor: { visible: options.cursorVisible, ...options.getCursorView() },
+    cursor: cursorOf(options, session),
     aim: options.aimCell,
     grid: options.aimCell !== null,
   };
@@ -235,7 +290,11 @@ function useDirectorLoop(
     }
     const phase = phaseOf({ hasPlan: session.plan !== null, hasFlight: session.flight !== null, windupActive: session.windupStartedAtMs !== null });
     options.stage?.apply(sceneFrameAt(frameInputOf(options, session, phase, tMs, nowMs)));
-    patch({ phase, telop: session.plan === null ? null : telopAt(session.plan, tMs) });
+    patch({
+      phase,
+      telop: session.plan === null ? null : telopAt(session.plan, tMs),
+      timingCue: session.plan === null ? null : timingAt(session.plan, tMs),
+    });
     return "continue";
   }, "stage");
 }
@@ -256,7 +315,7 @@ export function useStageDirector(options: UseStageDirectorOptions): StageDirecto
     (seq: number): void => {
       sessionRef.current.plan = null;
       sessionRef.current.flight = null;
-      patch({ telop: null, playKind: null, phase: "idle" });
+      patch({ telop: null, playKind: null, phase: "idle", timingCue: null });
       latest.current.onFinished(seq);
     },
     [latest, patch],

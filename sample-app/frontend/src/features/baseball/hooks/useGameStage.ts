@@ -1,11 +1,11 @@
-import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type PointerEventHandler, type RefObject } from "react";
 import { INITIAL_CURSOR } from "../model/batting/cursor";
 import { isHolding, recordSwing, type SwingRecord } from "../model/world/sequence/session";
 import { CPU_SWING_LEAD_MS } from "../model/world/space/params";
 import type { SwingInput, SwingKind, TimingCue } from "../types/batting";
 import type { PlaybackSpeed } from "../types/game";
 import type { PitchCommand, PitchFlight } from "../types/pitch";
-import type { ScenePhase } from "../types/scene";
+import type { SceneLayout, ScenePhase } from "../types/scene";
 import type { ScreenRect, StageStatus } from "../types/stage";
 import type { FieldMarkerView, GameView, PitchOutcomeView } from "../types/view";
 import { useBattingControls, type BattingControls, type CursorView } from "./useBattingControls";
@@ -15,6 +15,7 @@ import { useHeldView } from "./useHeldView";
 import { useLatest } from "./useLatest";
 import { usePitchFlight } from "./usePitchFlight";
 import type { PointerHandlers } from "./usePointerInput";
+import { useSafeArea } from "./useSafeArea";
 import { useSkipInput } from "./useSkipInput";
 import { useStage3d, type UseStage3dResult } from "./useStage3d";
 import { useStageDirector, type StageDirector } from "./useStageDirector";
@@ -67,7 +68,8 @@ type UseGameStageResult = {
   /** `SwingControls` の `swingKind`・`onSelectSwingKind`・`onSwing`(pointerdown)。 */
   readonly swingKind: SwingKind;
   readonly setSwingKind: (kind: SwingKind) => void;
-  readonly swingNow: () => void;
+  /** スイングボタンの pointerdown 用(`useBattingControls` の `swingFromButton`)。イベントの時刻と入力種別から判定時刻を求める。 */
+  readonly swingNow: PointerEventHandler<HTMLButtonElement>;
   readonly stageProps: GameStageViewProps;
 };
 
@@ -110,6 +112,11 @@ function useBindCursorSource(sourceRef: RefObject<() => CursorView>, source: () 
   }, [sourceRef, source]);
 }
 
+/** 構図のレイアウト(人間守備は守備レイアウト、それ以外は打撃レイアウト)。表示用の view で決める(director の `aimCell` と同じ基準)。 */
+function layoutOf(heldView: GameView): SceneLayout {
+  return heldView.mode === "human-pitching" ? "pitching" : "batting";
+}
+
 type PlaybackOptions = {
   readonly game: UseGameResult;
   readonly speed: PlaybackSpeed;
@@ -135,7 +142,7 @@ function usePlayback({ game, speed, selection, holding, swingReady, heldView, on
   const { view } = game;
   const humanBatting = view.mode === "human-batting";
   const stage3d = useStage3d({ quality: speed.timeScale > 1 ? "low" : "normal" });
-  const { getElapsedMs } = usePitchFlight({
+  const { getElapsedMs, getSwingAtMs, holdArrivalFor, releaseArrival } = usePitchFlight({
     flight: view.flight,
     arriveAfterMs: view.arriveAfterMs,
     leadMs: humanBatting ? 0 : CPU_SWING_LEAD_MS,
@@ -143,6 +150,8 @@ function usePlayback({ game, speed, selection, holding, swingReady, heldView, on
     onArrive: game.pitchArrived,
   });
   const { swingRecordRef, onSwing } = useSwingRecording(game);
+  // 空き領域の実測。打撃/守備の切り替えでオーバーレイの高さが変わるので、レイアウトを再測定のキーに渡す。
+  const { getSafeArea } = useSafeArea(stage3d.containerRef, layoutOf(heldView));
   const cursorSourceRef = useCursorSourceRef(view);
   const getCursorView = useCallback((): CursorView => cursorSourceRef.current(), [cursorSourceRef]);
 
@@ -152,6 +161,8 @@ function usePlayback({ game, speed, selection, holding, swingReady, heldView, on
     holding,
     onFinished,
     getElapsedMs,
+    getAspect: stage3d.getAspect,
+    getSafeArea,
     getCursorView,
     swingRecordRef,
     aimCell: heldView.mode === "human-pitching" ? selection.cell : null,
@@ -164,11 +175,15 @@ function usePlayback({ game, speed, selection, holding, swingReady, heldView, on
     holding,
     swingReady,
     cursorRadii: heldView.batter.cursorRadii,
-    getElapsedMs,
+    getSwingAtMs,
+    holdArrivalFor,
+    releaseArrival,
     onSwing,
     onSkip: director.skip,
     pickZone: stage3d.pickZone,
     getZoneRect: stage3d.getZoneRect,
+    getViewSize: stage3d.getViewSize,
+    getSafeArea,
   });
   useBindCursorSource(cursorSourceRef, controls.getCursorView);
   return { stage3d, director, controls };
@@ -199,7 +214,7 @@ export function useGameStage({ game, speed, selection }: UseGameStageOptions): U
     onThrow: () => director.startThrow(() => game.throwPitch(selection)),
     swingKind: controls.swingKind,
     setSwingKind: controls.setSwingKind,
-    swingNow: controls.swingNow,
+    swingNow: controls.swingFromButton,
     stageProps: {
       containerRef: stage3d.containerRef,
       status: stage3d.status,
@@ -212,9 +227,8 @@ export function useGameStage({ game, speed, selection }: UseGameStageOptions): U
       lastFlight: director.lastFlight,
       zoneRect: stage3d.zoneRect,
       marker: heldView.fieldMarker,
-      // H9 で director の値に差し替える(H0 では型だけ。値は null 固定)。
-      timingCue: null,
-      lastTiming: null,
+      timingCue: director.timingCue,
+      lastTiming: director.lastTiming,
     },
   };
 }
