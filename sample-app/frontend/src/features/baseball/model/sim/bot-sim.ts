@@ -13,7 +13,7 @@ import { CPU_TEAM, PLAYER_TEAM } from "../data/teams";
 import { deliverPitch } from "../pitch/delivery";
 import { isStrike } from "../pitch/zone";
 import { createRng } from "../rng/rng";
-import { projectPoint, zoneRectOf } from "../world/camera/project";
+import { zoneRectOf } from "../world/camera/project";
 import { battingCameraFor } from "../world/camera/rig";
 import { pitchBallAt } from "../world/path/pitch-path";
 import { worldToZone } from "../world/space/coords";
@@ -135,15 +135,6 @@ export function pxPerZoneUnit(viewport: Viewport): { readonly x: number; readonl
 }
 
 const UNIT_CACHE = new Map<string, { readonly x: number; readonly y: number }>();
-
-/** ゾーン面の点(ゾーン座標)の画面座標(px)。投影の整合テスト用。 */
-export function zonePointToScreen(viewport: Viewport, point: ZonePoint): { readonly x: number; readonly y: number } {
-  const pose = battingCameraFor(viewport.width / viewport.height, "batting", safeAreaOf(viewport));
-  const zone = WORLD_PARAMS.zone;
-  const world = { x: point.x * zone.halfWidth, y: ((zone.top + zone.bottom) / 2) + (point.y * (zone.top - zone.bottom)) / 2, z: zone.planeZ };
-  const projected = projectPoint(pose, viewport, world);
-  return { x: projected.x, y: projected.y };
-}
 
 // ---------- 入力イベントと判定時刻 ----------
 

@@ -1,6 +1,8 @@
 import type { Difficulty } from "../../types/game";
 
 // CPU の難易度表と CPU 共通定数(仮値)。数値は balance.test.ts とプレイで調整する。
+// 操作性の修正(H3b)で、判定の当たり範囲が広がった(ボール半径を足す)ぶん CPU のノイズを小さくし(ふつう ≈ ボット B。sim/bot-balance.test.ts の
+// 「CPU ふつう」)、当たりやすくなって打席が短くなった(三振・四球が減った)ぶんをゾーン内のスイング率を下げて(見逃し三振・四球を増やして)戻した。
 // `cpu/` は batting/・game/ に依存しない。難易度キー(`Difficulty`)から `DifficultyParams` を引くのは呼び出し側(game/reducer.ts)の責務。
 
 /** 難易度ごとの CPU のパラメータ(解決済み)。`chooseCpuPitch`・`decideCpuBat` はこれを受け取る。 */
@@ -20,9 +22,9 @@ export type DifficultyParams = {
 };
 
 const DIFFICULTY_TABLE: ReadonlyMap<Difficulty, DifficultyParams> = new Map<Difficulty, DifficultyParams>([
-  ["easy", { zoneSwingRate: 0.55, chaseSwingRate: 0.4, cursorSigma: 0.22, timingSigmaMs: 75, aimSigmaScale: 1.4, twoStrikeOutsideRate: 0.2 }],
-  ["normal", { zoneSwingRate: 0.65, chaseSwingRate: 0.3, cursorSigma: 0.15, timingSigmaMs: 55, aimSigmaScale: 1.0, twoStrikeOutsideRate: 0.35 }],
-  ["hard", { zoneSwingRate: 0.7, chaseSwingRate: 0.2, cursorSigma: 0.1, timingSigmaMs: 42, aimSigmaScale: 0.75, twoStrikeOutsideRate: 0.5 }],
+  ["easy", { zoneSwingRate: 0.33, chaseSwingRate: 0.32, cursorSigma: 0.22, timingSigmaMs: 75, aimSigmaScale: 1.4, twoStrikeOutsideRate: 0.2 }],
+  ["normal", { zoneSwingRate: 0.4, chaseSwingRate: 0.22, cursorSigma: 0.14, timingSigmaMs: 53, aimSigmaScale: 1.0, twoStrikeOutsideRate: 0.35 }],
+  ["hard", { zoneSwingRate: 0.47, chaseSwingRate: 0.14, cursorSigma: 0.1, timingSigmaMs: 42, aimSigmaScale: 0.75, twoStrikeOutsideRate: 0.5 }],
 ]);
 
 /** 難易度のパラメータを返す。未定義の難易度は `Error`(プログラミングエラー)。 */

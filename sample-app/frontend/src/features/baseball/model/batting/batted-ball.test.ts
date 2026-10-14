@@ -30,16 +30,15 @@ describe("classifyHeight", () => {
     expect(classifyHeight(-band - EPS, 2)).toBe("ground");
   });
 
-  it("同じ高さでも弾道 4 の方が弾道 1 より fly になりやすい", () => {
-    const height = 0.25;
-    expect(classifyHeight(height, 4)).toBe("fly");
-    expect(classifyHeight(height, 1)).toBe("liner");
+  it("同じ高さでも弾道 4 の方が弾道 1 より fly になりやすい(ライナー帯の上端ちょうどの高さ)", () => {
+    // 弾道 1 は帯が上へずれて上端が band + shift なので、帯の上端 band ではまだライナー。弾道 4 は帯が下へずれて上端が band − shift なので fly。
+    expect(classifyHeight(band, 4)).toBe("fly");
+    expect(classifyHeight(band, 1)).toBe("liner");
   });
 
-  it("同じ高さでも弾道 1 の方が弾道 4 より ground になりやすい", () => {
-    const height = -0.4;
-    expect(classifyHeight(height, 1)).toBe("ground");
-    expect(classifyHeight(height, 4)).toBe("liner");
+  it("同じ高さでも弾道 1 の方が弾道 4 より ground になりやすい(ライナー帯の下端ちょうどの高さ)", () => {
+    expect(classifyHeight(-band, 1)).toBe("ground");
+    expect(classifyHeight(-band, 4)).toBe("liner");
   });
 
   it("弾道ごとに境界がずれる(shift = (弾道 - 2) × trajectoryShiftPerLevel)", () => {
@@ -159,15 +158,16 @@ describe("shapeContact", () => {
   });
 
   it("弾道が高い打者ほど同じ高さで fly になりやすい", () => {
-    const high = shapeContact(shapeInputWith({ height: 0.25, batter: { power: 50, trajectory: 4 } }));
-    const low = shapeContact(shapeInputWith({ height: 0.25, batter: { power: 50, trajectory: 1 } }));
+    const height = BATTING_PARAMS.linerHalfBand;
+    const high = shapeContact(shapeInputWith({ height, batter: { power: 50, trajectory: 4 } }));
+    const low = shapeContact(shapeInputWith({ height, batter: { power: 50, trajectory: 1 } }));
     expect(high.kind === "fair" ? high.ball.type : null).toBe("fly");
     expect(low.kind === "fair" ? low.ball.type : null).toBe("liner");
   });
 
-  it("強振の方がミートより強さ段階が高くなる位置がある(同じ q)", () => {
+  it("強振の方がミートより強さ段階が高くなる位置がある(同じ q。パワー 50 で能力項 1.0、ミート 0.5 = medium、強振 0.75 = strong)", () => {
     const strengthOf = (swingKind: SwingKind): string | null => {
-      const judgement = shapeContact(shapeInputWith({ q: 0.3, swingKind }));
+      const judgement = shapeContact(shapeInputWith({ q: 0.5, swingKind }));
       return judgement.kind === "fair" ? judgement.ball.strength : null;
     };
     expect(strengthOf("meet")).toBe("medium");

@@ -1,7 +1,8 @@
 import type { BattedType, InPlayResult, Strength } from "../../types/batting";
 
 // 打撃判定の定数。数値はすべて仮値で、balance.test.ts とプレイで調整する。
-// 操作性の修正(H0)で `lateCutoffMs`〜`maxTapSpanMs` を足し、`linerHalfBand`・`mediumFrom`・`strongFrom` を出発値に変えた(H3b が調整)。
+// 操作性の修正(H0)で `lateCutoffMs`〜`maxTapSpanMs` を足し、`linerHalfBand`・`mediumFrom`・`strongFrom` を出発値に変えた。
+// H3b で人間代理ボット(sim/bot-balance.test.ts)の試算に合わせて `foulRatio`(0.7 → 0.61)・`mediumFrom`(0.38 → 0.32)・`strongFrom`(0.62 → 0.68)を調整した。
 // 入力座標はすべてゾーン単位(ストライクゾーン = [-1, 1]²)。
 
 /** 打撃判定(接触・打球形成)の定数。 */
