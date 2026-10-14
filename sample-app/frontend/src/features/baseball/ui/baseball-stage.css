@@ -182,6 +182,57 @@ body:has(.bb-page) {
   animation: bb-fade-in 0.35s 0.5s ease-out both;
 }
 
+/* 文言は 2 つの span を持ち、タッチ端末(pointer: coarse)では「タップでスキップ」、それ以外は「タップ / Space でスキップ」を出す */
+.bb-stage__skip-hint-touch {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .bb-stage__skip-hint-touch {
+    display: inline;
+  }
+
+  .bb-stage__skip-hint-pointer {
+    display: none;
+  }
+}
+
+/* スイング後のタイミング表示(早い/ジャスト/遅い)。ゾーン枠の上端中央の直上に出る小さなピル。
+   位置(left/top = 枠の上端中央)は StageView がゾーン枠の矩形から style で与え、ここでは枠の真上へ持ち上げるだけ。
+   操作は受けない(pointer-events: none)。出入りは StageView が 900ms で切り替える */
+.bb-stage__timing {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 3px 12px 4px;
+  transform: translate(-50%, calc(-100% - 6px));
+  border: 2px solid var(--bs-ink);
+  border-radius: 999px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+  color: var(--bs-ink);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  animation: bb-timing-pop 0.14s ease-out both;
+}
+
+.bb-stage__timing--just {
+  background: #ffd23f;
+}
+
+.bb-stage__timing--early {
+  background: #6ec1ff;
+}
+
+.bb-stage__timing--late {
+  background: #ff9f43;
+}
+
 /* WebGL 不可・描画中断の表示。文言そのもの(直下のテキストでも段落でも)をパネルにする */
 .bb-stage__fallback {
   position: absolute;
