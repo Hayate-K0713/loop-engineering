@@ -26,11 +26,18 @@ export type MeasureContactInput = {
   readonly batter: BatterProfile;
 };
 
-/** 判定時のカーソル半径。打者の半径(強振補正済み)に、球種の打ちにくさ補正を掛ける。 */
-export function effectiveRadii(batter: BatterProfile, swingKind: SwingKind, pitchKind: PitchKind): CursorRadii {
-  const base = cursorRadii(batter, swingKind);
+/**
+ * カーソル半径に球種の打ちにくさ補正(`cursorScale`)を掛ける。純関数。
+ * 判定(`effectiveRadii`)と、飛行中に表示するカーソルの半径(director)の両方が使い、表示と判定の補正を一致させる。
+ */
+export function scaleRadiiForPitch(radii: CursorRadii, pitchKind: PitchKind): CursorRadii {
   const spec = getPitchSpec(pitchKind);
-  return { rx: base.rx * spec.cursorScale.x, ry: base.ry * spec.cursorScale.y };
+  return { rx: radii.rx * spec.cursorScale.x, ry: radii.ry * spec.cursorScale.y };
+}
+
+/** 判定時のカーソル半径。打者の半径(強振補正済み)に、球種の打ちにくさ補正を掛ける。ボール半径(`reach`)は含まない。 */
+export function effectiveRadii(batter: BatterProfile, swingKind: SwingKind, pitchKind: PitchKind): CursorRadii {
+  return scaleRadiiForPitch(cursorRadii(batter, swingKind), pitchKind);
 }
 
 /** スイング種別ごとの判定窓(±ms)。強振は狭い。 */
@@ -52,20 +59,29 @@ export function ellipseDistance(ball: ZonePoint, cursor: ZonePoint, radii: Curso
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/** 当たり範囲の楕円の半径。カーソル楕円にボール半径(`ballReachX/Y`)を足したもの。 */
+function reachRadii(radii: CursorRadii): CursorRadii {
+  return { rx: radii.rx + BATTING_PARAMS.ballReachX, ry: radii.ry + BATTING_PARAMS.ballReachY };
+}
+
 /**
- * 接触判定。ボールがカーソル楕円の内側(d ≤ 1)かつタイミング誤差が窓以内なら接触、それ以外は空振り。
- * 乱数は使わない。
+ * 接触判定。ボール中心が「カーソル楕円にボール半径を足した楕円」の内側(縁が触れて見える範囲)で、
+ * かつタイミング誤差が窓以内なら接触、それ以外は空振り。
+ * 質 q と高さ(打球タイプの入力)は、ボール半径を足す前の元の楕円の中心距離 d で求める
+ * (元の楕円の外側かつ当たり範囲の内側 = かすった当たりは q = 0)。
+ * タイミング誤差 Δt は判定時刻 `swing.atMs` から求める(演出の受付時刻ではない)。乱数は使わない。
  */
 export function measureContact(input: MeasureContactInput): ContactMeasure {
   const { flight, swing, batter } = input;
   const radii = effectiveRadii(batter, swing.kind, flight.kind);
   const windowMs = swingWindowMs(swing.kind);
   const dtMs = swing.atMs - flight.durationMs;
-  const d = ellipseDistance(flight.landing, swing.cursor, radii);
+  const reach = ellipseDistance(flight.landing, swing.cursor, reachRadii(radii));
   const timingRatio = Math.abs(dtMs) / windowMs;
 
-  if (d <= 1 && timingRatio <= 1) {
-    const q = (1 - d) * (1 - timingRatio) * edgeFactor(flight.landing);
+  if (reach <= 1 && timingRatio <= 1) {
+    const d = ellipseDistance(flight.landing, swing.cursor, radii);
+    const q = Math.max(0, 1 - d) * (1 - timingRatio) * edgeFactor(flight.landing);
     return { kind: "contact", hit: { q, height: (flight.landing.y - swing.cursor.y) / radii.ry, dtMs, windowMs } };
   }
   return { kind: "miss" };

@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 import type { SwingInput, SwingKind } from "../../types/batting";
 import type { PitchFlight, PitchKind } from "../../types/pitch";
 import type { BatterProfile } from "../../types/team";
-import { type ContactHit, type ContactMeasure, edgeFactor, effectiveRadii, ellipseDistance, measureContact, swingWindowMs } from "./contact";
+import { getPitchSpec } from "../pitch/kinds";
+import {
+  type ContactHit,
+  type ContactMeasure,
+  edgeFactor,
+  effectiveRadii,
+  ellipseDistance,
+  measureContact,
+  scaleRadiiForPitch,
+  swingWindowMs,
+} from "./contact";
 import { cursorRadii } from "./cursor";
 import { BATTING_PARAMS } from "./params";
 
@@ -43,18 +53,33 @@ describe("measureContact: 接触の成否", () => {
     expect(hit.height).toBe(0);
   });
 
-  it("d > 1 は空振り、d < 1 は接触(楕円の内外)", () => {
+  it("接触の境界は (rx + ballReachX): rx·1.01 は接触(q = 0)、(rx + ballReachX)·1.01 は空振り", () => {
     const flight = flightWith();
     const { rx } = effectiveRadii(BATTER, "meet", "straight");
-    expect(measure(flight, swingFor(flight, { dx: rx * 1.01 })).kind).toBe("miss");
-    expect(measure(flight, swingFor(flight, { dx: rx * 0.99 })).kind).toBe("contact");
+    const reachX = rx + BATTING_PARAMS.ballReachX;
+    expect(hitOf(measure(flight, swingFor(flight, { dx: rx * 1.01 }))).q).toBe(0);
+    expect(measure(flight, swingFor(flight, { dx: reachX * 0.99 })).kind).toBe("contact");
+    expect(measure(flight, swingFor(flight, { dx: reachX * 1.01 })).kind).toBe("miss");
   });
 
-  it("縦方向にも楕円(ry)で判定される", () => {
+  it("縦方向にも楕円で判定され、境界は (ry + ballReachY)", () => {
     const flight = flightWith();
     const { ry } = effectiveRadii(BATTER, "meet", "straight");
-    expect(measure(flight, swingFor(flight, { dy: ry * 1.01 })).kind).toBe("miss");
-    expect(measure(flight, swingFor(flight, { dy: -ry * 0.99 })).kind).toBe("contact");
+    const reachY = ry + BATTING_PARAMS.ballReachY;
+    expect(hitOf(measure(flight, swingFor(flight, { dy: ry * 1.01 }))).q).toBe(0);
+    expect(measure(flight, swingFor(flight, { dy: reachY * 1.01 })).kind).toBe("miss");
+    expect(measure(flight, swingFor(flight, { dy: -reachY * 0.99 })).kind).toBe("contact");
+  });
+
+  it("当たり範囲は楕円(軸方向ではなく斜めも rx + reach, ry + reach で正規化される)", () => {
+    const flight = flightWith();
+    const { rx, ry } = effectiveRadii(BATTER, "meet", "straight");
+    const reachX = rx + BATTING_PARAMS.ballReachX;
+    const reachY = ry + BATTING_PARAMS.ballReachY;
+    expect(measure(flight, swingFor(flight, { dx: reachX * 0.6 * 0.99, dy: reachY * 0.8 * 0.99 })).kind).toBe("contact");
+    expect(measure(flight, swingFor(flight, { dx: reachX * 0.6 * 1.01, dy: reachY * 0.8 * 1.01 })).kind).toBe("miss");
+    // 軸方向の縁(rx + reachX, ry + reachY)の角は楕円の外側
+    expect(measure(flight, swingFor(flight, { dx: reachX * 0.95, dy: reachY * 0.95 })).kind).toBe("miss");
   });
 
   it("|Δt| = 窓 ちょうどは接触(q = 0)、窓を超えると空振り(早い・遅いの両側)", () => {
@@ -85,8 +110,9 @@ describe("measureContact: 接触の成否", () => {
 
   it("強振はカーソルが小さい(同じずれでもミートなら接触し、強振なら空振りになる位置がある)", () => {
     const flight = flightWith();
-    const meetRx = effectiveRadii(BATTER, "meet", "straight").rx;
-    const powerRx = effectiveRadii(BATTER, "power", "straight").rx;
+    const reach = BATTING_PARAMS.ballReachX;
+    const meetRx = effectiveRadii(BATTER, "meet", "straight").rx + reach;
+    const powerRx = effectiveRadii(BATTER, "power", "straight").rx + reach;
     const dx = (meetRx + powerRx) / 2;
     expect(measure(flight, swingFor(flight, { dx })).kind).toBe("contact");
     expect(measure(flight, swingFor(flight, { dx, kind: "power" })).kind).toBe("miss");
@@ -94,18 +120,31 @@ describe("measureContact: 接触の成否", () => {
 
   it("ミート能力が高い打者ほど接触しやすい", () => {
     const flight = flightWith();
-    const dx = 0.65;
-    expect(measure(flight, swingFor(flight, { dx }), { ...BATTER, meet: 20 }).kind).toBe("miss");
-    expect(measure(flight, swingFor(flight, { dx }), { ...BATTER, meet: 90 }).kind).toBe("contact");
+    const low: BatterProfile = { ...BATTER, meet: 20 };
+    const high: BatterProfile = { ...BATTER, meet: 90 };
+    const lowReach = effectiveRadii(low, "meet", "straight").rx + BATTING_PARAMS.ballReachX;
+    const highReach = effectiveRadii(high, "meet", "straight").rx + BATTING_PARAMS.ballReachX;
+    const dx = (lowReach + highReach) / 2;
+    expect(measure(flight, swingFor(flight, { dx }), low).kind).toBe("miss");
+    expect(measure(flight, swingFor(flight, { dx }), high).kind).toBe("contact");
   });
 
   it("球種の cursorScale が小さいほど接触しにくい(フォークはストレートより縦に厳しい)", () => {
-    const { ry } = cursorRadii(BATTER, "meet");
-    const dy = ry * 0.9;
+    const straightRadii = effectiveRadii(BATTER, "meet", "straight");
+    const forkRadii = effectiveRadii(BATTER, "meet", "fork");
+    const dy = (straightRadii.ry + forkRadii.ry) / 2 + BATTING_PARAMS.ballReachY;
     const straight = flightWith({ kind: "straight" });
     const fork = flightWith({ kind: "fork" });
     expect(measure(straight, swingFor(straight, { dy })).kind).toBe("contact");
     expect(measure(fork, swingFor(fork, { dy })).kind).toBe("miss");
+  });
+
+  it("球種の cursorScale は当たり範囲の元の楕円にだけ掛かり、ボール半径は足すだけ(フォークの縦の境界)", () => {
+    const fork = flightWith({ kind: "fork" });
+    const { ry } = effectiveRadii(BATTER, "meet", "fork");
+    const reachY = ry + BATTING_PARAMS.ballReachY;
+    expect(measure(fork, swingFor(fork, { dy: reachY * 0.99 })).kind).toBe("contact");
+    expect(measure(fork, swingFor(fork, { dy: reachY * 1.01 })).kind).toBe("miss");
   });
 
   it("NaN のスイング時刻は空振り扱い", () => {
@@ -142,6 +181,26 @@ describe("measureContact: 質 q と高さ", () => {
     const swing = swingFor(flight, { dx: radii.rx * 0.5, dtMs: 75 });
     const expected = (1 - ellipseDistance(flight.landing, swing.cursor, radii)) * (1 - 75 / BATTING_PARAMS.contactWindowMs) * edgeFactor(flight.landing);
     expect(hitOf(measure(flight, swing)).q).toBeCloseTo(expected, 12);
+  });
+
+  it("q は元の楕円の中心距離で決まる: 当たり範囲を足した分(rx〜rx+ballReachX)は q = 0 の弱い当たり、ボール半径で q は増えない", () => {
+    const flight = flightWith();
+    const { rx } = effectiveRadii(BATTER, "meet", "straight");
+    const centered = hitOf(measure(flight, swingFor(flight)));
+    const inside = hitOf(measure(flight, swingFor(flight, { dx: rx * 0.5 })));
+    const graze = hitOf(measure(flight, swingFor(flight, { dx: rx + BATTING_PARAMS.ballReachX * 0.5 })));
+    expect(graze.q).toBe(0);
+    expect(inside.q).toBeCloseTo(0.5, 12);
+    expect(centered.q).toBeGreaterThan(inside.q);
+  });
+
+  it("height は元の ry で割る(ボール半径を足した ry ではない)。かすった当たりでは |height| が 1 を超えうる", () => {
+    const flight = flightWith();
+    const { ry } = effectiveRadii(BATTER, "meet", "straight");
+    const dy = ry + BATTING_PARAMS.ballReachY * 0.5;
+    const hit = hitOf(measure(flight, swingFor(flight, { dy })));
+    expect(hit.height).toBeCloseTo(-dy / ry, 12);
+    expect(Math.abs(hit.height)).toBeGreaterThan(1);
   });
 
   it("端・ボールゾーンほど q が下がる(同じ完璧なスイングでも)", () => {
@@ -200,6 +259,19 @@ describe("ellipseDistance / effectiveRadii", () => {
 
   it("カーソル中心が基準", () => {
     expect(ellipseDistance({ x: 1.5, y: 1 }, { x: 1.5, y: 1 }, radii)).toBe(0);
+  });
+
+  it("scaleRadiiForPitch は球種の cursorScale を掛けるだけ(effectiveRadii と一致、ボール半径は足さない)", () => {
+    const base = cursorRadii(BATTER, "power");
+    const kinds: readonly PitchKind[] = ["straight", "slider", "curve", "fork", "shoot"];
+    kinds.forEach((kind) => {
+      const scaled = scaleRadiiForPitch(base, kind);
+      const spec = getPitchSpec(kind);
+      expect(scaled.rx).toBeCloseTo(base.rx * spec.cursorScale.x, 12);
+      expect(scaled.ry).toBeCloseTo(base.ry * spec.cursorScale.y, 12);
+      expect(scaled).toEqual(effectiveRadii(BATTER, "power", kind));
+    });
+    expect(scaleRadiiForPitch(base, "straight")).toEqual(base);
   });
 
   it("球種の cursorScale が半径に掛かる(straight は不変、フォークは縦が縮む)", () => {

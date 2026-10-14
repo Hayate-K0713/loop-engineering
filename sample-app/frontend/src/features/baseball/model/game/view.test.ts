@@ -135,9 +135,11 @@ describe("toGameView: flight, arrival time and speed label", () => {
     expect(toGameView(makeState({ phase: { kind: "in-flight", flight: flight("straight", 143.4, 1330) } })).pitchSpeedLabel).toBe("143km/h ストレート");
   });
 
-  it("adds the contact window to the arrival time for a human batter only", () => {
+  it("adds the late cutoff (not the contact window) to the arrival time for a human batter only", () => {
     const phase = { kind: "in-flight", flight: curve } as const;
-    expect(toGameView(makeState({ config: AWAY, phase })).arriveAfterMs).toBe(curve.durationMs + BATTING_PARAMS.contactWindowMs);
+    expect(toGameView(makeState({ config: AWAY, phase })).arriveAfterMs).toBe(curve.durationMs + BATTING_PARAMS.lateCutoffMs);
+    // 窓外の遅いスイングも振り遅れの空振りとして返すため、猶予は判定窓より長い。
+    expect(BATTING_PARAMS.lateCutoffMs).toBeGreaterThan(BATTING_PARAMS.contactWindowMs);
     expect(toGameView(makeState({ config: HOME, phase })).arriveAfterMs).toBe(curve.durationMs);
     expect(toGameView(makeState({ config: CPU_ONLY, phase })).arriveAfterMs).toBe(curve.durationMs);
   });

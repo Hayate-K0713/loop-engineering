@@ -185,13 +185,17 @@ function pitchSpeedLabelOf(state: GameState): string {
   return phase.kind === "in-flight" ? `${Math.round(phase.flight.speedKmh)}km/h ${getPitchSpec(phase.flight.kind).label}` : "-";
 }
 
-/** ボールが到達して判定するまでの経過ゲーム時間。人間打者にはスイングの猶予(判定窓)を加える。 */
+/**
+ * ボールが到達して判定するまでの経過ゲーム時間。人間打者には見逃し確定までの猶予(`lateCutoffMs`)を加える。
+ * 猶予は判定窓(`contactWindowMs`)より長く、窓を過ぎたスイングも振り遅れの空振りとして演出が返るようにするため。
+ * 締切は入力イベントの時刻(遅延補正前)で判定する(タップは押下時刻、それ以外は処理時刻)。
+ */
 function arriveAfterMsOf(state: GameState): number {
   const { phase } = state;
   if (phase.kind !== "in-flight") {
     return 0;
   }
-  return phase.flight.durationMs + (state.config.humanSide === offenseSide(state.half) ? BATTING_PARAMS.contactWindowMs : 0);
+  return phase.flight.durationMs + (state.config.humanSide === offenseSide(state.half) ? BATTING_PARAMS.lateCutoffMs : 0);
 }
 
 /** 表示用の状態。`state` も乱数も変更しない(フィールド図の落下点は決定論で逆算する)。 */
