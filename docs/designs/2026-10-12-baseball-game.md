@@ -719,15 +719,27 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 
 | # | ファイル(`final-` の続き) | 内容 | 目的 | 撮り直し後のパス |
 | --- | --- | --- | --- | --- |
-| 1 | `batting-390x844.png` | 縦長・打撃・390×844。ストレート(中央)の D−400・D−200・D・接触(D+60)の 4 枚。左に修正前 | ゾーン・投手・打者・ボールの見え方。接触の瞬間にバットとボールが重なり、待っていたボールと打球の始点が一致する | (撮影後に記入) |
-| 2 | `batting-390x664.png`・`batting-390x745.png` | 縦長・打撃・ツールバーありの高さ。D−200・D・接触 | 低いビューポートでもゾーンがティッカーに隠れない。ゾーンが小さくなる程度 | 同上 |
-| 3 | `pitching-390x844.png`・`pitching-390x745.png`・`pitching-390x664.png` | 縦長・守備。操作バー(球種・5×5 格子・投げる)つき。D−200・D の 2 枚 | 格子がバーに隠れない。投手の頭がネームプレートに掛からない。バーの詰め方(800px 未満) | 同上 |
-| 4 | `strobe-slider.png`・`strobe-curve.png`・`strobe-fork.png`(任意で `strobe-shoot.png`) | 縦長・打撃・390×844。**最終式(`bendGain` 1.8・n 2.2・時間写像 `g(p)`)**のストロボ合成。50ms ごとの点、弦、同じ着弾のストレートの軌跡、M1・M2・S300 の値を併記。左に修正前 | 軌道の誇張と終盤の減速が自然に見えるか(要確認 Q-C の材料) | 同上 |
-| 5 | `arrival-portrait.png`・`arrival-desktop.png` | D−100・D・D+60 の 3 枚。ゾーン枠の発光、止まったボール、影、カーソルとボールの前後 | 到達の手がかり(デスクトップ 1280×720 を含む)。ミットが無く、ボールが跳ばない | 同上 |
-| 6 | `batter-contact-390x844.png` | 接触の瞬間。着弾点がゾーン中央と四隅の 5 枚 | カメラ −0.25・打者 x −0.65・接触点 z 0.03 の組み合わせで、頭が画面内、バットとボールが合い、手がゾーンを隠さない | 同上 |
-| 7 | `tap-sequence-390x844.png` | タップでスイングした場合の時系列(押下 D+100、離し D+200、`atMs` D+30)。受付時刻、D+230(接触)、打球の始点 | 受付が遅れたスイングでも、ボールが消えて再出現せず、バットが過去の時刻から振り始めない(§1) | 同上 |
-| 8 | `chase-390x844.png` | 接触 +300ms・+800ms・落下。落下点のリング、ボールの最小径、ホームランの頂点と HUD | 打球が追える | 同上 |
-| 9 | `desktop-batting-1280x720.png`・`desktop-pitching-1280x720.png` | 修正前後(従来から変わらないことの確認。接触点 z 0.03 と影・発光だけが変わる) | 横長の回帰 | 同上 |
+| 1 | `batting-390x844.png` | 縦長・打撃・390×844。ストレート(中央)の D−400・D−200・D・接触(D+60)の 4 枚。左に修正前 | ゾーン・投手・打者・ボールの見え方。接触の瞬間にバットとボールが重なり、待っていたボールと打球の始点が一致する | [final-batting-390x844.png](assets/2026-10-13-baseball-game-feel/final-batting-390x844.png) |
+| 2 | `batting-390x664.png`・`batting-390x745.png` | 縦長・打撃・ツールバーありの高さ。D−200・D・接触 | 低いビューポートでもゾーンがティッカーに隠れない。ゾーンが小さくなる程度 | [664](assets/2026-10-13-baseball-game-feel/final-batting-390x664.png)・[745](assets/2026-10-13-baseball-game-feel/final-batting-390x745.png) |
+| 3 | `pitching-390x844.png`・`pitching-390x745.png`・`pitching-390x664.png` | 縦長・守備。操作バー(球種・5×5 格子・投げる)つき。D−200・D の 2 枚 | 格子がバーに隠れない。投手の頭がネームプレートに掛からない。バーの詰め方(800px 未満) | [844](assets/2026-10-13-baseball-game-feel/final-pitching-390x844.png)・[745](assets/2026-10-13-baseball-game-feel/final-pitching-390x745.png)・[664](assets/2026-10-13-baseball-game-feel/final-pitching-390x664.png) |
+| 4 | `strobe-slider.png`・`strobe-curve.png`・`strobe-fork.png`(任意で `strobe-shoot.png`) | 縦長・打撃・390×844。**最終式(`bendGain` 1.8・n 2.2・時間写像 `g(p)`)**のストロボ合成。50ms ごとの点、弦、同じ着弾のストレートの軌跡、M1・M2・S300 の値を併記。左に修正前 | 軌道の誇張と終盤の減速が自然に見えるか(要確認 Q-C の材料) | [slider](assets/2026-10-13-baseball-game-feel/final-strobe-slider.png)・[curve](assets/2026-10-13-baseball-game-feel/final-strobe-curve.png)・[fork](assets/2026-10-13-baseball-game-feel/final-strobe-fork.png)・[shoot](assets/2026-10-13-baseball-game-feel/final-strobe-shoot.png) |
+| 5 | `arrival-portrait.png`・`arrival-desktop.png` | D−100・D・D+60 の 3 枚。ゾーン枠の発光、止まったボール、影、カーソルとボールの前後 | 到達の手がかり(デスクトップ 1280×720 を含む)。ミットが無く、ボールが跳ばない | [portrait](assets/2026-10-13-baseball-game-feel/final-arrival-portrait.png)・[desktop](assets/2026-10-13-baseball-game-feel/final-arrival-desktop.png) |
+| 6 | `batter-contact-390x844.png` | 接触の瞬間。着弾点がゾーン中央と四隅の 5 枚 | カメラ −0.25・打者 x −0.65・接触点 z 0.03 の組み合わせで、頭が画面内、バットとボールが合い、手がゾーンを隠さない | [final-batter-contact-390x844.png](assets/2026-10-13-baseball-game-feel/final-batter-contact-390x844.png) |
+| 7 | `tap-sequence-390x844.png` | タップでスイングした場合の時系列(押下 D+100、離し D+200、`atMs` D+30)。受付時刻、D+230(接触)、打球の始点 | 受付が遅れたスイングでも、ボールが消えて再出現せず、バットが過去の時刻から振り始めない(§1) | [final-tap-sequence-390x844.png](assets/2026-10-13-baseball-game-feel/final-tap-sequence-390x844.png)(接触は §1 どおり D+260。左の D+230 は誤記) |
+| 8 | `chase-390x844.png` | 接触 +300ms・+800ms・落下。落下点のリング、ボールの最小径、ホームランの頂点と HUD | 打球が追える | [final-chase-390x844.png](assets/2026-10-13-baseball-game-feel/final-chase-390x844.png) |
+| 9 | `desktop-batting-1280x720.png`・`desktop-pitching-1280x720.png` | 修正前後(従来から変わらないことの確認。接触点 z 0.03 と影・発光だけが変わる) | 横長の回帰 | [batting](assets/2026-10-13-baseball-game-feel/final-desktop-batting-1280x720.png)・[pitching](assets/2026-10-13-baseball-game-feel/final-desktop-pitching-1280x720.png) |
+
+**撮り直しで判明した未達(2026-10-14。実装で解消し、H12 で再計測する):** 最終値で撮ると、次の受け入れ基準が満たせていなかった(撮影は使い捨てハーネス。守備バー 300px は CSS 未実装のため近似、タップは未実装のためスイングボタンと時刻のずらしで代用)。
+
+| # | 未達 | 実測 | 対応ステップと方針 |
+| --- | --- | --- | --- |
+| R1 | 打者の構えの手がゾーン左上に掛かる(#27 は 0) | 390×844 で 38×47px(ゾーンの約 4.8%)、664 で 30px | H12: 縦長の構えのポーズ(前の手の位置)と打者 x(−0.60〜−0.70 の範囲)で調整。足りなければ縦長だけ構えの手を下げるキーフレームを持つ |
+| R2 | 守備画面で CPU 打者が格子・ゾーン左上に掛かる | 格子の約 10.2%、ゾーンに 16〜25px | H12: 同上(守備レイアウトの打者配置)。格子の可視が優先 |
+| R3 | 投手の頭がネームプレート下端より上(#28 は 8px 以上下) | 頭頂 y 143〜150(下端 155)、守備で −1〜+3px | H2: 閉形式の基準を「頭の中心」から「頭頂(頭の画面半径を加味)」に変える |
+| R4 | ホームランが縦長で画面上端から出る(§8 の目的に反する) | 頂点 y=14、約 0.9 秒画面外、HUD 帯に約 4 秒 | H2: 中継カメラは打撃の lift を引き継がず、blend 中に lift を 0 へ戻す。縦長の `kLook` と追跡の FOV を、ホームランの頂点が HUD 下端より下に収まる値にする(H2 のテストで頂点の画面 y を検査) |
+| R5 | 軌道の M1/S300 が着弾点によって未達 | カーブ M1 0.7〜10.1px(目標 7)、スライダー M1 7.5/10.8(目標 12)、カーブ S300 63〜65%(目標 62% 以下)、フォーク S300 69%(目標 68% 以下) | H1/H12: 球種別の曲がり K の配分(カーブは縦に加えて横も持たせる等)を調整。M1/M2/S300 は 6 着弾点の平均で判定し、最悪点は参考値とする(§15 を H12 で更新) |
+| R6 | 「最後に急に迫る」見え方は残る | 50ms ごとの移動がスライダー 1.5→44.7px、カーブ 0.2→50.3px | 透視投影の性質で、時間写像だけでは消えない。誇張の程度とあわせてゲート1で人間が判断する(Q-C) |
+| R7 | 低い打撃画面でゾーン下とティッカーの間が狭い | 745 で 7px、664 で 5px。到達の影はティッカーに半分隠れる | H8/H12: `marginRatio` を上げる、または低い高さでティッカーを1行に詰める |
 
 ### スコープ
 
