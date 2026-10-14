@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { BATTING_PARAMS } from "../batting/params";
-import { BOTS, type BotSpec, type BotTally, isIgnoredEvent, judgeTimeOf, rateOf, runBot, runCpuNormal } from "./bot-sim";
+import { projectPoint } from "../world/camera/project";
+import { battingCameraFor } from "../world/camera/rig";
+import { zoneToWorld } from "../world/space/coords";
+import { BOTS, type BotSpec, type BotTally, isIgnoredEvent, judgeTimeOf, pxPerZoneUnit, rateOf, runBot, runCpuNormal } from "./bot-sim";
 
 // 人間を模したボット(反応時間・入力の遅れ・時刻と位置のばらつき・端末の画面サイズ)で、判定と結果表の数値が
 // 「スマホで普通に打てる」範囲に収まっているかを固定シードで確認する。実際の人間の手触りを保証するものではない(ゲート2の試遊で確認する)。
@@ -168,5 +171,68 @@ describe("無効(見逃し扱い)の判定は入力イベントの時刻で行�
   it("判定時刻はイベント時刻から入力種別の遅延補正を引いたもの(タッチ 70ms・マウス 20ms)", () => {
     expect(judgeTimeOf(500, "touch")).toBe(500 - BATTING_PARAMS.inputLatencyMs.touch);
     expect(judgeTimeOf(500, "mouse")).toBe(500 - BATTING_PARAMS.inputLatencyMs.mouse);
+  });
+});
+
+describe("ボットの換算が実装と一致する(H10 の整合テスト)", () => {
+  const TOLERANCE = 0.08;
+
+  /** ゾーン座標 1 単位あたりの px を、`projectPoint` でゾーン平面の ±1 の点を投影して直接求める(ボットの換算とは別の経路)。 */
+  function unitFromProjection(width: number, height: number, topPx: number, bottomPx: number): { readonly x: number; readonly y: number } {
+    const pose = battingCameraFor(width / height, "batting", { top: topPx / height, bottom: (height - bottomPx) / height });
+    const size = { width, height };
+    const at = (x: number, y: number) => projectPoint(pose, size, zoneToWorld({ x, y }));
+    return { x: (at(1, 0).x - at(-1, 0).x) / 2, y: (at(0, -1).y - at(0, 1).y) / 2 };
+  }
+
+  /** 設計 §10 に書かれた px/ゾーン単位(390×844 で x 77・y 87、390×664 で x 約 62・y 約 70、PC 1280×720 で x 90.7・y 104.5)。 */
+  const DESIGN_UNITS = [
+    { name: "390×844", viewport: { width: 390, height: 844 }, x: 77, y: 87 },
+    { name: "390×664", viewport: { width: 390, height: 664 }, x: 62, y: 70 },
+    { name: "1280×720", viewport: { width: 1280, height: 720 }, x: 90.7, y: 104.5 },
+  ] as const;
+
+  function within(actual: number, expected: number): boolean {
+    return Math.abs(actual - expected) / expected <= TOLERANCE;
+  }
+
+  it.each(DESIGN_UNITS)("$name: ボットの px/ゾーン単位が project.ts の投影の計算値と ±8% 以内に一致する", ({ viewport }) => {
+    // 空き領域は bot-sim と同じ前提(上は HUD の下端 155px、下は打撃のティッカーの上端 = 下から 181px)。
+    const projected = unitFromProjection(viewport.width, viewport.height, 155, 181);
+    const unit = pxPerZoneUnit(viewport);
+    expect(within(unit.x, projected.x)).toBe(true);
+    expect(within(unit.y, projected.y)).toBe(true);
+  });
+
+  it.each(DESIGN_UNITS)("$name: ボットの px/ゾーン単位が設計 §10 の値と ±8% 以内に一致する(カメラ調整の検知)", ({ viewport, x, y }) => {
+    const unit = pxPerZoneUnit(viewport);
+    expect(within(unit.x, x), `x: ${unit.x.toFixed(1)} vs 設計 ${x}`).toBe(true);
+    expect(within(unit.y, y), `y: ${unit.y.toFixed(1)} vs 設計 ${y}`).toBe(true);
+  });
+});
+
+describe("ボットの遅延補正が BATTING_PARAMS.inputLatencyMs と一致する(H10 の整合テスト)", () => {
+  const COMPENSATION = new Map<string, number>(Object.entries(BATTING_PARAMS.inputLatencyMs));
+
+  function compensationOf(kind: string): number {
+    const value = COMPENSATION.get(kind);
+    if (value === undefined) {
+      throw new Error(`no latency compensation for ${kind}`);
+    }
+    return value;
+  }
+
+  it("タッチ 70・マウス 20・キー 20(ゲート ms)", () => {
+    expect(BATTING_PARAMS.inputLatencyMs).toEqual({ touch: 70, mouse: 20, key: 20 });
+  });
+
+  it.each(Object.values(BOTS))("$name: 判定時刻 = 入力イベントの時刻 − その入力種別の補正量", (spec) => {
+    expect(judgeTimeOf(1500, spec.input)).toBe(1500 - compensationOf(spec.input));
+  });
+
+  it("A 上手い人の遅れ L は補正量と同じ(正味 0)。タッチの標準ボットは補正より大きく遅れる", () => {
+    expect(BOTS.A.latencyMs).toBe(compensationOf(BOTS.A.input));
+    expect(BOTS.B.latencyMs).toBeGreaterThan(compensationOf(BOTS.B.input));
+    expect(BOTS.E.latencyMs).toBeGreaterThan(compensationOf(BOTS.E.input));
   });
 });
