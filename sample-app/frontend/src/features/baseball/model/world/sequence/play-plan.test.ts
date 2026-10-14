@@ -4,17 +4,21 @@ import type { ZonePoint } from "../../../types/common";
 import type { PitchFlight } from "../../../types/pitch";
 import type { PitchOutcomeView } from "../../../types/view";
 import { computeBattedLanding } from "../../batting/batted-landing";
-import { BATTING_PARAMS } from "../../batting/params";
+import { swingWindowMs } from "../../batting/contact";
+import { BATTING_PARAMS, LANDING_BANDS } from "../../batting/params";
 import { resultEntries } from "../../batting/result-table";
 import { FIELDER_SLOTS, pickFielder } from "../path/fielders";
 import { landingToWorld, zoneToWorld } from "../space/coords";
 import { CPU_SWING_LEAD_MS, WORLD_PARAMS } from "../space/params";
 import { type PlayPlan, planPlay, swingProgressAt } from "./play-plan";
 import { telopFor } from "./telop";
+import { timingCueOf } from "./timing-cue";
 
 const SWING = WORLD_PARAMS.swing;
 const TELOP = WORLD_PARAMS.telop;
 const FIELDER_RUN = WORLD_PARAMS.fielderRun;
+const HOLD_MS = WORLD_PARAMS.catch.holdMs;
+const TIMING_MS = WORLD_PARAMS.cue.timingMs;
 const TYPES: readonly BattedType[] = ["ground", "liner", "fly"];
 const STRENGTHS: readonly Strength[] = ["weak", "medium", "strong"];
 const DIRECTIONS: readonly Direction[] = ["pull", "center", "opposite"];
@@ -33,8 +37,8 @@ const FLIGHTS: readonly PitchFlight[] = [
   flightOf(4, 600, { x: 0, y: 0 }),
 ];
 
-/** 人間のクリック時刻の `durationMs` からのずれ(−300 〜 +150ms、15ms 刻み)。 */
-const HUMAN_OFFSETS: readonly number[] = Array.from({ length: 31 }, (_, i) => -300 + i * 15);
+/** 人間のクリックの判定時刻 `atMs` の `durationMs` からのずれ(−300 〜 +240ms、15ms 刻み)。窓外の振り遅れ(D+150〜)を含む。 */
+const HUMAN_OFFSETS: readonly number[] = Array.from({ length: 37 }, (_, i) => -300 + i * 15);
 const CURSOR: ZonePoint = { x: 0.2, y: -0.3 };
 
 type Scenario = {
@@ -43,7 +47,7 @@ type Scenario = {
   readonly outcome: PitchOutcomeView;
   readonly swing: SwingInput | null;
   readonly resolvedAtMs: number;
-  /** 接触・スイングの起点(人間は `atMs`、CPU・見逃しは `resolvedAtMs`)。 */
+  /** 接触・スイングの起点(人間は `max(atMs, resolvedAtMs)`、CPU・見逃しは `resolvedAtMs`)。 */
   readonly baseMs: number;
   readonly plan: PlayPlan;
 };
@@ -56,10 +60,11 @@ function scenarioOf(flight: PitchFlight, outcome: PitchOutcomeView, swing: Swing
   const plan = planPlay({ flight, outcome, swing, resolvedAtMs });
   const detail =
     outcome.inPlay === null ? "" : `/${outcome.inPlay.result}/${outcome.inPlay.ball.type}-${outcome.inPlay.ball.strength}-${outcome.inPlay.ball.direction}`;
-  return { label: `${outcome.kind}${detail}/${tag}/seq${flight.seq}`, flight, outcome, swing, resolvedAtMs, baseMs: swing?.atMs ?? resolvedAtMs, plan };
+  const baseMs = swing === null ? resolvedAtMs : Math.max(swing.atMs, resolvedAtMs);
+  return { label: `${outcome.kind}${detail}/${tag}/seq${flight.seq}`, flight, outcome, swing, resolvedAtMs, baseMs, plan };
 }
 
-/** CPU 打者(入力なし。`PITCH_ARRIVED` は `durationMs − CPU_SWING_LEAD_MS` に前倒し)と、人間の全クリック時刻の組。 */
+/** CPU 打者(入力なし。`PITCH_ARRIVED` は `durationMs − CPU_SWING_LEAD_MS` に前倒し)と、人間の全クリック時刻の組(受付時刻 = `atMs`)。 */
 function swingScenarios(flight: PitchFlight, outcome: PitchOutcomeView): readonly Scenario[] {
   const cpu = scenarioOf(flight, outcome, null, flight.durationMs - CPU_SWING_LEAD_MS, "cpu");
   const humans = HUMAN_OFFSETS.map((offset): Scenario => {
@@ -69,12 +74,12 @@ function swingScenarios(flight: PitchFlight, outcome: PitchOutcomeView): readonl
   return [cpu, ...humans];
 }
 
-/** 見逃し・ボール: CPU(前倒し)と、人間の振らない判定(`durationMs + contactWindowMs`)。 */
+/** 見逃し・ボール: CPU(前倒し)と、人間の振らない判定(`durationMs + lateCutoffMs`)。 */
 function takeScenarios(flight: PitchFlight, kind: "ball" | "called-strike"): readonly Scenario[] {
   const outcome = outcomeOf(kind, flight.seq);
   return [
     scenarioOf(flight, outcome, null, flight.durationMs - CPU_SWING_LEAD_MS, "cpu"),
-    scenarioOf(flight, outcome, null, flight.durationMs + BATTING_PARAMS.contactWindowMs, "human-take"),
+    scenarioOf(flight, outcome, null, flight.durationMs + BATTING_PARAMS.lateCutoffMs, "human-take"),
   ];
 }
 
@@ -102,7 +107,7 @@ const isCpu = (scenario: Scenario): boolean => scenario.swing === null;
 const isHuman = (scenario: Scenario): boolean => scenario.swing !== null;
 
 /** 条件を満たさないシナリオの先頭3件(失敗メッセージ用)。 */
-function failures(scenarios: readonly Scenario[], predicate: (scenario: Scenario) => boolean): readonly string[] {
+function failures<T extends { readonly label: string }>(scenarios: readonly T[], predicate: (scenario: T) => boolean): readonly string[] {
   return scenarios
     .filter((scenario) => !predicate(scenario))
     .slice(0, 3)
@@ -145,8 +150,14 @@ describe("planPlay: 時刻表の単調性(全種別)", () => {
     expect(failures(EVERYTHING, (s) => near(s.plan.endMs, s.plan.telop.endMs + TELOP.afterglowMs))).toEqual([]);
   });
 
-  it("endMs は有限で durationMs + 6000 以下", () => {
-    expect(failures(EVERYTHING, (s) => Number.isFinite(s.plan.endMs) && s.plan.endMs <= s.flight.durationMs + 6000)).toEqual([]);
+  it("endMs は有限で、最長の滞空(ホームラン級)+ テロップ + 余韻から計算した上限以下", () => {
+    // 受付時刻は最大 D + 330、接触は受付 + minSwingMs。滞空は距離の最大(落下点の距離帯の上限)の飛球、テロップはインプレー。
+    const farthest = Math.max(...LANDING_BANDS.map((band) => band.max));
+    const longestHangMs = WORLD_PARAMS.batted.fly.hangBaseMs + WORLD_PARAMS.batted.fly.hangPerMeterMs * farthest;
+    const limitAfterD = 330 + SWING.minSwingMs + longestHangMs + TELOP.inPlayMs + TELOP.afterglowMs;
+    expect(failures(EVERYTHING, (s) => Number.isFinite(s.plan.endMs) && s.plan.endMs <= s.flight.durationMs + limitAfterD)).toEqual([]);
+    // 最長級の滞空(ホームラン)の演出が実際に D + 滞空 を超えて続くこと(上限の式が的外れでないこと)
+    expect(EVERYTHING.some((s) => s.plan.endMs >= s.flight.durationMs + longestHangMs)).toBe(true);
   });
 
   it("テロップの文言は telopFor(outcome, 落下点) に一致する", () => {
@@ -180,12 +191,28 @@ describe("planPlay: 見逃し・ボール", () => {
     expect(failures(TAKES, timed)).toEqual([]);
   });
 
-  it("CPU の見逃し(前倒し)は durationMs から、人間の見逃しは判定窓の後から出る", () => {
+  it("CPU の見逃し(前倒し)は durationMs から、人間の見逃しは見逃し確定(D + lateCutoffMs)の後から出る", () => {
     const outcome = outcomeOf("called-strike", FIRST_FLIGHT.seq);
     const cpu = planPlay({ flight: FIRST_FLIGHT, outcome, swing: null, resolvedAtMs: FIRST_FLIGHT.durationMs - CPU_SWING_LEAD_MS });
-    const human = planPlay({ flight: FIRST_FLIGHT, outcome, swing: null, resolvedAtMs: FIRST_FLIGHT.durationMs + BATTING_PARAMS.contactWindowMs });
+    const human = planPlay({ flight: FIRST_FLIGHT, outcome, swing: null, resolvedAtMs: FIRST_FLIGHT.durationMs + BATTING_PARAMS.lateCutoffMs });
     expect(cpu.telop.startMs).toBe(FIRST_FLIGHT.durationMs);
-    expect(human.telop.startMs).toBe(FIRST_FLIGHT.durationMs + BATTING_PARAMS.contactWindowMs);
+    expect(human.telop.startMs).toBe(FIRST_FLIGHT.durationMs + BATTING_PARAMS.lateCutoffMs);
+  });
+
+  it("ボールの待機: 人間の見逃しは D + lateCutoffMs まで、CPU の見逃しは D + holdMs まで着弾点に残る(max(D + holdMs, resolvedAtMs))", () => {
+    const hold = (s: Scenario): boolean => near(s.plan.ballHoldUntilMs, Math.max(s.flight.durationMs + HOLD_MS, s.resolvedAtMs));
+    expect(failures(TAKES, hold)).toEqual([]);
+    const cpuTakes = TAKES.filter((s) => s.resolvedAtMs < s.flight.durationMs);
+    expect(cpuTakes.length).toBeGreaterThan(0);
+    expect(failures(cpuTakes, (s) => near(s.plan.ballHoldUntilMs, s.flight.durationMs + HOLD_MS))).toEqual([]);
+    const humanTakes = TAKES.filter((s) => s.resolvedAtMs > s.flight.durationMs);
+    expect(humanTakes.length).toBeGreaterThan(0);
+    expect(failures(humanTakes, (s) => near(s.plan.ballHoldUntilMs, s.flight.durationMs + BATTING_PARAMS.lateCutoffMs))).toEqual([]);
+  });
+
+  it("見逃し・CPU・入力なしでは timing が null", () => {
+    expect(failures(TAKES, (s) => s.plan.timing === null)).toEqual([]);
+    expect(failures(EVERYTHING.filter(isCpu), (s) => s.plan.timing === null)).toEqual([]);
   });
 });
 
@@ -198,7 +225,8 @@ describe("planPlay: 空振り", () => {
     expect(failures(MISSES, noBall)).toEqual([]);
   });
 
-  it("人間: startMs = atMs、contactAtMs = atMs + 132(圧縮なし)、高さはカーソルの高さ", () => {
+  it("人間: startMs = base(= max(atMs, resolvedAtMs))、contactAtMs = base + 132(圧縮なし)、高さはカーソルの高さ。窓外の振り遅れ(D+150〜)も同じ", () => {
+    expect(humans.some((s) => (s.swing?.atMs ?? 0) > s.flight.durationMs + BATTING_PARAMS.contactWindowMs)).toBe(true);
     const exact = (s: Scenario): boolean =>
       s.plan.swing !== null &&
       near(s.plan.swing.startMs, s.baseMs) &&
@@ -254,9 +282,19 @@ describe("planPlay: 空振り", () => {
       near(s.plan.telop.endMs - s.plan.telop.startMs, TELOP.swingMissMs);
     expect(failures(MISSES, timed)).toEqual([]);
   });
+
+  it("ボールの待機: ballHoldUntilMs = max(durationMs + holdMs, resolvedAtMs)(接触なし)。受付が遅れても受付時刻までは残る", () => {
+    const hold = (s: Scenario): boolean => near(s.plan.ballHoldUntilMs, Math.max(s.flight.durationMs + HOLD_MS, s.resolvedAtMs));
+    expect(failures(MISSES, hold)).toEqual([]);
+    expect(failures(MISSES, (s) => s.plan.ballHoldUntilMs >= s.resolvedAtMs && s.plan.ballHoldUntilMs >= s.flight.durationMs)).toEqual([]);
+  });
 });
 
 describe("planPlay: ファウル・インプレー(接触あり)", () => {
+  it("ボールは接触の瞬間まで着弾点で待つ: ballHoldUntilMs = contactMs", () => {
+    expect(failures(CONTACTS, (s) => s.plan.ballHoldUntilMs === s.plan.contactMs)).toEqual([]);
+  });
+
   it("contactMs = max(durationMs, base + minSwingMs) で、durationMs 以上。CPU は durationMs", () => {
     const exact = (s: Scenario): boolean =>
       s.plan.contactMs !== null &&
@@ -389,6 +427,208 @@ describe("planPlay: 打球", () => {
       return start !== undefined && near(start.x, landing.x) && near(start.y, landing.y) && start.z === WORLD_PARAMS.batted.contactZ;
     };
     expect(failures(CONTACTS, valid)).toEqual([]);
+  });
+
+  it("打球の始点の z は接触点 = ゾーン平面(待っていたボールの着弾点と同じ位置なので、接触で跳ばない)", () => {
+    const sameAsHeld = (s: Scenario): boolean => {
+      const start = s.plan.batted?.start;
+      const landing = zoneToWorld(s.flight.landing);
+      return start !== undefined && start.z === WORLD_PARAMS.zone.planeZ && JSON.stringify(start) === JSON.stringify(landing);
+    };
+    expect(failures(CONTACTS, sameAsHeld)).toEqual([]);
+  });
+});
+
+// ---- 性質テスト #8c: 人間のスイングの演出の時刻(判定時刻 atMs と受付時刻 resolvedAtMs の分離) ----
+
+/** 判定時刻 `atMs` の D からのずれ(−400 〜 +250ms、25ms 刻み)。 */
+const AT_OFFSETS: readonly number[] = Array.from({ length: 27 }, (_, i) => -400 + i * 25);
+/** 受付時刻 = `atMs` + この遅れ(0 以上)。ただし上限は D + 330。 */
+const RECEIVE_DELAYS: readonly number[] = [0, 3, 30, 80, 130, 200, 330, 730];
+const RECEIPT_CAP_OFFSET = 330;
+const IN_PLAY_SINGLE = outcomeOf("in-play", FIRST_FLIGHT.seq, { result: "single", ball: { type: "fly", strength: "medium", direction: "center" } });
+const RECEIPT_KINDS: readonly PitchOutcomeView[] = [outcomeOf("swinging-strike", FIRST_FLIGHT.seq), outcomeOf("foul", FIRST_FLIGHT.seq), IN_PLAY_SINGLE];
+const SWING_KINDS: readonly SwingInput["kind"][] = ["meet", "power"];
+
+/** タイミング表示の期待ラベル(`|dt| < 窓 × centerRatio` ならジャスト、負なら早い、それ以外は遅い)。 */
+function expectedLabelOf(dtMs: number, windowMs: number): "early" | "just" | "late" {
+  if (Math.abs(dtMs) < windowMs * BATTING_PARAMS.centerRatio) {
+    return "just";
+  }
+  return dtMs < 0 ? "early" : "late";
+}
+
+type ReceiptScenario = {
+  readonly label: string;
+  readonly swing: SwingInput;
+  readonly resolvedAtMs: number;
+  readonly plan: PlayPlan;
+};
+
+function receiptScenario(flight: PitchFlight, outcome: PitchOutcomeView, atOffset: number, delay: number, kind: SwingInput["kind"]): ReceiptScenario {
+  const swing: SwingInput = { kind, cursor: CURSOR, atMs: flight.durationMs + atOffset };
+  const resolvedAtMs = Math.max(swing.atMs, Math.min(swing.atMs + delay, flight.durationMs + RECEIPT_CAP_OFFSET));
+  return { label: `${outcome.kind}/${kind}/at${atOffset}/recv${delay}`, swing, resolvedAtMs, plan: planPlay({ flight, outcome, swing, resolvedAtMs }) };
+}
+
+/** 受付時刻の組み合わせ(判定時刻のずれ × 受付の遅れ)。 */
+const TIME_PAIRS: readonly { readonly atOffset: number; readonly delay: number }[] = AT_OFFSETS.flatMap((atOffset) =>
+  RECEIVE_DELAYS.map((delay) => ({ atOffset, delay })),
+);
+
+const RECEIPT_SCENARIOS: readonly ReceiptScenario[] = FLIGHTS.flatMap((flight) =>
+  RECEIPT_KINDS.flatMap((outcome) =>
+    SWING_KINDS.flatMap((kind) => TIME_PAIRS.map(({ atOffset, delay }) => receiptScenario(flight, outcome, atOffset, delay, kind))),
+  ),
+);
+
+describe("planPlay: 受付時刻の性質(#8c。atMs × 受付時刻の全組み合わせ)", () => {
+  const swingOf = (s: ReceiptScenario): NonNullable<PlayPlan["swing"]> => s.plan.swing ?? { startMs: Number.NaN, contactAtMs: Number.NaN, height: Number.NaN };
+  const contacts = RECEIPT_SCENARIOS.filter((s) => s.plan.contactMs !== null);
+  const misses = RECEIPT_SCENARIOS.filter((s) => s.plan.contactMs === null);
+
+  it("atMs(D−400〜D+250)× 受付(atMs〜D+330)× 空振り/ファウル/インプレー × 飛行 × 打撃種別を走査している", () => {
+    expect(RECEIPT_SCENARIOS).toHaveLength(FLIGHTS.length * RECEIPT_KINDS.length * SWING_KINDS.length * AT_OFFSETS.length * RECEIVE_DELAYS.length);
+    expect(contacts.length).toBeGreaterThan(1000);
+    expect(misses.length).toBeGreaterThan(500);
+    expect(RECEIPT_SCENARIOS.some((s) => s.resolvedAtMs - s.swing.atMs > 100)).toBe(true);
+    expect(RECEIPT_SCENARIOS.some((s) => s.resolvedAtMs === s.swing.atMs)).toBe(true);
+  });
+
+  it("(1) swing.startMs ≥ resolvedAtMs(バットは受付より前の時刻から振り始めない)", () => {
+    expect(failures(RECEIPT_SCENARIOS, (s) => swingOf(s).startMs >= s.resolvedAtMs)).toEqual([]);
+  });
+
+  it("(2) 接触あり: contactMs − startMs ≥ minSwingMs(60ms)かつ contactMs ≥ D(接触姿勢を飛ばさない)", () => {
+    const valid = (s: ReceiptScenario): boolean => {
+      const contactMs = s.plan.contactMs ?? Number.NaN;
+      return contactMs - swingOf(s).startMs >= SWING.minSwingMs - 1e-9 && contactMs >= s.plan.durationMs;
+    };
+    expect(failures(contacts, valid)).toEqual([]);
+  });
+
+  it("(2b) 接触あり: D ちょうどのタップでも、受付 + minSwingMs までボールは待つ(contactMs = max(D, base + 60))", () => {
+    const exact = (s: ReceiptScenario): boolean =>
+      near(s.plan.contactMs ?? Number.NaN, Math.max(s.plan.durationMs, Math.max(s.swing.atMs, s.resolvedAtMs) + SWING.minSwingMs));
+    expect(failures(contacts, exact)).toEqual([]);
+  });
+
+  it("(3) 空振り: contactAtMs − startMs = 132ms(圧縮なし)で、startMs = base", () => {
+    const valid = (s: ReceiptScenario): boolean => {
+      const swing = swingOf(s);
+      return near(swing.contactAtMs - swing.startMs, SWING.contactMs) && near(swing.startMs, Math.max(s.swing.atMs, s.resolvedAtMs));
+    };
+    const missesOnly = RECEIPT_SCENARIOS.filter((s) => s.plan.kind === "swinging-strike");
+    expect(missesOnly.length).toBeGreaterThan(500);
+    expect(failures(missesOnly, valid)).toEqual([]);
+  });
+
+  it("(4) 接触なし: ballHoldUntilMs ≥ resolvedAtMs かつ ≥ D + holdMs(ボールは受付までは消えない)", () => {
+    const valid = (s: ReceiptScenario): boolean =>
+      s.plan.ballHoldUntilMs >= s.resolvedAtMs &&
+      s.plan.ballHoldUntilMs >= s.plan.durationMs + HOLD_MS - 1e-9 &&
+      near(s.plan.ballHoldUntilMs, Math.max(s.plan.durationMs + HOLD_MS, s.resolvedAtMs));
+    expect(failures(misses, valid)).toEqual([]);
+  });
+
+  it("具体例: マウス(atMs D−20・受付 D+3)は startMs D+3・contactMs D+63", () => {
+    const d = FIRST_FLIGHT.durationMs;
+    const swing: SwingInput = { kind: "meet", cursor: CURSOR, atMs: d - 20 };
+    const plan = planPlay({ flight: FIRST_FLIGHT, outcome: IN_PLAY_SINGLE, swing, resolvedAtMs: d + 3 });
+    expect(plan.contactMs).toBe(d + 63);
+    expect(plan.swing?.startMs).toBe(d + 3);
+  });
+
+  it("具体例: タッチのタップ(atMs D+30・受付 D+200)は startMs D+200・contactMs D+260(接触姿勢まで 60ms)", () => {
+    const d = FIRST_FLIGHT.durationMs;
+    const swing: SwingInput = { kind: "meet", cursor: CURSOR, atMs: d + 30 };
+    const plan = planPlay({ flight: FIRST_FLIGHT, outcome: outcomeOf("foul", FIRST_FLIGHT.seq), swing, resolvedAtMs: d + 200 });
+    expect(plan.swing?.startMs).toBe(d + 200);
+    expect(plan.contactMs).toBe(d + 260);
+    expect(plan.swing?.contactAtMs).toBe(d + 260);
+    expect(plan.ballHoldUntilMs).toBe(d + 260);
+  });
+
+  it("具体例: 遅いタップ(atMs D+170・受付 D+330)の空振りは startMs D+330・contactAtMs D+462、ボールは D+330 まで残る", () => {
+    const d = FIRST_FLIGHT.durationMs;
+    const swing: SwingInput = { kind: "meet", cursor: CURSOR, atMs: d + 170 };
+    const plan = planPlay({ flight: FIRST_FLIGHT, outcome: outcomeOf("swinging-strike", FIRST_FLIGHT.seq), swing, resolvedAtMs: d + 330 });
+    expect(plan.swing?.startMs).toBe(d + 330);
+    expect(plan.swing?.contactAtMs).toBe(d + 462);
+    expect(plan.ballHoldUntilMs).toBe(d + 330);
+  });
+
+  it("具体例: 早いキー(atMs D−320・受付 D−297)の空振りは startMs D−297・contactAtMs D−165", () => {
+    const d = FIRST_FLIGHT.durationMs;
+    const swing: SwingInput = { kind: "meet", cursor: CURSOR, atMs: d - 320 };
+    const plan = planPlay({ flight: FIRST_FLIGHT, outcome: outcomeOf("swinging-strike", FIRST_FLIGHT.seq), swing, resolvedAtMs: d - 297 });
+    expect(plan.swing?.startMs).toBe(d - 297);
+    expect(plan.swing?.contactAtMs).toBe(d - 165);
+    expect(plan.ballHoldUntilMs).toBe(d + HOLD_MS);
+  });
+});
+
+describe("planPlay: タイミング表示(timing)", () => {
+  it("人間のスイングでは timing があり、dtMs は判定時刻 atMs − D(受付時刻ではない)を四捨五入した値", () => {
+    const valid = (s: ReceiptScenario): boolean => {
+      const timing = s.plan.timing;
+      return (
+        timing !== null &&
+        timing.dtMs === Math.round(s.swing.atMs - s.plan.durationMs) &&
+        timing.dtMs === timingCueOf(s.swing.atMs - s.plan.durationMs, swingWindowMs(s.swing.kind)).dtMs
+      );
+    };
+    expect(failures(RECEIPT_SCENARIOS, valid)).toEqual([]);
+  });
+
+  it("label は swingWindowMs(打撃種別)× centerRatio で早い/ジャスト/遅い、startMs = base(受付以降)、endMs = startMs + timingMs", () => {
+    const valid = (s: ReceiptScenario): boolean => {
+      const timing = s.plan.timing;
+      const dt = s.swing.atMs - s.plan.durationMs;
+      const expectedLabel = expectedLabelOf(dt, swingWindowMs(s.swing.kind));
+      const base = Math.max(s.swing.atMs, s.resolvedAtMs);
+      return (
+        timing !== null &&
+        timing.label === expectedLabel &&
+        near(timing.startMs, base) &&
+        near(timing.endMs - timing.startMs, TIMING_MS) &&
+        timing.startMs >= s.resolvedAtMs
+      );
+    };
+    expect(failures(RECEIPT_SCENARIOS, valid)).toEqual([]);
+  });
+
+  it("早い(負)・遅い(正)・ジャストの 3 種が現れる。窓外の大きなずれ(D−400・D+250)でも出る", () => {
+    const labels = new Set(RECEIPT_SCENARIOS.map((s) => s.plan.timing?.label));
+    expect(labels).toEqual(new Set(["early", "just", "late"]));
+    const far = RECEIPT_SCENARIOS.filter((s) => s.swing.atMs - s.plan.durationMs === -400 || s.swing.atMs - s.plan.durationMs === 250);
+    expect(far.length).toBeGreaterThan(0);
+    expect(failures(far, (s) => s.plan.timing !== null)).toEqual([]);
+  });
+
+  it("具体例: タップ(atMs D+30・受付 D+200)は「ジャスト +30ms」を受付時刻 D+200 から 900ms 出す", () => {
+    const d = FIRST_FLIGHT.durationMs;
+    const swing: SwingInput = { kind: "meet", cursor: CURSOR, atMs: d + 30 };
+    const plan = planPlay({ flight: FIRST_FLIGHT, outcome: outcomeOf("foul", FIRST_FLIGHT.seq), swing, resolvedAtMs: d + 200 });
+    expect(plan.timing).toEqual({ label: "just", dtMs: 30, startMs: d + 200, endMs: d + 200 + TIMING_MS });
+  });
+
+  it("具体例: 早いキー(atMs D−320)は「早い −320ms」、遅いタップ(atMs D+170)は「遅い +170ms」", () => {
+    const d = FIRST_FLIGHT.durationMs;
+    const early = planPlay({
+      flight: FIRST_FLIGHT,
+      outcome: outcomeOf("swinging-strike", FIRST_FLIGHT.seq),
+      swing: { kind: "meet", cursor: CURSOR, atMs: d - 320 },
+      resolvedAtMs: d - 297,
+    });
+    const late = planPlay({
+      flight: FIRST_FLIGHT,
+      outcome: outcomeOf("swinging-strike", FIRST_FLIGHT.seq),
+      swing: { kind: "meet", cursor: CURSOR, atMs: d + 170 },
+      resolvedAtMs: d + 330,
+    });
+    expect(early.timing).toMatchObject({ label: "early", dtMs: -320, startMs: d - 297 });
+    expect(late.timing).toMatchObject({ label: "late", dtMs: 170, startMs: d + 330 });
   });
 });
 

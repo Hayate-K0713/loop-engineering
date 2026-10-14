@@ -261,10 +261,10 @@ describe("sceneFrameAt: ボール", () => {
 
   it("play・インプレー: flight が無くても接触後は打球を表示する", () => {
     const plan = swingOf(SINGLE);
-    expect(frameAt(SINGLE, plan.contactAtMs + 100, { flight: null }).ball).toEqual({
-      visible: true,
-      position: battedBallAt(battedOf(SINGLE), 100),
-    });
+    const ball = frameAt(SINGLE, plan.contactAtMs + 100, { flight: null }).ball;
+    expect(ball.visible).toBe(true);
+    expect(ball.position).toEqual(battedBallAt(battedOf(SINGLE), 100));
+    expect(ball.scale).toBeGreaterThanOrEqual(1);
   });
 
   it("play・接触なし(空振り・見逃し・CPU): ballHoldUntilMs まで着弾点に留まり、以降は非表示", () => {
@@ -302,11 +302,7 @@ describe("sceneFrameAt: ボール", () => {
 const AT_OFFSETS: readonly number[] = Array.from({ length: 14 }, (_, i) => -400 + i * 50);
 /** 受付時刻の、`atMs` からのずれ(0〜)。受付は `atMs` 以降で D+330 まで。 */
 const RECEIVE_DELAYS: readonly number[] = Array.from({ length: 12 }, (_, i) => i * 70);
-const SWING_OUTCOMES: readonly PitchOutcomeView[] = [
-  outcomeOf("swinging-strike"),
-  outcomeOf("foul"),
-  inPlayOutcome("single", SINGLE_BALL),
-];
+const SWING_OUTCOMES: readonly PitchOutcomeView[] = [outcomeOf("swinging-strike"), outcomeOf("foul"), inPlayOutcome("single", SINGLE_BALL)];
 
 type BallSample = { readonly tMs: number; readonly ball: SceneFrame["ball"] };
 type VisibilityScenario = { readonly label: string; readonly plan: PlayPlan; readonly timeline: readonly BallSample[] };
@@ -437,36 +433,95 @@ describe("sceneFrameAt: カメラ", () => {
   });
 
   it.each(CHASE_PLANS.map((plan, i) => [i, plan] as const))(
-    "play・打球 #%d: chaseFromMs 以降は blendCamera(打撃, 中継, 位置の割合, 注視点の割合)",
+    "play・打球 #%d: chaseFromMs 以降は blendCamera(打撃カメラ, 中継カメラ(lift 0), 位置の割合, 注視点の割合)(構図ごと)",
     (_i, plan) => {
       const batted = battedOf(plan);
       const times = [0, 50, 125, 250, 400, 500, 800, 1500].map((since) => chaseFrom(plan) + since);
-      const mismatched = times.filter((tMs) => {
+      const cases = COMPOSITIONS.flatMap((composition) => times.map((tMs) => ({ composition, tMs })));
+      const mismatched = cases.filter(({ composition, tMs }) => {
         const ball = battedBallAt(batted, tMs - (plan.contactMs ?? 0));
         const blend = chaseBlendAt(tMs - chaseFrom(plan));
-        const expected: CameraPose = blendCamera(battingCamera(), chaseCamera(ball), blend.position, blend.target);
-        return JSON.stringify(frameAt(plan, tMs).camera) !== JSON.stringify(expected);
+        const aspect = Number.isFinite(composition.aspect) && composition.aspect > 0 ? composition.aspect : 16 / 9;
+        const base = battingCameraFor(aspect, composition.layout, composition.safeArea);
+        const expected: CameraPose = blendCamera(base, chaseCamera(ball, aspect, 0), blend.position, blend.target);
+        return JSON.stringify(frameAt(plan, tMs, composition).camera) !== JSON.stringify(expected);
       });
-      expect(mismatched).toEqual([]);
+      expect(mismatched.map(({ composition, tMs }) => `aspect${composition.aspect}/t${tMs}`)).toEqual([]);
     },
   );
 
-  it("play・打球: chaseFromMs より前は打撃カメラ、ちょうどの時刻は打撃カメラと一致(切り替わりで飛ばない)", () => {
-    const moved = CHASE_PLANS.filter(
-      (plan) =>
-        JSON.stringify(frameAt(plan, chaseFrom(plan) - 1).camera) !== JSON.stringify(battingCamera()) ||
-        JSON.stringify(frameAt(plan, chaseFrom(plan)).camera) !== JSON.stringify(battingCamera()),
+  it("play・打球: chaseFromMs より前は打撃カメラ、ちょうどの時刻は打撃カメラと一致(切り替わりで飛ばない。縦長・守備を含む)", () => {
+    const moved = CHASE_PLANS.flatMap((plan) =>
+      COMPOSITIONS.filter((composition) => {
+        const base = JSON.stringify(sceneFrameAt(inputOf({ phase: "flight", plan: null, tMs: 100, ...composition })).camera);
+        return (
+          JSON.stringify(frameAt(plan, chaseFrom(plan) - 1, composition).camera) !== base ||
+          JSON.stringify(frameAt(plan, chaseFrom(plan), composition).camera) !== base
+        );
+      }),
     );
     expect(moved).toHaveLength(0);
   });
 
-  it("play・打球: 16ms 間のカメラ位置の移動は 1.5m 以下(接触から落下後 1 秒まで)", () => {
-    const jumps = CHASE_PLANS.flatMap((plan) => {
-      const end = chaseFrom(plan) + battedOf(plan).hangMs + 1000;
-      const steps = Array.from({ length: Math.floor((end - chaseFrom(plan)) / 16) }, (_, i) => chaseFrom(plan) + i * 16);
-      return steps.filter((tMs) => distance(frameAt(plan, tMs).camera.position, frameAt(plan, tMs + 16).camera.position) > 1.5);
-    });
+  it("play・打球: 16ms 間のカメラ位置の移動は 1.5m 以下(接触から落下後 1 秒まで。縦長・守備を含む)", () => {
+    const jumps = CHASE_PLANS.flatMap((plan) =>
+      COMPOSITIONS.flatMap((composition) => {
+        const end = chaseFrom(plan) + battedOf(plan).hangMs + 1000;
+        const steps = Array.from({ length: Math.floor((end - chaseFrom(plan)) / 16) }, (_, i) => chaseFrom(plan) + i * 16);
+        return steps.filter((tMs) => distance(frameAt(plan, tMs, composition).camera.position, frameAt(plan, tMs + 16, composition).camera.position) > 1.5);
+      }),
+    );
     expect(jumps).toHaveLength(0);
+  });
+
+  it("縦横比 16/9・レイアウト・空き領域によらず(横長)、接触前は従来の打撃カメラ battingCamera() と一致する", () => {
+    for (const layout of ["batting", "pitching"] as const) {
+      expect(frameAt(null, 100, { phase: "flight", aspect: 16 / 9, layout, safeArea: PORTRAIT_SAFE_AREA }).camera).toEqual(battingCamera());
+    }
+  });
+
+  it("接触前の camera は battingCameraFor(aspect, layout, safeArea) に一致する(縦長・守備・空き領域あり)", () => {
+    const mismatched = COMPOSITIONS.filter((composition) => {
+      const aspect = Number.isFinite(composition.aspect) && composition.aspect > 0 ? composition.aspect : 16 / 9;
+      const expected = battingCameraFor(aspect, composition.layout, composition.safeArea);
+      return JSON.stringify(frameAt(null, 100, { phase: "flight", ...composition }).camera) !== JSON.stringify(expected);
+    });
+    expect(mismatched).toHaveLength(0);
+    const portrait = frameAt(null, 100, { phase: "flight", aspect: PORTRAIT_ASPECT, layout: "batting" }).camera;
+    expect(portrait.lift).toBeGreaterThan(0);
+    expect(portrait.position.x).toBeLessThan(0);
+  });
+
+  it("無効な縦横比(NaN・0)は 16/9 とみなす", () => {
+    const reference = frameAt(null, 100, { phase: "flight", aspect: 16 / 9 });
+    expect(frameAt(null, 100, { phase: "flight", aspect: Number.NaN })).toEqual(reference);
+    expect(frameAt(null, 100, { phase: "flight", aspect: 0 })).toEqual(reference);
+    expect(frameAt(null, 100, { phase: "flight", aspect: -2 })).toEqual(reference);
+  });
+
+  it("縦長で接触後、blend の起点は接触前の camera(跳ばない)。blend 終了後の lift は 0(中継カメラは打撃の lift を引き継がない)", () => {
+    const composition = { aspect: PORTRAIT_ASPECT, layout: "batting" as const, safeArea: PORTRAIT_SAFE_AREA };
+    const before = frameAt(null, 100, { phase: "flight", ...composition }).camera;
+    expect(before.lift).toBeGreaterThan(0);
+    for (const plan of CHASE_PLANS) {
+      expect(frameAt(plan, chaseFrom(plan), composition).camera).toEqual(before);
+      expect(frameAt(plan, chaseFrom(plan) + 1500, composition).camera.lift).toBe(0);
+      const lifts = [0, 100, 200, 300, 400, 500].map((since) => frameAt(plan, chaseFrom(plan) + since, composition).camera.lift);
+      expect(lifts.every((lift, i) => i === 0 || lift <= (lifts.at(i - 1) ?? Number.POSITIVE_INFINITY) + 1e-12)).toBe(true);
+    }
+  });
+
+  it("frame.layout は入力の layout、frame.safeArea は既定値で補った空き領域(無効・null は既定値)", () => {
+    const fit = WORLD_PARAMS.framing.fit;
+    expect(frameAt(null, 0, { phase: "flight", layout: "pitching", safeArea: PORTRAIT_SAFE_AREA }).layout).toBe("pitching");
+    expect(frameAt(null, 0, { phase: "flight", layout: "batting" }).layout).toBe("batting");
+    expect(frameAt(null, 0, { phase: "flight", safeArea: PORTRAIT_SAFE_AREA }).safeArea).toEqual(PORTRAIT_SAFE_AREA);
+    expect(frameAt(null, 0, { phase: "flight", layout: "batting", safeArea: null }).safeArea).toEqual(fit.defaultSafeArea.batting);
+    expect(frameAt(null, 0, { phase: "flight", layout: "pitching", safeArea: null }).safeArea).toEqual(fit.defaultSafeArea.pitching);
+    const narrow = { top: 0.5, bottom: 0.5 + fit.minBandRatio / 2 };
+    expect(frameAt(null, 0, { phase: "flight", layout: "pitching", safeArea: narrow }).safeArea).toEqual(fit.defaultSafeArea.pitching);
+    const notFinite = { top: Number.NaN, bottom: 0.8 };
+    expect(frameAt(null, 0, { phase: "flight", layout: "batting", safeArea: notFinite }).safeArea).toEqual(fit.defaultSafeArea.batting);
   });
 });
 
@@ -501,11 +556,53 @@ describe("sceneFrameAt: 捕手の表示", () => {
 
 describe("sceneFrameAt: ゾーン・カーソル・狙い", () => {
   it("zone.grid は入力に従う。zone.visible は中継カメラに移り始めるまで", () => {
-    expect(frameAt(null, 100, { phase: "flight", grid: true }).zone).toEqual({ visible: true, grid: true });
-    expect(frameAt(null, 100, { phase: "windup", grid: false }).zone).toEqual({ visible: true, grid: false });
+    expect(frameAt(null, 100, { phase: "flight", grid: true }).zone).toEqual({ visible: true, grid: true, pulse: 0 });
+    expect(frameAt(null, 100, { phase: "windup", grid: false }).zone).toEqual({ visible: true, grid: false, pulse: 0 });
     expect(frameAt(SINGLE, chaseFrom(SINGLE) - 1).zone.visible).toBe(true);
     expect(frameAt(SINGLE, chaseFrom(SINGLE)).zone.visible).toBe(false);
     expect(frameAt(MISS_HUMAN, 2000).zone.visible).toBe(true);
+  });
+
+  it("zone.pulse: D−20ms 前は 0、D−20ms から立ち上がり、D〜D+60ms は 1、D+260ms 以降は 0(zonePulseAt と一致)", () => {
+    const { durationMs } = FLIGHT;
+    const { leadMs, holdMs, fadeMs } = CUE.zonePulse;
+    expect(zonePulseAt(durationMs, durationMs - leadMs - 1)).toBe(0);
+    expect(zonePulseAt(durationMs, durationMs - leadMs)).toBe(0);
+    expect(zonePulseAt(durationMs, durationMs - leadMs / 2)).toBeCloseTo(0.5, 9);
+    expect(zonePulseAt(durationMs, durationMs)).toBe(1);
+    expect(zonePulseAt(durationMs, durationMs + holdMs)).toBe(1);
+    expect(zonePulseAt(durationMs, durationMs + holdMs + fadeMs / 2)).toBeCloseTo(0.5, 9);
+    expect(zonePulseAt(durationMs, durationMs + holdMs + fadeMs)).toBe(0);
+    expect(zonePulseAt(durationMs, durationMs + holdMs + fadeMs + 1000)).toBe(0);
+    expect(durationMs + holdMs + fadeMs).toBe(durationMs + 260);
+    const at = (tMs: number): number => frameAt(null, tMs, { phase: "flight" }).zone.pulse;
+    expect([durationMs - 21, durationMs, durationMs + 60, durationMs + 260, durationMs + 500].map(at)).toEqual([0, 1, 1, 0, 0]);
+  });
+
+  it("zone.pulse は 0〜1 で、D の前後で連続に近く(1 ms の変化が小さい)、非有限の入力は 0", () => {
+    const { durationMs } = FLIGHT;
+    const values = Array.from({ length: 400 }, (_, i) => zonePulseAt(durationMs, durationMs - 50 + i));
+    expect(values.every((value) => value >= 0 && value <= 1)).toBe(true);
+    const steps = values.slice(1).map((value, i) => Math.abs(value - (values.at(i) ?? 0)));
+    expect(Math.max(...steps)).toBeLessThanOrEqual(1 / CUE.zonePulse.leadMs + 1e-9);
+    expect(zonePulseAt(durationMs, Number.NaN)).toBe(0);
+    expect(zonePulseAt(Number.NaN, 100)).toBe(0);
+  });
+
+  it("zone.pulse は flight / play で投球があるときだけ。idle・windup・投球なし・ゾーン枠が消えた(中継カメラ)後は 0", () => {
+    const tMs = FLIGHT.durationMs;
+    expect(frameAt(null, tMs, { phase: "flight" }).zone.pulse).toBe(1);
+    expect(frameAt(null, tMs, { phase: "play" }).zone.pulse).toBe(1);
+    expect(frameAt(null, tMs, { phase: "idle" }).zone.pulse).toBe(0);
+    expect(frameAt(null, tMs, { phase: "windup" }).zone.pulse).toBe(0);
+    expect(frameAt(null, tMs, { phase: "flight", flight: null }).zone.pulse).toBe(0);
+    const hidden = GRID_INPUTS.filter((input) => !sceneFrameAt(input).zone.visible && sceneFrameAt(input).zone.pulse !== 0);
+    expect(hidden).toHaveLength(0);
+  });
+
+  it("zone.pulse は人間・CPU の plan があっても D を基準にする(plan の種別によらない)", () => {
+    const wrong = ALL_PLANS.filter((plan) => frameAt(plan, FLIGHT.durationMs).zone.pulse !== (frameAt(plan, FLIGHT.durationMs).zone.visible ? 1 : 0));
+    expect(wrong).toHaveLength(0);
   });
 
   it("cursor.visible は入力が真かつ中継カメラに移る前のみ", () => {
@@ -637,6 +734,102 @@ describe("sceneFrameAt: 打者", () => {
   it("打者は常に表示", () => {
     const hidden = GRID_INPUTS.filter((input) => !sceneFrameAt(input).batter.visible);
     expect(hidden).toHaveLength(0);
+  });
+
+  it("打者の x は縦横比の補間 k で横長(position.x)から縦長(portraitX)へ混ざる。y・z・向き・拡大率は不変", () => {
+    const { position, portraitX, yaw, scale } = ACTORS.batter;
+    const aspects = [16 / 9, 1.2, 1, 0.9, 0.8, 0.75, 0.7, PORTRAIT_ASPECT, 0.3];
+    const wrong = aspects.filter((aspect) => {
+      const batter = frameAt(null, 100, { phase: "flight", aspect }).batter;
+      const expectedX = lerp(position.x, portraitX, portraitBlendAt(aspect));
+      return (
+        Math.abs(batter.position.x - expectedX) > 1e-12 ||
+        batter.position.y !== position.y ||
+        batter.position.z !== position.z ||
+        batter.yaw !== yaw ||
+        batter.scale !== scale
+      );
+    });
+    expect(wrong).toEqual([]);
+    expect(frameAt(null, 100, { phase: "flight", aspect: 16 / 9 }).batter.position.x).toBe(position.x);
+    expect(frameAt(null, 100, { phase: "flight", aspect: PORTRAIT_ASPECT }).batter.position.x).toBe(portraitX);
+    const xs = aspects.map((aspect) => frameAt(null, 100, { phase: "flight", aspect }).batter.position.x);
+    expect(xs.every((x, i) => i === 0 || x >= (xs.at(i - 1) ?? Number.NEGATIVE_INFINITY) - 1e-12)).toBe(true);
+  });
+
+  it("スイング中も打者の x は縦長の値(バットの高さの補正は変わらない)", () => {
+    const swing = swingOf(SINGLE);
+    const portrait = frameAt(SINGLE, swing.contactAtMs, { aspect: PORTRAIT_ASPECT }).batter;
+    expect(portrait.position.x).toBe(ACTORS.batter.portraitX);
+    expect(worldBatHeight(portrait)).toBeCloseTo(swing.height, 9);
+  });
+});
+
+describe("sceneFrameAt: 落下点のリング(landingMark)", () => {
+  const { startAfterContactMs, endAfterLandMs, y, minRadius } = LANDING_MARK;
+  const AERIAL_PLANS: readonly PlayPlan[] = [SINGLE, FOUL, LINEOUT];
+  const NOT_MARKED_PLANS: readonly PlayPlan[] = [HOMERUN, GROUNDOUT, ...NO_CHASE_PLANS];
+
+  function markOf(plan: PlayPlan, tMs: number, overrides: Partial<SceneFrameInput> = {}): SceneFrame["landingMark"] {
+    return frameAt(plan, tMs, overrides).landingMark;
+  }
+
+  it("フライ・ライナー(ファウルの飛球を含む)で、接触 +200ms から落下 +400ms まで出る", () => {
+    const wrong = AERIAL_PLANS.filter((plan) => {
+      const contactMs = plan.contactMs ?? Number.NaN;
+      const landMs = contactMs + battedOf(plan).hangMs;
+      return (
+        markOf(plan, contactMs + startAfterContactMs - 1).visible ||
+        !markOf(plan, contactMs + startAfterContactMs).visible ||
+        !markOf(plan, landMs).visible ||
+        !markOf(plan, landMs + endAfterLandMs).visible ||
+        markOf(plan, landMs + endAfterLandMs + 1).visible
+      );
+    });
+    expect(wrong).toHaveLength(0);
+    expect(LINEOUT.batted?.shape).toBe("liner");
+    expect(FOUL.batted?.shape).toBe("fly");
+  });
+
+  it("ホームラン・ゴロ・打球なし(空振り・見逃し)では出ない", () => {
+    const shown = NOT_MARKED_PLANS.flatMap((plan) => TIMES.filter((tMs) => markOf(plan, tMs).visible));
+    expect(shown).toHaveLength(0);
+    expect(HOMERUN.batted?.overFence).toBe(true);
+    expect(GROUNDOUT.batted?.shape).toBe("ground");
+  });
+
+  it("idle・windup・flight(plan が使われない phase)では出ない", () => {
+    const shown = GRID_INPUTS.filter((input) => input.phase !== "play" && sceneFrameAt(input).landingMark.visible);
+    expect(shown).toHaveLength(0);
+  });
+
+  it("位置は打球の終点の地面(x・z は batted.end、y は landingMark.y)", () => {
+    const wrong = AERIAL_PLANS.filter((plan) => {
+      const end = battedOf(plan).end;
+      const mark = markOf(plan, (plan.contactMs ?? 0) + 600);
+      return !(mark.visible && mark.position.x === end.x && mark.position.z === end.z && mark.position.y === y);
+    });
+    expect(wrong).toHaveLength(0);
+  });
+
+  it("半径は minRadius 以上で、画面の表示高の screenRatio 相当(最終のカメラから計算)と minRadius の大きい方", () => {
+    const wrong = COMPOSITIONS.flatMap((composition) =>
+      AERIAL_PLANS.filter((plan) => {
+        const frame = frameAt(plan, (plan.contactMs ?? 0) + 600, composition);
+        const mark = frame.landingMark;
+        const dist = distance(mark.position, frame.camera.position);
+        const expected = Math.max(minRadius, LANDING_MARK.screenRatio * 2 * dist * Math.tan((frame.camera.fovDeg * Math.PI) / 360));
+        return !(mark.visible && mark.radius >= minRadius && Math.abs(mark.radius - expected) < 1e-9);
+      }),
+    );
+    expect(wrong).toHaveLength(0);
+  });
+
+  it("出ていないときの radius は 0(位置は有限)", () => {
+    const mark = markOf(HOMERUN, 0);
+    expect(mark.visible).toBe(false);
+    expect(mark.radius).toBe(0);
+    expect(Number.isFinite(mark.position.x) && Number.isFinite(mark.position.y) && Number.isFinite(mark.position.z)).toBe(true);
   });
 });
 
