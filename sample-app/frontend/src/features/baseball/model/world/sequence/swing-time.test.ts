@@ -3,7 +3,7 @@ import type { SwingInputKind, SwingOrigin } from "../../../types/batting";
 import { BATTING_PARAMS } from "../../batting/params";
 import { inputLatencyOf, swingAtMs, type SwingAtMsInput } from "./swing-time";
 
-// 時計の基準は performance.now() 相当(投球開始 1000ms)。補正量・範囲は BATTING_PARAMS から取る(リテラルで固定しない)。
+// 時計の基準は event.timeStamp と同じ高精度タイマー(投球開始 1000ms)。補正量・範囲は BATTING_PARAMS から取る(リテラルで固定しない)。
 const START = 1000;
 const { maxEventAgeMs, maxTapSpanMs } = BATTING_PARAMS;
 const KINDS: readonly SwingInputKind[] = ["touch", "mouse", "key"];

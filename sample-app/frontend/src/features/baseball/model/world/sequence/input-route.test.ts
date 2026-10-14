@@ -200,7 +200,9 @@ describe("routeStageRelease: 全組み合わせ", () => {
   });
 
   it("それ以外(ドラッグした・長押し・スキップに使った指・マウス/ペン・演出中・打撃中でない)は none", () => {
-    const others = ALL_RELEASE_INPUTS.filter((input) => !(input.pointerType === "touch" && input.tapCandidate && input.tapOk && !input.holding && input.enabled));
+    const others = ALL_RELEASE_INPUTS.filter(
+      (input) => !(input.pointerType === "touch" && input.tapCandidate && input.tapOk && !input.holding && input.enabled),
+    );
     expect(others).toHaveLength(47);
     expect(others.every((input) => routeStageRelease(input) === "none")).toBe(true);
   });

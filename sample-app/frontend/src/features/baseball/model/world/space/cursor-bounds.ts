@@ -54,7 +54,7 @@ function verticalRange(zoneRect: ScreenRect, freeBottomPx: number | null, margin
  */
 export function clampCursorToView(point: ZonePoint, zoneRect: ScreenRect, viewWidthPx: number, freeBottomPx: number | null = null): ZonePoint {
   const limit = BATTING_PARAMS.cursorLimit;
-  if (zoneRect.width <= 0 || zoneRect.height <= 0 || !(viewWidthPx > 0)) {
+  if (zoneRect.width <= 0 || zoneRect.height <= 0 || !Number.isFinite(viewWidthPx) || viewWidthPx <= 0) {
     return { x: clamp(point.x, -limit, limit), y: clamp(point.y, -limit, limit) };
   }
   const margin = WORLD_PARAMS.input.edgeMarginPx;

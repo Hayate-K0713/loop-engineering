@@ -2,12 +2,12 @@ import { BATTING_PARAMS } from "../../batting/params";
 import type { SwingInputKind, SwingOrigin } from "../../../types/batting";
 
 // スイングの判定時刻 `atMs` の求め方(純関数)。入力イベントの時刻(`event.timeStamp`)から経過ゲーム時間を求め、入力種別ごとの遅延を引く。
-// ハンドラの実行時刻(`performance.now()`)は、描画で詰まったメインスレッドの待ちを含むので、イベントの時刻が信頼できるときはそちらを使う。
+// ハンドラの実行時刻(`nowMs`)は、描画で詰まったメインスレッドの待ちを含むので、イベントの時刻が信頼できるときはそちらを使う。
 
 export type SwingAtMsInput = {
   /** 入力イベントの時刻情報。プログラムからの呼び出し(イベントなし)は `null`。 */
   readonly origin: SwingOrigin | null;
-  /** 入力を処理した時刻(`performance.now()` と同じ時計、ms)。 */
+  /** 入力を処理した時刻(`event.timeStamp` と同じ時計の高精度タイマー、ms)。 */
   readonly nowMs: number;
   /** 投球開始(リリース)の時刻(同じ時計、ms)。一度も `flight` が出ていなければ `null`。 */
   readonly startedAtMs: number | null;
