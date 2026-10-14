@@ -35,9 +35,9 @@ body:has(.bb-page) {
     -0.71px -0.71px 0 var(--bs-ink), 0 -1px 0 var(--bs-ink), 0.71px -0.71px 0 var(--bs-ink), 0 2px 0 var(--bs-ink);
   --bs-stroke-bold:
     4px 0 0 var(--bs-ink), 3.7px 1.53px 0 var(--bs-ink), 2.83px 2.83px 0 var(--bs-ink), 1.53px 3.7px 0 var(--bs-ink), 0 4px 0 var(--bs-ink),
-    -1.53px 3.7px 0 var(--bs-ink), -2.83px 2.83px 0 var(--bs-ink), -3.7px 1.53px 0 var(--bs-ink), -4px 0 0 var(--bs-ink),
-    -3.7px -1.53px 0 var(--bs-ink), -2.83px -2.83px 0 var(--bs-ink), -1.53px -3.7px 0 var(--bs-ink), 0 -4px 0 var(--bs-ink),
-    1.53px -3.7px 0 var(--bs-ink), 2.83px -2.83px 0 var(--bs-ink), 3.7px -1.53px 0 var(--bs-ink), 0 7px 0 var(--bs-ink);
+    -1.53px 3.7px 0 var(--bs-ink), -2.83px 2.83px 0 var(--bs-ink), -3.7px 1.53px 0 var(--bs-ink), -4px 0 0 var(--bs-ink), -3.7px -1.53px 0 var(--bs-ink),
+    -2.83px -2.83px 0 var(--bs-ink), -1.53px -3.7px 0 var(--bs-ink), 0 -4px 0 var(--bs-ink), 1.53px -3.7px 0 var(--bs-ink), 2.83px -2.83px 0 var(--bs-ink),
+    3.7px -1.53px 0 var(--bs-ink), 0 7px 0 var(--bs-ink);
 
   position: fixed;
   inset: 0;
@@ -801,9 +801,7 @@ body:has(.bb-page) {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background:
-    linear-gradient(var(--bs-accent) 0 3px, transparent 3px),
-    var(--bs-panel);
+  background: linear-gradient(var(--bs-accent) 0 3px, transparent 3px), var(--bs-panel);
   clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%, 0 14px);
 }
 
@@ -1021,6 +1019,73 @@ body:has(.bb-page) {
   }
 }
 
+/* ---- 縦長(アスペクト比 1 以下): スキップのヒントの位置 ----
+   縦長の構図(ゾーン枠が画面の下寄りに大きく出る)では、ヒントを画面中央に置くとゾーン枠の上中央に重なる。
+   投手の足元とゾーン枠の間(テロップは上から 38%)に収まるよう、打撃・CPU 観戦は 30%、守備は 27% にする。 */
+
+@media (max-aspect-ratio: 1/1) {
+  .bb-stage__skip-hint {
+    top: 30%;
+  }
+
+  .bb-game--pitching .bb-stage__skip-hint {
+    top: 27%;
+  }
+}
+
+/* ---- 縦長で画面の高さが 800px 未満(ブラウザのツールバーがあるとき等) ----
+   構図は実測した空き領域(data-inset の 2 要素の間)から決まるので、下のオーバーレイが低いほどゾーン枠・格子を大きく取れる。
+   打撃: ティッカーを 1 行にして余白を詰め、スイングボタンも 80px に(タップ目標 64px 以上は保つ)。ゾーン枠の下の余裕とゾーン枠の大きさに効く。
+   守備: ティッカーを隠し、グリッドのセルを 44px から 36px に、余白を縮めて、操作バーを 300px 以内(下端から)に収める。 */
+
+@media (max-aspect-ratio: 1/1) and (max-height: 799px) {
+  .bb-stage__skip-hint {
+    top: 33%;
+  }
+
+  .bb-game--pitching .bb-stage__skip-hint {
+    top: 30%;
+  }
+
+  /* data-inset="bottom" の箱の上端が空き領域の下端。上に透明な 10px の余白を足して、ゾーン枠・格子の下端とティッカー/バーの見た目の上端の間を
+     (構図の式の marginRatio ぶんに足して)広げる。低い画面では枠が空き領域の下端ぎりぎりまで下がるので、影や格子の最下段がティッカーに隠れるのを防ぐ */
+  .bb-overlay__bottom {
+    gap: 4px;
+    padding-top: 10px;
+  }
+
+  .bb-ticker {
+    min-height: 0;
+    padding: 4px 24px 5px 16px;
+  }
+
+  .bb-ticker__line {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .bb-bar--swing {
+    padding: 9px 14px 8px;
+  }
+
+  .bb-bar--swing .bb-swing__button {
+    width: 80px;
+    height: 80px;
+  }
+
+  .bb-game--pitching .bb-ticker {
+    display: none;
+  }
+
+  .bb-bar--pitch {
+    --bb-cell: 36px;
+    --bb-grid-size: calc(var(--bb-cell) * 5 + var(--bb-cell-gap) * 4);
+
+    gap: 6px 10px;
+    padding: 11px 12px 8px;
+  }
+}
+
 /* ---- アニメーションと動きの抑制 ---- */
 
 @keyframes bb-fade-in {
@@ -1033,13 +1098,27 @@ body:has(.bb-page) {
   }
 }
 
+/* タイミング表示: 枠の少し下から 6px 上へ、0.14 秒で浮かび上がる(translate は位置決めの一部なのでキーフレームにも含める) */
+@keyframes bb-timing-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 1px)) scale(0.85);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, calc(-100% - 6px)) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bb-stage__telop {
     transform: none;
     transition: none;
   }
 
-  .bb-stage__skip-hint {
+  .bb-stage__skip-hint,
+  .bb-stage__timing {
     animation: none;
   }
 }
