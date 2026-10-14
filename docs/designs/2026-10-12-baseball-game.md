@@ -21,12 +21,13 @@
 4. 2026-10-12: Three.js の3Dモックをユーザーが承認。重視点は **打撃画面の視点(捕手後方からボールが迫る)・キャラクター(2頭身・モーション)・打球の演出(球場に飛び野手が追う)** の3つ。実況テロップ・効果音は重視点に含まれない。
 5. 本書は 4 の方針で描画層を作り直す設計である。同日の壁打ちで、チーム色・演出スキップ・スコア更新のタイミングが確定した(末尾「壁打ち記録」)。
 6. 2026-10-12: 設計レビュー(2ラウンド、最終 PASS)の後、ユーザーから「デザインとUIがクソだからなおせ」と指示があった。3D の作り直しに加えて、**周辺 UI(スコア・対戦情報・操作・実況・タイトル・結果)を「管理画面のようなパネル型」から「ゲーム画面らしいオーバーレイ型」に作り直す**方針を本書に追加した(論点 N7・N16・N17)。
+7. 2026-10-13: 遊べる版のスマホ試遊でゲート2が「修正依頼」(操作性・投球軌道)になった。診断([docs/investigations/_parts/baseball-game/2026-10-13-feel-diagnosis.md](../investigations/_parts/baseball-game/2026-10-13-feel-diagnosis.md))と修正前後の比較画像([docs/designs/assets/2026-10-13-baseball-game-feel/](assets/2026-10-13-baseball-game-feel/))に基づく修正設計を、「## 修正設計(ゲート2 修正依頼: 操作性・投球軌道、2026-10-13)」(「## 実装ステップ」の直前)に追補した。**この節が既存の本文に優先する**。
 
 ### 第1版から引き継ぐもの(変更しない)
 
 | 領域 | 本書での扱い | 参照先(第1版) |
 | --- | --- | --- |
-| ルール・判定・CPU・データ(`model/` の `rng`・`pitch`・`batting`・`cpu`・`data`・`game`) | ロジックは無改変。**加算のみ**: `game/view.ts` の `outcome`・`teamColors`・`uniforms`・`ScoreRowView.shortName`、`Team.uniformColor`・`Team.shortName`(チームデータ。描画・表示用で、判定・乱数に影響しない)。reducer・`GameState` は不変 | 「モデル設計(`model/`)」全節、「設計の既定値と論点」#1〜#13・#15〜#19 |
+| ルール・判定・CPU・データ(`model/` の `rng`・`pitch`・`batting`・`cpu`・`data`・`game`) | ロジックは無改変。(→ 修正設計で変更: `batting` の判定、`cpu` の難易度、`pitch/kinds` の曲がり、`game/view.ts` の `arriveAfterMs`)**加算のみ**: `game/view.ts` の `outcome`・`teamColors`・`uniforms`・`ScoreRowView.shortName`、`Team.uniformColor`・`Team.shortName`(チームデータ。描画・表示用で、判定・乱数に影響しない)。reducer・`GameState` は不変 | 「モデル設計(`model/`)」全節、「設計の既定値と論点」#1〜#13・#15〜#19 |
 | 型(`types/` の `common`・`pitch`・`batting`・`game`・`actions`、`team`・`view` の既存部分) | 無改変。`team.ts` に `uniformColor`・`shortName`、`view.ts` に `outcome`・`teamColors`・`uniforms` と `ScoreRowView.shortName` を加算するのみ | 「型設計(`types/`)」 |
 | 起動パラメータ・再生速度(`?seed=&innings=&fast=1`、開発ビルドのみ、`timeScale`) | 無改変。`timeScale` は演出時間にも適用する | 「起動パラメータと再生速度」、論点 #8・#11・#16 |
 | hooks(`useGame`・`useCpuTurn`・`useAnimationFrame`・`useKeyboardInput`・`useLatest`・`useLaunchParams`・`random-seed`) | 無改変 | 「hooks 設計」 |
@@ -68,7 +69,7 @@
 - **オーバーレイ型の試合画面**: ステージ全面+左上のスコア HUD(回表裏・両チーム略称とチーム色チップと得点・B/S/O ランプ・走者ダイヤモンド。回別スコアは開閉)+右上のネームプレート(打者・投手)+下部の実況ティッカー(1〜2行、全ログは開閉)+下部の操作バー(打撃: 大きなスイングボタンとミート/強振切替、守備: 球種の横並びチップと5×5の小型グリッドと「投げる」)+中央の結果テロップ。**スマホ縦(390×844)とデスクトップの両方**で成立させる。
 - **ゲームらしいタイトル画面と結果画面**: 球場の絵を背景にしたロゴ風タイトル「ブラウザ野球」、選択肢はボタン群(セレクトボックスは使わない)。結果画面は3D の試合画面をぼかして背景にし、大きなスコアと勝敗を出す。
 - **見た目のトーン**: 承認済みモックの世界観(昼の球場、トゥーン調)に合わせる。太めの丸ゴシック系(システムフォント)、白文字+濃い縁取り、半透明の濃紺パネル、アクセントは黄。
-- 入力: 3D ステージ上でのスイングカーソル操作(マウスは絶対位置、タッチは相対ドラッグ。キーボード・「スイング」ボタンは第1版のまま)。
+- 入力: 3D ステージ上でのスイングカーソル操作 → タッチの振り分けは修正設計で変更(§3)(マウスは絶対位置、タッチは相対ドラッグ。キーボード・「スイング」ボタンは第1版のまま)。
 - `GameView.outcome`(解決した1球の事実)・`teamColors`・`uniforms`・`ScoreRowView.shortName` を `model/game/view.ts` に、`Team.uniformColor`・`Team.shortName` をチームデータに**加算的に**追加する(reducer・`GameState` は不変)。
 - `GameScreen` を `React.lazy` で遅延ロードする(`/` とタイトル画面のバンドルに three を含めない)。
 - E2E・`sample-app/README.md`・`docs/process/sample-app-dev.md` の更新。
@@ -82,7 +83,7 @@
 - **react-three-fiber / drei / three addons / Phaser / Pixi / 状態管理ライブラリ**の導入。
 - 実況の拡充(音声、イニング別演出、リプレイ)。テロップは結果1行のみ。
 - 物理シミュレーション(打球軌道は演出用の閉形式。判定・得点とは独立)。
-- 判定・CPU・ルール・バランスの変更(第1版のまま)。スキップも表示の短縮だけで、試合の状態には触れない。
+- 判定・CPU・ルール・バランスの変更(第1版のまま) → 修正設計で変更(判定へのボール半径・人間の見逃し猶予・バランス再調整。修正設計 §5・§10)。スキップも表示の短縮だけで、試合の状態には触れない。
 - ユニフォームの色以外のチーム差(縞・帽子マークの違い、チームロゴ)。
 - **タイトル画面で3D 球場を実際に描画すること**(CSS で描いた球場の背景にする。3D 背景は将来案。N16)。
 - モバイル実機での検証(Playwright の `hasTouch`+viewport 縮小で確認するのみ)、Playwright のモバイル project 追加。
@@ -328,14 +329,14 @@ types/ はどこからでも参照可
 
 1. **時計は1本**: `usePitchFlight.getElapsedMs()`(リリース = `flight` 出現からの経過ゲーム時間 ms。`timeScale` 適用済み)。スイング時刻 `atMs` と演出時刻は同じ時計。開始時刻は **`useLayoutEffect`** で記録し(`flight` 出現直後の1フレームに古い値が見えないようにする)、`flight` が `null` になっても**次の `flight` が出るまで保持**する(人間がスイングすると `view.flight` は即 `null` になるが、演出は続くため)。
 2. **windup はリリース前の別区間**で、壁時計を `speed.cpuWaitMs` で 0〜1 に正規化した `u`(`windupProgress`)で表す。`u = 1` がリリース直前のポーズ。リリース後のフォロースルーはゲーム時間 `t`(`pitcherFollowMs`)で再生する。`u = 1` のポーズと `t = 0` のポーズは一致させる(連続性をテストで固定)。
-3. **ボールの本塁通過 = `flight.durationMs`**(`pitchBallAt` のテストで固定)。通過後は `mittBallAt` が `mittMs`(150ms)かけて捕手ミットへ進む(人間打者の判定窓 `contactWindowMs` と同じ長さ)。
+3. **ボールの本塁通過 = `flight.durationMs`**(`pitchBallAt` のテストで固定)。通過後は `mittBallAt` が `mittMs`(150ms)かけて捕手ミットへ進む(人間打者の判定窓 `contactWindowMs` と同じ長さ → 修正設計で変更(ミットへは動かさず着弾点で止める。§1))。
 4. **接触とスイングの時刻**(`planPlay`):
     - `base` = 人間のスイング入力があれば `swing.atMs`、なければ `resolvedAtMs`(CPU 打者は `PITCH_ARRIVED` の前倒しにより `durationMs − CPU_SWING_LEAD_MS`(150ms)付近)。
     - ファウル/インプレーの接触は `contactMs = max(durationMs, base + minSwingMs)`(`minSwingMs` 60ms)。CPU 打者は `durationMs`、人間の早いクリックも `durationMs`、遅い/ジャストのクリックは `atMs + 60ms`。
     - バットは `swing.startMs = max(contactMs − 132, base)` から振り始め、`swing.contactAtMs = contactMs`。`startMs`〜`contactMs` で構え→接触姿勢(`progress` 0→0.66)を線形に補間する。区間が 132ms 未満なら**圧縮**されるが、最短でも 60ms あるので、構え→接触姿勢が1フレームで飛ばない。`contactMs` 以降は通常の速度でフォロースルー(`progress` 0.66→1.0 を 68ms、さらに 1.4 まで)。`progress` は純関数 `swingProgressAt(swing, tMs)` で求める。
     - 人間のクリックが `durationMs` より遅い(Δt>0)接触では、`atMs` までボールがミット方向へ進んでから接触位置に戻って飛ぶ(最大約210msのずれ。N5 のごまかしとして許容し、手動確認で見え方を確認する。目立つ場合はボールを判定待ちの間だけ非表示にする案へ切り替える)。
 5. **空振り**: 人間は `swing.startMs = swing.atMs`、`contactAtMs = startMs + 132`(圧縮なし)。CPU は入力が無いので、`contactAtMs = durationMs ± missOffsetMs`(70ms。`seq` の偶奇で早/遅)にずらしてタイミングを外したスイングに見せ、**接触ありと同じく `startMs = max(contactAtMs − 132, base)`(`base` = `resolvedAtMs`)**とする。CPU の早い空振り(`contactAtMs = durationMs − 70`)では `contactAtMs − 132` が `resolvedAtMs`(約 `durationMs − 150`)より前になるため、`startMs = resolvedAtMs` に圧縮される(接触姿勢まで約80ms。スイングが約52ms 飛ぶのを避ける)。見逃しは振らない。**`swing.height`(バットの高さ)**: 人間のスイング入力がある空振りは `zoneToWorld(swing.cursor).y`、それ以外(CPU の空振り・ファウル・インプレー、人間のファウル/インプレー)は `zoneToWorld(flight.landing).y`。
-6. **CPU 打者の `PITCH_ARRIVED` を前倒し**: `leadMs = CPU_SWING_LEAD_MS`(150ms。`world/space/params.ts`)として、`arriveAfterMs − leadMs` に送る。`decideCpuBat` は `flight.durationMs` 基準でディスパッチ時刻に依存しないため、reducer・view・テストは不変。人間打者は `leadMs = 0`(従来どおり `durationMs + contactWindowMs`)。
+6. **CPU 打者の `PITCH_ARRIVED` を前倒し**: `leadMs = CPU_SWING_LEAD_MS`(150ms。`world/space/params.ts`)として、`arriveAfterMs − leadMs` に送る。`decideCpuBat` は `flight.durationMs` 基準でディスパッチ時刻に依存しないため、reducer・view・テストは不変。人間打者は `leadMs = 0`(従来どおり `durationMs + contactWindowMs` → 修正設計で変更(`durationMs + lateCutoffMs`。§1))。
 7. **人間のスイング入力の受け渡し**: 人間がスイングすると `view.flight` は即 `null` になるが、director は `flight` を session に保持して演出を続ける。スイング入力は `swingRecord = { seq, input }`(`seq` はスイング時点の `view.flight.seq`)として `useGameStage` が ref に記録する。**1つの `seq` につき最初の1回だけ記録**する(`recordSwing`。reducer が2回目の `SWING` を無視するのと一致)。`planPlay` に渡すのは `swingRecord.seq === outcome.seq` のときだけ(`swingForOutcome`)で、そうでなければ `null`。これにより、人間打撃の次の半イニングで CPU 打者の空振り/ファウル/インプレーに古い人間のスイングが渡らない。plan 作成後は記録を `null` に戻す。`outcome.seq` に対応する `flight` が session に無い(想定外)場合は、演出なしで即座に `finishedSeq` を更新して進行を止めない。
 8. **すべての演出時間はゲーム時間で定義**し、`timeScale` で壁時計に換算する(`fast=1` の E2E を短く保つ)。windup のみ壁時計(`cpuWaitMs`)。
 9. **`holding`(演出中)**: `isHolding(view.outcome, finishedSeq)`(= `outcome !== null && outcome.seq !== finishedSeq`)を **render 中に導出**する。`finishedSeq` は `useGameStage` が `useState` で持ち、director が演出の終了(`plan.endMs` 到達)または**スキップ**(規約13)で `onFinished(seq)` を呼んで更新する。`holding` の間は次を止める: ①`useCpuTurn` の `cpuPitchPending`(`view.cpuPitchPending && !holding`)、②`PitchingControls` の `ready`(`view.pitchReady && !holding && !throwing`)、③`ResultScreen` の表示(`view.result !== null && !holding`)。`pitch-controls` の `data-ready` は②と一致させる。
@@ -343,7 +344,7 @@ types/ はどこからでも参照可
 11. **人間守備の windup**: 「投げる」押下で同期的に `throwing = true`、`cpuWaitMs` 後に `throwPitch(selection)`(タイマーは cleanup で解除)。CPU 守備は `useCpuTurn` の待機(`cpuWaitMs`)を windup の長さとして使い、`cpuPitchPending && !holding` の立ち上がりで windup を始める。
 12. **品質**: `speed.timeScale > 1`(`fast=1`)のとき `createStage` に `quality: "low"`(影なし、`pixelRatio` 1、`antialias` なし)。`import.meta.env` を参照するのは `useLaunchParams.ts` のみ(品質は `speed` から決める)。
 13. **演出のスキップ(N14)**: `useStageDirector.skip()` は **`holding` 中だけ**有効で、現在の `view.outcome.seq` で `onFinished` を呼び(`finishedSeq` が更新され `holding` が解除される)、plan・telop を破棄し、`phase` を `idle` に戻す(次のフレームで打撃カメラ・待機姿勢へ即カット。`playKind` もクリア)。`holding` でないときは何もしない(冪等)。reducer・`GameState`・乱数に触れない(表示だけを飛ばす)。スキップの直後、表示用の view は最新の view に切り替わる(N8。スコア・実況が更新される)。次の投球は従来どおり windup から始まる(CPU 守備なら `cpuWaitMs` 後)。
-    - **入力の振り分け**(`routeStagePointer`、pointerdown のみ): 「主ポインタ操作」= マウス/ペンは `isPrimary` かつ `button === 0`、**タッチは `isPrimary` のみ(`button` は見ない)**。**`holding` が真なら、主ポインタ操作は常にスキップ**(`swingReady` や `enabled` に関係なく)。それ以外のポインタは無視。`holding` が偽のときは従来どおり、人間打撃中(`enabled`)のマウス/ペンの主ポインタ操作は「カーソルを移動してスイング」(スイング可否は `swingReady` で `swingNow` が判定)、タッチは「ドラッグ開始」、人間打撃中でなければ無視。`holding` と `swingReady` は同時に真にならない(次の投球は演出が終わってから始まる)が、同時に真になった場合も `holding` を優先してスイングを出さない。スキップに使った pointerdown は、スイングにもドラッグ開始にも使わない。
+    - **入力の振り分け**(`routeStagePointer`、pointerdown のみ) → 修正設計で変更(タッチの 2 本目の指・タップ・押しっぱなしの指、pointermove/pointerup の振り分けを追加。§3): 「主ポインタ操作」= マウス/ペンは `isPrimary` かつ `button === 0`、**タッチは `isPrimary` のみ(`button` は見ない)**。**`holding` が真なら、主ポインタ操作は常にスキップ**(`swingReady` や `enabled` に関係なく)。それ以外のポインタは無視。`holding` が偽のときは従来どおり、人間打撃中(`enabled`)のマウス/ペンの主ポインタ操作は「カーソルを移動してスイング」(スイング可否は `swingReady` で `swingNow` が判定)、タッチは「ドラッグ開始」、人間打撃中でなければ無視。`holding` と `swingReady` は同時に真にならない(次の投球は演出が終わってから始まる)が、同時に真になった場合も `holding` を優先してスイングを出さない。スキップに使った pointerdown は、スイングにもドラッグ開始にも使わない。
     - **キー**(`isSkipKey`): Space/Enter の keydown で、`holding` が真、`event.repeat` が偽、かつ target がリンク・select・input・textarea でないときスキップし、`preventDefault` する。`useKeyboardInput`(スイング)は `swingReady` のときだけ Space/Enter を扱うので排他。
     - 入力面(`bb-stage__input`)のハンドラは人間打撃中以外も常時つなぐ(CPU 打者のとき、人間守備のときもスキップできる)。`touch-action: none` は人間打撃中だけ。**ステージに重なるオーバーレイのうち操作しない要素(HUD・ネームプレート・ティッカー・テロップ・ヒント・フォールバック)は `pointer-events: none`** にして、タップが入力面に届くようにする。操作バーと、開閉する `details` の見出し・パネルだけ `pointer-events: auto`(バーの背景部分のタップはスキップ/スイングにならない)。
 14. **ユニフォーム色の切替(N9)**: director は `SceneFrame.uniforms` の元に、`useHeldView` が保持する**表示用の view の `uniforms`** を使う。3アウト目の打球演出中は保持される view が旧半イニングのものなので旧配色のまま、`holding` が解除された(演出の終了またはスキップ)次のフレームから新配色になる。render は `uniforms` が前回と変わったときだけアクセント材質の色を更新する。
@@ -354,9 +355,9 @@ types/ はどこからでも参照可
 | --- | --- | --- | --- |
 | windup | 壁時計(`cpuWaitMs` = 700ms、`fast` で 20ms) | 1.0 に正規化 | リリース前 |
 | 飛行 | `t = 0` | `durationMs` | 投手のフォロースルーは `t = 0` から `pitcherFollowMs` 400ms |
-| ミット | `durationMs` | 150ms | 見逃し/空振り/人間の判定待ち |
+| ミット | `durationMs` | 150ms | 見逃し/空振り/人間の判定待ち → 修正設計で変更(ミットへは動かさず着弾点で止め、接触なしは D+100ms で消す。§1) |
 | スイング | `startMs = max(contactAtMs − 132, base)`(人間の空振りは `atMs`) | 接触姿勢まで 60〜132ms(圧縮あり)、通常 200ms(`contactRatio` 0.66) | カーソルは同区間 `flash` |
-| 打球 | `contactMs = max(durationMs, base + 60)` | 滞空: フライ `700 + 17×距離`、ライナー `500 + 11×距離`、ゴロ `250 + 30×距離` | 距離は落下点(m)。ファウルは別式 |
+| 打球 | `contactMs = max(durationMs, base + 60)` | 滞空: フライ `700 + 17×距離`、ライナー `500 + 11×距離` → 修正設計で変更(フライ 1000 + 28d、ライナー 600 + 16d。§8)、ゴロ `250 + 30×距離` | 距離は落下点(m)。ファウルは別式 |
 | カメラ | `contactMs` | 位置 500ms(smoothstep)、注視点 250ms | 打撃カメラ→中継カメラ |
 | 野手の走行 | `contactMs` | 滞空 × 1.15 | 最寄りの1人のみ |
 | テロップ(開始) | インプレー: 落下時(`contactMs + hangMs`)/ **ファウル: 落下時(`contactMs + hangMs`)**/ 空振り: `max(durationMs, swing.contactAtMs)` / 見逃し・ボール: `max(durationMs, resolvedAtMs)` | インプレー 1100、ファウル・空振り 700、見逃し・ボール 500 | `StageTelop` の DOM。**どの種別も `telop.startMs ≥ durationMs`**(早い空振りでもボールが通過してから出す) |
@@ -379,19 +380,19 @@ types/ はどこからでも参照可
   - `colorsOf(state)`(`model/game/view.ts`): `teamColors = { away: teams.away.uniformColor, home: teams.home.uniformColor }`、`uniforms = { offense: 攻撃側(`offenseSide(half)`)チームの色, defense: 守備側チームの色 }`。乱数を使わず、state を変更しない。
 - `types/scene.ts`(新規)
   - `Vec3 = { x: number; y: number; z: number }`、`Rot3 = { x: number; y: number; z: number }`(three の Euler XYZ、rad)。座標系: **本塁原点、+x = 右(ライト側)、+y = 上、−z = センター方向**、単位は m。
-  - `CameraPose = { position: Vec3; target: Vec3; fovDeg: number }`
+  - `CameraPose = { position: Vec3; target: Vec3; fovDeg: number }` → 修正設計で変更(`lift` を追加。§11)
   - `CharacterPose = { visible: boolean; position: Vec3(足元); yaw: number; scale: number; torso: Rot3; head: Rot3; armL: Rot3; armR: Rot3; legL: Rot3; legR: Rot3 }`
   - `BatPose = { visible: boolean; sweepYaw: number; tilt: number; height: number }`(モックの `swing.rotation.y`・`batTilt.rotation.x`・グループの高さ(m))、`BatterPose = CharacterPose & { bat: BatPose }`
   - `UniformColors = { offense: number; defense: number }`(24bit RGB。打者=`offense`、投手・捕手・野手=`defense`)
   - `ScenePhase = "idle" | "windup" | "flight" | "play"`
-  - `SceneFrame = { camera: CameraPose; uniforms: UniformColors; ball: { visible: boolean; position: Vec3 }; pitcher: CharacterPose; catcher: CharacterPose; batter: BatterPose; fielders: readonly CharacterPose[](固定順 7人: 一塁・二塁・遊撃・三塁・左・中・右); zone: { visible: boolean; grid: boolean }; cursor: { visible: boolean; position: Vec3; scaleX: number; scaleY: number; flash: boolean }; aim: { visible: boolean; position: Vec3; width: number; height: number } }`
+  - `SceneFrame = { camera: CameraPose; uniforms: UniformColors; ball: { visible: boolean; position: Vec3 }; pitcher: CharacterPose; catcher: CharacterPose; batter: BatterPose; fielders: readonly CharacterPose[](固定順 7人: 一塁・二塁・遊撃・三塁・左・中・右); zone: { visible: boolean; grid: boolean }; cursor: { visible: boolean; position: Vec3; scaleX: number; scaleY: number; flash: boolean }; aim: { visible: boolean; position: Vec3; width: number; height: number } }` → 修正設計で変更(`layout`・`ball.scale`・`zone.pulse`・`landingMark` を追加。§11)
     - **単位はすべてワールド m**。`cursor.scaleX`/`scaleY` は楕円の**半径**(m)で、`radii.rx × zone.halfWidth`(0.26)・`radii.ry × (zone.top − zone.bottom) / 2`(0.30)。単位円のメッシュに掛ける。`aim.width`/`height` は選択セルの**全幅・全高**(m)で、セル幅(ゾーン単位 2/3)× `zone.halfWidth`(= 約0.173m)、× ゾーン半高(= 0.2m)。`aim.position` は `cellToWorld(cell)`。
 - `types/stage.ts`(新規)
   - `StageGeometry`: **`zone: { halfWidth: number; bottom: number; top: number; planeZ: number }`(ゾーン実寸。初期値 0.26/0.42/1.02/0.03。`WORLD_PARAMS` から渡し、`zoneToWorld` と同じ値)**、**`ballRadius: number`(初期値 0.1)**、地面・内野の土と芝・マウンド・ラバー・塁・本塁・ファウルライン・打席ボックス・フェンス(半径は `LANDING_PARAMS.fenceRadius`)・スタンド・屋根の寸法(モックの `flat(...)`/`arc(...)`/`BoxGeometry` の値を転記したフィールド。**フィールド名はステップ A の実装者が定義し、B1(生成側)と B3(消費側)はそれに従う**)。`render/` は寸法を直書きせず、すべてここから読む。
   - `CrowdCell = { col: number; row: number; paletteIndex: number }`(観客席の点の配置。色は `render/look.ts` のパレットが解決する)。
   - `CharacterRig = { hipX: number; hipY: number; torsoY: number; shoulderX: number; shoulderY: number; headY: number; armLength: number }`(関節の寸法。初期値はモックの 0.14/0.5/0.55/0.36/0.48/0.98/0.38)。
   - `ScreenRect = { left: number; top: number; width: number; height: number }`(**キャンバス左上基準**の CSS px)、`StageStatus = "loading" | "ready" | "unsupported" | "lost"`、`StageQuality = "normal" | "low"`。
-  - `StageOptions = { container: HTMLElement; geometry: StageGeometry; crowd: readonly CrowdCell[]; rig: CharacterRig; battingCamera: CameraPose; quality: StageQuality; onStatusChange: (status: StageStatus) => void; onResize: (size: { width: number; height: number }) => void }`(`battingCamera` は初期カメラと `zoneScreenRect` の計算に使う)
+  - `StageOptions = { container: HTMLElement; geometry: StageGeometry; crowd: readonly CrowdCell[]; rig: CharacterRig; battingCamera: CameraPose; quality: StageQuality; onStatusChange: (status: StageStatus) => void; onResize: (size: { width: number; height: number }) => void }`(`battingCamera` は初期カメラと `zoneScreenRect` の計算に使う) → 修正設計で変更(`battingCameraFor(aspect, layout)` に。§4・§11)
   - `StageHandle = { apply(frame: SceneFrame): void; resize(width: number, height: number): void; pickPlane(clientX: number, clientY: number): Vec3 | null; zoneScreenRect(): ScreenRect | null; dispose(): void }`
   - `createStage(options: StageOptions): StageHandle | null` のシグネチャ(`render/stage.ts` が実装し、WebGL2 が取れない・`WebGLRenderer` の生成に失敗したときは `null`)。関数そのものは実行時コードなので `types/` に置けない。ステップ C2 と C3 はこのシグネチャを契約として並列実装する。
 - `model/world` 内部の型(`types/` には置かない。`render` は参照しない): `PlayPlan`・`BattedPlan`・`SceneFrameInput`・`StagePointerAction`・`SwingRecord`(下記「world 設計」)。`hooks/` は `model/world` から import してよい。
@@ -407,13 +408,13 @@ types/ はどこからでも参照可
 | ゾーン実寸 | 半幅 x ±0.26m、y 0.42〜1.02m(中心 0.72、半高 0.30)、z = 0.03 | モック `ZONE`。`zoneToWorld(p) = (p.x×0.26, 0.72 + p.y×0.30, 0.03)`。ゾーン外(±2まで)も線形に外挿。`StageGeometry.zone` と同じ値 |
 | ボール半径 | 0.1m | モック。`StageGeometry.ballRadius` |
 | リリース点 | (−0.30, 1.65, −18.1) | 投手(右投げ)の手先。投手の release ポーズから `fk.ts` で求めた手先位置と 0.15m 以内(テストで固定) |
-| ミット | z = 1.6、y = `landing.y − 0.2` | モックの `endZ`・`target.y − 0.2` |
+| ミット | z = 1.6、y = `landing.y − 0.2` | モックの `endZ`・`target.y − 0.2` → 修正設計で変更(ミットは廃止し、ボールは着弾点で止める。§1) |
 | 投手 | 足元 (0, 0.25, −18.4)、yaw 0 | モック。マウンド高 0.25 |
 | 捕手 | (0, −0.25, 1.3)、yaw π | モック。打撃カメラの視界を遮るため、中継カメラの `blend ≥ 0.35` になってから `visible` |
-| 打者 | (−0.85, 0, 0.05)、yaw π/2、頭は投手側へ | モック。右打ち固定(引っ張り=レフト側 x<0 と整合) |
+| 打者 | (−0.85, 0, 0.05)、yaw π/2、頭は投手側へ | モック。右打ち固定(引っ張り=レフト側 x<0 と整合) → 縦長は x −0.65(アスペクトで補間)に変更(§4) |
 | 野手7人(x, z) | 一塁 (16.5,−23)、二塁 (6,−32.5)、遊撃 (−7,−32.5)、三塁 (−16.5,−23)、左 (−38,−72)、中 (0,−86)、右 (38,−72)。scale 1.15 | モック `FIELD_POS` |
-| 打撃カメラ | 位置 (0, 1.25, 3.4)、注視 (0, 1.0, −18)、fov 34° | モック `BATTING_CAM`。テストでモックの値に固定(ステップ G でも変更しない) |
-| 中継カメラ | 位置 = (ball.x×0.45, 16 + ball.y×0.35, 22 + ball.z×0.45)、注視 = (ball.x, max(0, ball.y×0.6), ball.z)、fov 34° | モックの式。係数は `WORLD_PARAMS` に外出し(ステップ G で調整してよい)。位置の blend 500ms、注視点の blend 250ms(smoothstep) |
+| 打撃カメラ | 位置 (0, 1.25, 3.4)、注視 (0, 1.0, −18)、fov 34° | モック `BATTING_CAM`。テストでモックの値に固定(ステップ G でも変更しない) → 横長のみ。縦長用の打撃カメラとレイアウト別の構図は修正設計で追加(§4) |
+| 中継カメラ | 位置 = (ball.x×0.45, 16 + ball.y×0.35, 22 + ball.z×0.45)、注視 = (ball.x, max(0, ball.y×0.6), ball.z)(縦長の `kLook` と FOV は修正設計で変更。§4・§8)、fov 34° | モックの式。係数は `WORLD_PARAMS` に外出し(ステップ G で調整してよい)。位置の blend 500ms、注視点の blend 250ms(smoothstep) |
 | スイング | 全体 200ms、接触姿勢まで 132ms(`contactRatio` 0.66)、`minSwingMs` 60ms、CPU の空振りのずれ `missOffsetMs` 70ms | モック(`swingK` の 0.2 秒・接触時の 0.66)から。ステップ G でも変更しない |
 | 球場寸法 | 塁間 27.4(= `LANDING_PARAMS.baseDistance`、塁の座標は (±19.4, −19.4)/(0, −38.8))、フェンス半径 105(= `LANDING_PARAMS.fenceRadius`。**モックの100から変更**)、スタンドの内側 109〜外側 147、高さ 34、屋根半径 155 | モックの寸法を転記。本塁の五角形は**尖りを捕手側(+z)に向ける**(モックは投手側向きだった) |
 | フォグ | 色 0xb9d9f2、near 150、far 320 | モック |
@@ -426,7 +427,7 @@ types/ はどこからでも参照可
 
 **ボール軌道(`path/`)**
 
-- `pitchBallAt(flight, elapsedMs) → Vec3`: 進行度 `p = clamp(elapsed / durationMs, 0, 1)`。`aim' = zoneToWorld(landing) + bendWorld`(`bendWorld = getPitchSpec(kind).bend × 半幅/半高 × bendGain(2.5)`)に向かって直進し、**終盤に曲がる**: `pos = lerp(release, aim', p) − bendWorld × p³ + (0, arcHeight × 4p(1−p), 0)`(`arcHeight` 0.12)。`p = 1` では `zoneToWorld(landing)` を直接返す(浮動小数の誤差を避ける)。`p = 0` はリリース点に厳密一致。z は単調に増える。
+- `pitchBallAt(flight, elapsedMs) → Vec3`: 進行度 `p = clamp(elapsed / durationMs, 0, 1)`。`aim' = zoneToWorld(landing) + bendWorld`(`bendWorld = getPitchSpec(kind).bend × 半幅/半高 × bendGain(2.5)`)に向かって直進し、**終盤に曲がる**: `pos = lerp(release, aim', p) − bendWorld × p³ + (0, arcHeight × 4p(1−p), 0)`(`arcHeight` 0.12) → 修正設計で変更(式を `lerp(release, landing, g(p)) + break·(pⁿ − p)` に、曲がりの向き・誇張・時間写像 `g` を変更。§6)。`p = 1` では `zoneToWorld(landing)` を直接返す(浮動小数の誤差を避ける)。`p = 0` はリリース点に厳密一致。z は単調に増える。
 - `mittBallAt(flight, sinceArrivalMs) → Vec3`: `landing` からミット位置へ `mittMs`(150ms)で線形に進み、以降はミット位置。`sinceArrivalMs = 0` は `pitchBallAt(flight, durationMs)` に厳密一致。
 - `planBattedBall(ball, result, seq, start: Vec3) → BattedPlan`: `BattedPlan = { start: Vec3; end: Vec3; peak: number; hangMs: number; hops: number; shape: "fly" | "liner" | "ground"; overFence: boolean }`。`end` の x・z は `computeBattedLanding(ball, result, seq)` の `landingToWorld`(= `GameView.fieldMarker` と同値)。`y`: ホームラン以外は 0、ホームランはスタンド斜面の高さ(`StageGeometry` から算出)。`peak`・`hangMs` は打球タイプ別の式(上の時間表。フライの頂点 = `0.24 × 距離`、ライナー `0.08 ×`、ゴロ 0 でバウンド3回・高さ 0.35m から減衰)。
 - `planFoul(seq, start) → BattedPlan`: `seq` の偶奇と黄金比数列で、ファウルライン外側(|x| > |z|)への飛球、またはバックネット方向(z>0)への飛球を決定論的に作る。
@@ -462,7 +463,7 @@ types/ はどこからでも参照可
 ### render 設計(`render/`)
 
 - **共通**: `import` は `types/` と `three` のみ。名前付き import のみ(`import * as THREE` 禁止、addons 不使用)。three オブジェクトは `getObjectByName` で探さず、ビルダーが返す参照を保持する。関数は60行以内(球場は部品ごとの小関数に分割)。`exactOptionalPropertyTypes` のため three のオプションに `undefined` を渡さない。チーム名・チーム id・`Team` は扱わない。ゾーン・ボールの寸法は `StageGeometry` から読み、直書きしない。
-- `look.ts`: 色管理・ライト・フォグ・パレット・輪郭線の太さ(1.07)・`fovFor(baseFovDeg, aspect)`(と、その定数 `MIN_HALF_WIDTH_TAN`(初期値 0.37)の export)・**`framingLift(aspect)`**(と定数 `PORTRAIT_LIFT`(初期値 0.16)・`LIFT_FULL_ASPECT`(0.6)・`LIFT_ZERO_ASPECT`(1.2)の export)・`gradientPixels(stops, height)`・ユニフォーム色の既定値(最初の `apply` までの仮の色。モックの青/赤)を集約する、**モック(r128)との差の吸収点**。第一候補は r128 の描画経路の再現: `ColorManagement.enabled = false` + `renderer.outputColorSpace = LinearSRGBColorSpace`、ライト強度は r128 の値に π を掛けた値(物理単位への換算)。見た目が合わなければステップ G で再調整する。`fovFor` は縦横比が小さいとき、ゾーン平面での画面の半幅が約 1.25m(`tan` 換算 `MIN_HALF_WIDTH_TAN`)以上になるよう縦 FOV を広げる(`max(base, 2·atan(MIN_HALF_WIDTH_TAN / aspect))`。16:10 では 34° のまま、4:5 で約 50°)。`framingLift` は縦長の画面で、下部のティッカー+操作バーがゾーンを覆わないよう、シーンを上へずらす量(画面高に対する比)を返す(`aspect ≥ LIFT_ZERO_ASPECT` で 0、`aspect ≤ LIFT_FULL_ASPECT` で `PORTRAIT_LIFT`、その間は線形)。
+- `look.ts`: 色管理・ライト・フォグ・パレット・輪郭線の太さ(1.07)・`fovFor(baseFovDeg, aspect)` → 修正設計で変更(`fovFor`・`framingLift` は `model/world/camera` へ移動。§4)(と、その定数 `MIN_HALF_WIDTH_TAN`(初期値 0.37)の export)・**`framingLift(aspect)`**(と定数 `PORTRAIT_LIFT`(初期値 0.16)・`LIFT_FULL_ASPECT`(0.6)・`LIFT_ZERO_ASPECT`(1.2)の export)・`gradientPixels(stops, height)`・ユニフォーム色の既定値(最初の `apply` までの仮の色。モックの青/赤)を集約する、**モック(r128)との差の吸収点**。第一候補は r128 の描画経路の再現: `ColorManagement.enabled = false` + `renderer.outputColorSpace = LinearSRGBColorSpace`、ライト強度は r128 の値に π を掛けた値(物理単位への換算)。見た目が合わなければステップ G で再調整する。`fovFor` は縦横比が小さいとき、ゾーン平面での画面の半幅が約 1.25m(`tan` 換算 `MIN_HALF_WIDTH_TAN`)以上になるよう縦 FOV を広げる(`max(base, 2·atan(MIN_HALF_WIDTH_TAN / aspect))`。16:10 では 34° のまま、4:5 で約 50°)。`framingLift` は縦長の画面で、下部のティッカー+操作バーがゾーンを覆わないよう、シーンを上へずらす量(画面高に対する比)を返す(`aspect ≥ LIFT_ZERO_ASPECT` で 0、`aspect ≤ LIFT_FULL_ASPECT` で `PORTRAIT_LIFT`、その間は線形)。
 - `stadium.ts`: `buildStadium(geometry, crowd)`。地面(縞の芝)・内野・マウンド・塁・本塁・ファウルライン・打席ボックス・フェンス・スタンド(観客のドット柄)・屋根・空・ライト。テクスチャは **`DataTexture` のみ**(`CanvasTexture`・`document` を使わず node で生成可能)。ピクセル配列は `Uint8Array.from(...)` を使うヘルパーに集約する(変数添字の書き込みを避ける)。
 - `character.ts`: `buildCharacter(rig, style) → { root, joints: { torso, head, armL, armR, legL, legR }, bat }`。モックの `makePlayer` を再現(脚・靴・胴・ベルト・縞・頭・帽子・つば・マーク・目・ハイライト・頬・腕・手、グローブ、バット)。`MeshToonMaterial` + 3段の `gradientMap`(`DataTexture`、`RedFormat`、`NearestFilter`)+ 背面法の輪郭線。`buildLeg`/`buildTorso`/`buildHead`/`buildFace`/`buildArm`/`buildBat` に分割する。**ユニフォームのアクセント色(ベルト・縞・帽子・つば)は `style.accent`(共有の `MeshToonMaterial`)を使う**。`createTeamMaterials(gradient) → { offense, defense }` が攻撃用・守備用の2材質を作り、打者は `offense`、投手・捕手・野手は `defense` を共有する。`applyUniforms(materials, uniforms)` は2材質の `color` を `uniforms.offense`/`uniforms.defense` に更新する(変化があるときだけ呼ぶ)。
 - `pose-apply.ts`: `applyPose(parts, pose)`・`applyBatterPose(parts, pose)`(明示フィールドの代入)。
@@ -477,7 +478,7 @@ types/ はどこからでも参照可
 | hook | 変更 | 内容 |
 | --- | --- | --- |
 | `useStage3d({ quality })` | 新規 | `containerRef`・`stage`(state)・`status`・`zoneRect`・`pickZone(clientX, clientY)`(`stage.pickPlane` → `worldToZone`。平面と交差しなければ `null`)・`getZoneRect()` を返す。**生成 effect の deps は `quality` のみ**(半イニングごとに作り直さない)。`createStage` の生成と cleanup の `dispose`(と `stage` state を `null` に戻す)。`buildStageGeometry`・`buildCrowdPattern`・`CHARACTER_RIG`・`battingCamera()` を `StageOptions` に渡す(静的データは model で作り hooks 経由で render へ渡す)。`createStage` が `null` なら `status = "unsupported"`。ゾーン矩形は `onResize` で更新する。初期カメラは `battingCamera`、ユニフォーム色は director の最初の `apply` で確定する(`sceneFrameAt` に依存しない) |
-| `usePitchFlight({ flight, arriveAfterMs, leadMs, timeScale, onArrive })` | 変更 | SVG 描画(`ballRef`/`ballRadius`)を削除。開始時刻を `useLayoutEffect` で記録し、`flight` が `null` になっても保持。`arriveAfterMs − leadMs` で `onArrive` を1回。`getElapsedMs()` を返す |
+| `usePitchFlight({ flight, arriveAfterMs, leadMs, timeScale, onArrive })` | 変更 | SVG 描画(`ballRef`/`ballRadius`)を削除。開始時刻を `useLayoutEffect` で記録し、`flight` が `null` になっても保持。`arriveAfterMs − leadMs` で `onArrive` を1回。`getElapsedMs()` を返す → 修正設計で変更(`getSwingAtMs` を追加。§2) |
 | `usePointerInput({ enabled, holding, swingReady, onSkip, pickZone, getZoneRect, getCursor, moveCursorTo, onSwing })` | 変更 | 対象要素を `HTMLElement`(入力面の div)に一般化。**pointerdown は `routeStagePointer` の結果で分岐する**(`skip` → `onSkip()` のみ。`swing` → カーソル移動+`onSwing()`。`drag-start` → 相対ドラッグの開始。`ignore` → 何もしない)。pointermove は従来どおり(`enabled` のときカーソルに反映)。下表のポリシー |
 | `useBattingControls({ enabled, holding, swingReady, cursorRadii, getElapsedMs, onSwing, onSkip, pickZone, getZoneRect })` | 変更 | `svgRef`/`cursorRef`/`applyCursor`/`useLayoutEffect` を削除し、`getCursor` と `getCursorView()`(`{ point, radii }`)を返す。カーソル位置は ref(`INITIAL_CURSOR` から)。`swingKind`・`currentRadii`・`swingNow`・`pointerHandlers` は従来どおり。`holding`・`onSkip` を `usePointerInput` へ渡す |
 | `useSkipInput({ holding, onSkip })` | 新規 | `window` の keydown を購読し、`isSkipKey` が真なら `preventDefault()` して `onSkip()`。cleanup でリスナ解除。`useKeyboardInput`(スイング)は変更しない |
@@ -494,7 +495,7 @@ types/ はどこからでも参照可
 | **`holding` 中の pointerdown(マウス/ペンの主ボタン、タッチの主ポインタ)** | **`onSkip()` のみ。カーソル移動・スイング・ドラッグ開始には使わない** |
 | マウス/ペンの pointermove | `pickZone` → `clampCursor` でカーソルをその位置へ(絶対位置) |
 | マウス/ペンの primary pointerdown(`holding` でない) | その位置へ移動して即スイング(`swingReady` のときだけ成立) |
-| **タッチの pointerdown(`holding` でない・人間打撃中)** | **カーソルは動かさず、開始点と開始時のカーソル位置を記録して `setPointerCapture`** |
+| **タッチの pointerdown(`holding` でない・人間打撃中)** | **カーソルは動かさず、開始点と開始時のカーソル位置を記録して `setPointerCapture`** → 修正設計で変更(タップ候補の記録・2 本目の指・押しっぱなしの指。§3) |
 | **タッチの pointermove(キャプチャ中)** | **`zoneDeltaFromScreenDelta(指の移動量, getZoneRect())` を開始時のカーソル位置に加えて `clampCursor`(スイングはしない)** |
 | 「スイング」ボタン pointerdown / Space・Enter(`swingReady`)/ Z・X / 矢印・WASD | 第1版のとおり |
 | **`holding` 中の Space/Enter** | **`useSkipInput` がスキップ**(`useKeyboardInput` は `swingReady` でないため何もしない) |
@@ -643,6 +644,609 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 - three のオブジェクトは `getObjectByName` で探さずビルダーの参照を保持する。`exactOptionalPropertyTypes` のため three のオプションに `undefined` を渡さない。
 - ステップ0で three 風スニペットを `npx eslint --stdin` に流して実測し、`no-param-reassign` 相当(引数オブジェクトのプロパティ代入 `mesh.position.y = …`)・`Map`・`.set()` が通ることを確認する。error になる書き方があれば規約表を更新して報告する。
 
+## 修正設計(ゲート2 修正依頼: 操作性・投球軌道、2026-10-13)
+
+本節は、第2版(Three.js 3D)の遊べる版をスマホで試遊した人間のゲート2「修正依頼」への修正設計である。**本節は既存の本文に優先する。** 既存の本文は書き換えず、本節で変わる記述にだけ「→ 修正設計で変更」と注記した(一覧は本節末尾「既存本文への注記一覧」)。この下の既存「実装ステップ」(0〜G)は完了済みの履歴であり、次に実装するのは本節の「修正の実装ステップ(H0〜H12)」である。
+
+### 背景と根拠
+
+- **経緯**: 2026-10-13、遊べる版をスマホで試遊したユーザーが「操作性、球の軌道が終わってる」と判断し、ゲート2が修正依頼になった([テストレポート](../tests/2026-10-12-baseball-game.md)「人間確認ゲート記録」)。ひどい点は「タイミングが合わない」「カーソルが思い通りに動かない」「投球の軌道が不自然」、端末はスマホ。自動テスト(単体 1142 件・E2E 13 件)は全て合格しており、**野球ゲームとしての手触りが不合格**だった。**目標: スマホで遊んで、野球ゲームとして普通に打てること。**
+- **根拠**: [診断](../investigations/_parts/baseball-game/2026-10-13-feel-diagnosis.md)(計測値・原因箇所・改善案・ボット試算。以下「診断」)と、修正案を実際に適用して作った**修正前後の比較画像**(下の「比較画像から分かったこと」)。本節の数値は診断の計測値と比較画像の実測から導いた**初期値**で、各節に「調整してよい範囲」と受け入れ基準を書いた。診断のスクリプト(投影・ボット)は使い捨て(scratchpad、コミット対象外)なので、再現が必要な部分は単体テスト(`camera/project.ts`・`path/pitch-screen.test.ts`・`game/bot-balance.test.ts`)として持つ。
+- **用語**: 以下、`D` = 投球の `flight.durationMs`(ボールがゾーン平面に着く時刻。判定の基準時刻)、`Δt` = `swing.atMs − D`(負 = 早い)。「打撃レイアウト」= 人間が打つ画面、「守備レイアウト」= 人間が投げる画面(ステージの構図が違う。§4)。
+- **共有メモリの適用**: [[game-feel-needs-playability-check]](到達ずれ・遅延補正・ボット試算を数値の目標にする。本節の受け入れ基準が該当)、[[swiftshader-playwright-input-latency]](E2E の安定化)、[[dom-key-input-exclusivity]](キー入力の排他は変えない)、[[visual-scope-must-be-shown-at-gate1]](ゲート1で修正前後の見た目を見せる)、[[frontend-3d-three-in-render-segment]](境界は維持し、カメラ構図の決定を `model/world` に寄せる。同エントリを更新済み)。
+- **設計のしかた**: DB の変更は無い(`db-designer` への委譲なし)。フロントエンド構成は既存 feature へのファイル追加のみ(新セグメントなし)で、構成判断を伴わないため `frontend-designer` への委譲は行わない。
+
+### 比較画像から分かったこと(修正案の適用結果。ゲート1で提示する)
+
+[[visual-scope-must-be-shown-at-gate1]] の適用。別担当が、本節の修正案(縦長カメラ B'・ミット・軌道式・影・描画順)を実際に適用して撮った画像が `docs/designs/assets/2026-10-13-baseball-game-feel/` にある。**この比較で、当初の案のままでは足りない点が 8 つ見つかった**。設計への反映は右の列のとおり(各節に詳細)。
+
+| 画像 | 内容 |
+| --- | --- |
+| [before-after-batting-view.png](assets/2026-10-13-baseball-game-feel/before-after-batting-view.png) | 打撃画面の修正前後(スマホ縦、ストレート、到達の 400ms 前・200ms 前・到達時) |
+| [before-after-pitch-strobe-slider.png](assets/2026-10-13-baseball-game-feel/before-after-pitch-strobe-slider.png)・[-curve](assets/2026-10-13-baseball-game-feel/before-after-pitch-strobe-curve.png)・[-fork](assets/2026-10-13-baseball-game-feel/before-after-pitch-strobe-fork.png) | 球種別のストロボ合成(修正前 / 軌道式のみ / 軌道式+縦長カメラ)と、直線からのずれの形 |
+| [before-after-arrival.png](assets/2026-10-13-baseball-game-feel/before-after-arrival.png) | 到達時の拡大(スマホ縦・デスクトップ)。ミット・影・描画順 |
+| [batter-position-options.png](assets/2026-10-13-baseball-game-feel/batter-position-options.png) | 縦長カメラでの打者位置 4 案(接触の瞬間のバットとボールの重なり) |
+
+![打撃画面の修正前後](assets/2026-10-13-baseball-game-feel/before-after-batting-view.png)
+
+![打者位置 4 案](assets/2026-10-13-baseball-game-feel/batter-position-options.png)
+
+| # | 比較で分かったこと | 設計の対応 | 節 |
+| --- | --- | --- | --- |
+| 1 | 縦長カメラ B' では、**守備画面**でティッカーの上端(y=476)がゾーン(y 376〜550)の下 42% を隠す(グリッド下段・着弾付近も)。打撃画面はティッカー y=663 で問題なし | **ステージの構図を打撃/守備のレイアウトで分ける**。守備は水平半幅 tan 0.38・lift 0.27 でゾーン 101×117px とし、5×5 格子全体を y 268〜464 に収める。打撃は B'(lift 0.25) | §4 |
+| 2 | B' の到達時の影は y=653 でティッカーの 10px 上、本塁の後ろ半分はティッカーの下。デスクトップは新旧とも到達時の影が画面外(y=760)で、影・本塁はデスクトップではタイミングの手がかりにならない | 本塁の発光はやめ、**ゾーン枠(常に画面内)を D の瞬間に光らせる**。影は 1 つ・濃くして高さの手がかり(深さ・落下の見え方)として残す | §6 |
+| 3 | z=0.5 のミットは縦長カメラに近く、到達後 40ms でボールが 95px 落ち 59→72px に膨らむ。D ちょうどのスイングでも接触姿勢は D+60 で、その時点でボールはミットにあり、接触点(z −0.2)へ 0.7m 跳び戻る | **ミットへは動かさず、ボールを着弾点(ゾーン平面)で止める**。接触ありなら接触の瞬間まで待ち、接触なしなら D+100ms で消す。接触点の z をゾーン平面に合わせる(0.03) | §1・§4 |
+| 4 | 新しい式で横の向きは直るが、捕手後方のカメラでは画面上の直線からのずれが 0.4〜10px(フォーク 0〜0.4、カーブ 5、スライダー 10)しかなく、縦の変化は速さの変化にしか見えない。画面上の動きの 72〜80% が最後の 300ms に集中する(現行 66〜78%) | **変化量を誇張**(`bendGain` 1.0 → 1.8)し、**進行の時間写像**(出だしを速く・終盤を遅く。係数 0.5)で最後の 300ms の割合を約 57% に。単体テストで画面上のずれ量・割合を守る | §6・受け入れ基準 |
+| 5 | 縦長カメラは中継カメラへの blend の起点でもあり、`battingCamera()` 自体をアスペクト依存にする必要がある(ステージ側の差し替えでは接触時にカメラが跳んだ)。`MIN_HALF_WIDTH_TAN` 0.25 は縦長の中継カメラも狭める | blend の起点を **`battingCameraFor(aspect, layout)`**(model の `sceneFrameAt` が作る `frame.camera`)にし、中継カメラの水平半幅 tan は別定数(0.37)にする。接触時にカメラが跳ばないことを単体テストで固定 | §4 |
+| 6 | スキップのヒント(x 92〜298、y 422〜449)が新しいゾーンの上中央に重なる。投手の頭(y≈157)がネームプレート下端(155)のすぐ下 | ヒントの位置をレイアウト別に上へ(打撃 30%・守備 27%)。打撃の lift を 0.26 → 0.25 にして投手の頭を y≈171 に(ネームプレートとの間 16px) | §4・H8 |
+| 7 | 打者を動かすだけでは「頭が画面内・バットとボールが合う・ゾーンが隠れない」を同時に満たせなかった((−0.6, −1.2) は頭が入るがバットが 85px 上、(−0.45, −0.25) はバットが合うが腕がゾーン上内側を隠す) | 打者の位置・カメラ・接触点を**組み合わせて**決める: 縦長のカメラを −0.25m 横にずらし、打者は x −0.65(z は 0.05 のまま)、**接触点の z をゾーン平面(0.03)に合わせてバットとボールの奥行きをそろえる**(バットの高さは既存の `batHeightInRoot`)。頭 x≈73px、バットのずれ ≈0px、手はゾーン枠の左 28px 以上離れる(計算) | §4 |
+| 8 | カーソルをボールの奥に描くには描画順だけでは足りない(Group の renderOrder が子全体の第1キーになり、ボールは不透明パスで先に描かれる) | 実装上の注意として H5 に明記: カーソルの Group の `renderOrder` を外して各メッシュに個別に付け、ボール(本体と輪郭)を透明パスへ移し(`transparent: true`)、カーソルの塗りの `depthWrite` を切る | §6・H5 |
+
+### スコープ
+
+**やること**: 診断 #1〜#10 のすべてと、操作性の修正で崩れる打撃バランスの再調整。
+
+| 診断 | 問題(診断の計測値) | 修正の要点(値は「決定値の一覧」) | 節 | ステップ |
+| --- | --- | --- | --- | --- |
+| #1 | 「届いた」と見える時刻と判定の基準時刻がずれ(見た目の到達 D+150〜261ms)、遅いスイングは黙って捨てられる(D+150 で見逃し確定) | ボールを D でゾーン平面に止める(ミットへ動かさない)。人間の見逃し確定を D+250(`lateCutoffMs`)に延ばし、遅いスイングは振り遅れの空振り/ファウルとして必ず演出を返す。スイング後に「早い/遅い/ジャスト」を表示。D の瞬間にゾーン枠を光らせる | 1, 6, 7 | H0, H1, H3, H4, H5, H6, H8, H9 |
+| #2 | タッチ遅延を補正していない(判定時刻 = ハンドラ実行時刻) | `atMs` を `event.timeStamp` から求め、入力種別ごとに遅延補正(タッチ 70ms、マウス・キー 20ms)。タッチ端末は pixelRatio ≤ 1.5・影マップ 1024 | 2, 9 | H0, H3, H4, H5, H7 |
+| #3 | スマホでボールが小さく(リリース 4.9px)、飛行の 9 割が投手の体に重なる | 縦長(アスペクト < 1)専用の打撃カメラ(案 B' を出発点に、−0.25m 横にずらす)。打撃/守備のレイアウトで構図を分ける。横長は現行のまま | 4 | H0, H2, H5, H6, H7, H9 |
+| #4 | タッチではステージをタップしても振れない。片手は空振り 45%。置いた指が次の球でドラッグにならない | ドラッグ中の 2 本目の指は即スイング、1 本指のタップもスイング、押しっぱなしの指は演出終了後の最初の pointermove でドラッグ開始 | 3 | H4, H7 |
+| #5 | ゾーン(81×94px)とカーソル(59×41px)が指より小さい | #3 のカメラ(打撃)でゾーン 154×174px・カーソル 112×76px になり、カメラ変更だけで足りる(カーソル半径のパラメータは変えない) | 4, 5 | H2 |
+| #6 | 重なって見えるのに空振り(判定はボール中心のみ。縁が触れて見える範囲は判定の 2.6 倍)。カーソルがボールの上に描かれる。`cursorScale` が表示に反映されない | 判定楕円にボール半径(rx +0.23、ry +0.20)を加える(質 q は中心距離のまま)。表示カーソルに `cursorScale` を反映。ボールをカーソルの塗りより手前に描く | 5, 6 | H3, H5, H9 |
+| #7 | 変化球の横の曲がりが逆向き | `PitchSpec.bend` を「終盤の曲がり量」と定義し直して符号を実際の右投手どおりに(スライダー・カーブ = グラブ側 +x、シュート = 腕側 −x) | 6 | H1 |
+| #8 | 軌道が「ほぼ止まって見えて最後に急加速」。曲がりが画面上で 0.4〜10px しか見えない | 式を `lerp(release, landing, g(p)) + break·(pⁿ − p)` に(n = 2.2)。変化量を誇張(`bendGain` 1.8)、進行の時間写像 `g` で最後の 300ms の割合を約 57% に。守備側(人間が投げる)も同じ式 | 6 | H1, H10 |
+| #9 | 影が 2 つで薄い(10×2px)。本塁・影は画面外/操作バーの下でタイミングの手がかりにならない | 影を 1 つ(円盤)にして濃く・大きく。D の瞬間に**ゾーン枠**を光らせる(常に画面内) | 6 | H5, H6 |
+| #10 | 打球が中継カメラでほとんど見えない(径 1.2〜4.8px) | 最小表示径(表示高の 0.95% = スマホで 8px)・落下点のリング・滞空の延長・縦長の kLook 0.4 | 8 | H0, H2, H5, H6 |
+| — | 操作性を直すと安打が増えすぎる(ボット B で 75%) | 打球タイプ・強さ・結果表と CPU 難易度の再調整。人間代理ボットを単体テストで持つ | 10 | H3 |
+
+**やらないこと(スコープ外)**:
+
+- **初心者向けアシスト**(カーソルの自動寄せ・吸着)と、**タイミング補正の設定 UI**(補正量は固定値)。
+- **守備側(人間が投げる)の操作改善**(windup の短縮、投球直後の狙いと着弾点の重ね表示。診断 §3)。ただし曲がりの向きと軌道の式(#7・#8)と、守備レイアウトの構図(§4)は守備側の見え方に効く。
+- 横長(デスクトップ)の打撃カメラの変更。判定窓(±150ms)・ミート/強振の仕組み・結果の種類・選手の能力値の変更。
+- ゴロの転がり表現、球場・キャラクター・HUD のデザイン変更、効果音。
+- 実機での自動検証(Playwright の headless のみ。実機の手触りはゲート2の人間の試遊で確認する)。
+
+### 設計の判断と論点(P1〜P17、壁打ち用)
+
+本節で新たに置いた判断を P1〜P17 として並べる(既存の N1〜N17 は引き継ぐ)。orchestrator の決定事項を前提に、自分で決められることは決めた。**「要確認」は 3 つだけ**(Q-A〜Q-C。P5・P6・P15 の行)。いずれも既定を決めてあり、不同意でも設計の骨格(ステップ H0〜H12)は変わらない。なお P1(ミット)は orchestrator の当初の決定(z 0.5・40ms)から、比較画像の実測(上の表 #3)に基づいて変更した。
+
+| # | 項目 | 設計での決定 | 根拠 | 壁打ち |
+| --- | --- | --- | --- | --- |
+| P1 | 到達後のボールと「届いた」の見た目 | ボールは D でゾーン平面(z 0.03)に**止まる**(ミットへは動かさない)。そのスイングが接触(ファウル/インプレー)なら**接触の瞬間まで待って**から打球が出る。接触なし(見逃し・空振り)なら D+100ms で消える(捕手が捕った扱い)。ボールの静止は D(= 判定の基準時刻) | 診断 #1: 前はボール静止 D+150ms・拡大率の到達 D+261ms で、判定の基準 D から最大 260ms ずれた。比較画像 #3: ミット z 0.5 は縦長カメラに近く、40ms で 95px 落ちて 59→72px に膨らむ跳びになり、D+60 の接触姿勢のときにボールがミットから 0.7m 跳び戻る | — |
+| P2 | 見逃しの確定 | 人間打者の `arriveAfterMs` = D + `lateCutoffMs`(新定数 250)。D+150 を超えたスイングは窓外の空振り(`swinging-strike`)として演出が返る。CPU は無関係 | 診断 #1・[[game-feel-needs-playability-check]]「遅れたスイングは黙って捨てず、振り遅れとして結果を返す」 | — |
+| P3 | 判定時刻 | `atMs` = `event.nativeEvent.timeStamp` から求めた経過ゲーム時間 − 入力種別の遅延補正。`0 ≤ now − timeStamp ≤ 250ms` のときだけ timeStamp を使い、範囲外は `now`(従来どおり)を使う。補正は範囲外でも引く | 診断 #2。timeStamp の使用でメインスレッドの待ち(描画で詰まった分)を判定から除く。範囲外の保険は、時計の基準が違う環境(古い Safari 等)や合成イベントへの備え | — |
+| P4 | 遅延補正の値 | タッチ 70ms、マウス/ペン 20ms、キー 20ms(ゲート ms。`timeScale` で換算しない)。固定値で、設定 UI は作らない | 診断 §1: スマホの touch-to-display 約 46〜120ms、PC は約 20〜40ms。ボット B(遅延 80ms)が補正後ほぼ 0 になる値 | — |
+| P5 | タッチ入力 | (a) 1 本目の指 = 相対ドラッグ(従来)、(b) **ドラッグ中などの 2 本目以降の指 = 現在のカーソル位置で即スイング**(ステージでもスイングボタンでも)、(c) **1 本指のタップ(≤180ms・移動 ≤10px)も、指を置いた時刻でスイング**、(d) 演出中に置いた指は従来どおりスキップに使い、押しっぱなしの指は演出終了後の最初の pointermove でドラッグ開始。**ステージ右側など領域でスイングを分けない**(領域分けはゾーン(画面の中央〜右)とドラッグ操作に重なり、スキップとも衝突するため) | 診断 #4。右親指 1 本のドラッグ→ボタンへの移動に約 0.4 秒かかり、片手は空振り 45%・安打 8%。移動量としきい値でタップとドラッグを区別すれば、領域分けなしでスキップ(pointerdown)・ドラッグと衝突しない | **要確認 Q-A** |
+| P6 | 縦長の打撃カメラ | アスペクト ≤ 0.7 で縦長用、≥ 1.0 で現行(横長)、その間は smoothstep で補間。縦長の姿勢: 位置 (−0.25, 1.75, 2.6)・注視 (−0.25, 0.55, −18)(診断 §6 案 B' を −0.25m 横にずらしたもの)。水平半幅 tan は打撃 0.25・守備 0.38(FOV はアスペクトから導出)。横長は現行のまま(0.37) | 診断 §6 案 B' を出発点に、打者の見切れ(頭 x≈−48)を解消するため横にずらす(比較画像 #7)。守備はバーが大きく(比較画像 #1)ゾーンを小さくする必要がある | **要確認 Q-B** |
+| P7 | 構図の責務と打撃/守備のレイアウト | `CameraPose` に `lift`(シーンを上へずらす量、画面高比)を加え、`fovFor`・`framingLift` を render から `model/world/camera` へ移す。render は姿勢をそのまま適用する。`sceneFrameAt` に `layout`(`"batting"` / `"pitching"`)を入れ、`battingCameraFor(aspect, layout)` が水平半幅 tan と lift を切り替える(打撃 0.25 / 0.25、守備 0.38 / 0.27)。切り替えは半イニングの境目(UI のバーも同時に入れ替わる) | カメラがアスペクトとレイアウトで変わるので、FOV・位置・ずらし量・打者位置を 1 か所(model)で決めて単体テストする。`lift` を姿勢に含めると、中継カメラへの blend で連続になる。単一の構図では、守備のバー(上端 y=476)でゾーン下 42% が隠れ、打撃のゾーンを小さくしないと両立しない(比較画像 #1) | — |
+| P8 | 判定の当たり範囲 | `measureContact` は「ボール中心が、カーソル楕円に (rx +0.23, ry +0.20) を足した楕円の内側」で接触とする(0.06m ÷ ゾーン半幅 0.26 / 半高 0.30)。質 q・高さ(打球タイプ)は元の楕円の中心距離のまま(`q = max(0, 1 − d)·…`) | 診断 #6。表示のボール半径 0.1m は実寸の 2.7 倍(見やすさのため)。判定は中間の 0.06m(実寸の 1.6 倍)にし、縁が触れて見える範囲と判定範囲の比を 2.6 → 約 1.4 に縮める | — |
+| P9 | `cursorScale` | **表示にも反映する**(廃止しない)。飛行中は、表示するカーソルの半径に球種の `cursorScale` を掛ける(director が `scaleRadiiForPitch` を使う)。リリースの瞬間に変化球だとカーソルが少し縮み、打ちにくさが見える | 診断 #6。廃止すると球種の打ちにくさの差が消え、守備側の配球の意味が薄れる | — |
+| P10 | 描画順 | ボールは `depthTest: false` の**透明パス**で、カーソルの塗り・リングより手前(renderOrder 12)に描く。カーソルの Group の `renderOrder` は外して各メッシュに個別に付け、カーソルの塗りは `depthWrite: false` | 診断 #6: 届いた瞬間にボールがカーソルの黄色に染まる。比較画像 #8: 不透明のボールは透明パスのカーソルより先に描かれ、Group の `renderOrder` が子全体の第1キーになるため、描画順の数値だけでは手前にならない | — |
+| P11 | 軌道の式・誇張・時間写像 | `pos(p) = lerp(release, landing, g(p)) + break·(pⁿ − p) + (0, 4·arcHeight·p(1−p), 0)`。`g(p) = p + a·p(1−p)`(a = 0.5。出だしを約 1.5 倍速く、到達時の速さを約 0.5 倍に)、n = 2.2、`break` = 球種の終盤の曲がり量 × `bendGain`(1.8。実際より大きい誇張)。p = 0 でリリース点、p = 1 で着弾点に厳密一致。`PitchSpec.bend` を「終盤の曲がり量(ゾーン単位)」と再定義 | 診断 #7・#8。比較画像 #4: 式を直しても画面上の直線からのずれは 0.4〜10px で、縦の変化は速さの変化にしか見えず、動きの 72〜80% が最後の 300ms に集中する。遠近法で画面上の速さは 1/奥行きに比例するので、世界での進行を終盤で遅くして画面上で均す(野球ゲームで一般的な誇張) | — |
+| P12 | 到達の手がかり | ボールの `castShadow` をやめ、地面の円盤(不透明度 0.5・半径 ×1.8)の 1 つだけにする(深さ・落下の見え方の手がかり)。**ゾーン枠(常に画面内)を、D−20ms から立ち上げ、D〜D+60ms は最大、D+260ms で 0 になるよう光らせる**(枠を黄色に寄せ、ゾーンの内側を薄く塗る) | 診断 #9。比較画像 #2: 本塁・影は到達時にティッカーの下か画面外(デスクトップ y=760)で、手がかりにならない。ゾーン枠は打撃レイアウトでも守備レイアウトでもデスクトップでも画面内に見える | — |
+| P13 | タイミング表示 | スイング直後から 900ms、**ゾーン枠の上端中央の直上**に小さなピル「早い −62ms」「ジャスト!」「遅い +48ms」(青・黄・橙)。ジャスト = `|Δt| < 窓 × centerRatio`(ミート ±37.5ms、強振 ±28ms)。テロップ(上から 38%)とは別要素。CPU の打席・見逃しでは出さない | #1 の「早い/遅い」。テロップは打球の落下後(インプレーで接触の約 1 秒後)に出るので、即時のフィードバックには使えない。カーソルは接触と同時に消えるため、カーソル自体の変色は使わない | — |
+| P14 | バランス | 打球タイプの帯(`linerHalfBand`)を狭め、強さのしきい値を上げ、ライナー行の安打率を下げる(出発点の机上見積もりでボット B 約 34%)。CPU 難易度は「ふつう ≈ ボット B」の精度に調整し、`balance.test.ts` のしきい値は**変えない**。人間代理ボットを `bot-balance.test.ts` として持つ | 診断 §0: 操作性を直すとボット B の安打が 75%。カーソルの中心で捉えると全てライナー(安打率 40〜85%)になるため | — |
+| P15 | 打球の見え方 | 中継カメラ中のボールの最小表示径(表示高の 0.95%)、落下点のリング、滞空の延長(フライ 1000 + 28d、ライナー 600 + 16d)、縦長の `kLook` 0.4 | 診断 #10。見かけの重力 2.9〜4.1G を約 1.2〜1.7G に | **要確認 Q-C** |
+| P16 | 描画負荷 | `pointer: coarse` の端末は pixelRatio ≤ 1.5・影マップ 1024 | 診断 #2。メインスレッドの詰まりが入力の遅れに直結する | — |
+| P17 | 打者の位置と接触点 | 縦長の打者は x −0.65(横長は −0.8)、z は 0.05 のまま(補間)。**接触点の z(`batted.contactZ`)を −0.2 → ゾーン平面の 0.03 に変える**。バットの高さは既存の `batHeightInRoot`(接触の高さ = ボールの高さ)のまま | 比較画像 #7: バットとボールの画面上のずれは「接触点の z と打者の z の差」でほぼ決まる(打者の z 0.05 で 31px 下、−0.25 で 6px 上、−0.5 で 31px 上、−1.2 で 85px 上)。z を動かして頭を入れると接触点とずれ、x だけ内側に寄せると腕がゾーンを隠す。カメラ側を横にずらして頭を入れ、接触点を打者の奥行きに合わせれば、3 条件が同時に満たせる(§4 の計算) | — |
+
+**要確認(最大 3 つ)**:
+
+- **Q-A タップ方式(P5)**: 既定(推奨)は「1 本指のタップ = スイング」+「2 本目の指 = スイング」+「スイングボタン」の 3 通り。懸念は、ドラッグするつもりで軽く触れて(≤180ms・≤10px)離すとスイングになる誤爆。代替は「ボタンと 2 本目の指だけ」(誤爆なし、ただし片手は不利のまま)。
+- **Q-B 縦長の構図(P6・P17)**: ゾーンが画面中央よりやや右(中心 x≈269/390)になり、打者が左に寄って左端で少し見切れる(頭の中心 x≈73、左端は少し切れる)。守備側ではゾーンが小さく(101×117px)なる。代替は「カメラ x = 0 でゾーンを中央に置き、打者は大きく見切れる」。比較画像(`batter-position-options.png` など)で確認する。
+- **Q-C テンポ(P15)**: 打球の滞空延長(外野フライ・ホームランで +1.2〜1.7 秒、ライナーで +0.4 秒、ゴロは変わらない)と、人間の見逃し確定の +0.1 秒で、1 球が長くなる(スキップ可)。許容か。代替は滞空の延長を半分にする(見かけの重力は約 2G に戻る)。
+
+### 決定値の一覧
+
+「調整可」は、ステップ H12(見た目の確認と調整)・H3(バランス再調整)で、受け入れ基準を満たす範囲で変えてよい値と範囲。それ以外は変えない。
+
+| 項目 | 前 | 後 | 置き場所 | 調整可 |
+| --- | --- | --- | --- | --- |
+| 到達後のボール | z 1.6 のミットへ 150ms(yOffset −0.2) | 動かさない(着弾点で停止)。接触なしは D+100ms で非表示、接触ありは接触まで待つ | `WORLD_PARAMS.catch.holdMs`(新)。`WORLD_PARAMS.mitt` は削除 | holdMs 60〜150 |
+| 接触点の z | −0.2 | 0.03(ゾーン平面) | `WORLD_PARAMS.batted.contactZ` | 固定(打者の z 0.05 との差 ≤ 0.05) |
+| 人間の見逃し確定 | D + 150(= `contactWindowMs`) | D + 250 | `BATTING_PARAMS.lateCutoffMs`(新) | 固定 |
+| 判定窓・ファウル境界・ジャスト | ±150ms(強振 ×0.75)・0.7・0.25 | 変更なし | `BATTING_PARAMS` | `foulRatio` のみ 0.6〜0.8 |
+| 判定の当たり範囲 | カーソル楕円 | 楕円 + (rx 0.23, ry 0.20) | `BATTING_PARAMS.ballReachX/Y`(新) | 固定 |
+| 入力の遅延補正 | なし | タッチ 70 / マウス・ペン 20 / キー 20(ゲート ms) | `BATTING_PARAMS.inputLatencyMs`(新) | 固定 |
+| timeStamp の許容範囲 | — | `0 ≤ now − timeStamp ≤ 250`(ms) | `BATTING_PARAMS.maxEventAgeMs`(新) | 固定 |
+| タップの判定 | — | ≤ 180ms かつ ≤ 10px | `input-route.ts` の定数 | 固定 |
+| 縦長の打撃カメラ(姿勢) | — | 位置 (−0.25, 1.75, 2.6)、注視 (−0.25, 0.55, −18) | `WORLD_PARAMS.battingCameraPortrait`(新) | x のずらし −0.2〜−0.3、y 1.65〜1.85 |
+| 水平半幅 tan(縦長) | 0.37(全レイアウト・FOV は縦横比から) | 打撃 0.25 / 守備 0.38 | `WORLD_PARAMS.framing.portraitMinHalfWidthTan { batting, pitching }`(新) | 打撃 0.24〜0.28、守備 0.36〜0.40 |
+| 水平半幅 tan(横長・中継カメラ) | 0.37 | 変更なし(横長 0.37、中継カメラは縦長でも 0.37) | `framing.landscapeMinHalfWidthTan`・`framing.chaseMinHalfWidthTan` | 固定 |
+| 横長の打撃カメラ | (0, 1.25, 3.4) / (0, 1.0, −18) / 34° | 変更なし | `WORLD_PARAMS.battingCamera` | 固定 |
+| 縦横比の補間 | — | ≤ 0.7 で縦長、≥ 1.0 で横長、smoothstep | `framing.portraitFullAspect/landscapeFullAspect`(新) | 固定 |
+| シーンを上へずらす量 `lift` | 0.2(≤0.6)、1.2 以上で 0 | 打撃 0.25 / 守備 0.27(≤0.7)、1.2 以上で 0、その間は線形 | `framing.lift { batting, pitching, fullAspect, zeroAspect }`(新) | 打撃 0.22〜0.28、守備 0.25〜0.29 |
+| 打者の x | −0.8(scale 0.92、z 0.05) | 横長 −0.8、縦長 −0.65(補間。z は 0.05 のまま) | `WORLD_PARAMS.actors.batter.portraitX`(新) | −0.55〜−0.75 |
+| 中継カメラの `kLook` | 0.6 | 横長 0.6、縦長 0.4(補間) | `WORLD_PARAMS.chaseCamera.portraitKLook`(新) | 0.3〜0.5 |
+| 軌道の指数 n・曲がりの誇張・時間写像 | p³ 相当・`bendGain` 2.5 | n = 2.2・`bendGain` 1.8・`g(p) = p + 0.5·p(1−p)` | `WORLD_PARAMS.pitch.breakExponent/bendGain/speedProfile` | n 2.0〜2.5、`bendGain` 1.4〜2.6、`speedProfile` 0.3〜0.7(0 で時間写像なし) |
+| 球種の曲がり(ゾーン単位、+x = ライト側・+y = 上。`bendGain` 前) | スライダー (0.6, 0)、カーブ (0.3, 0.8)、フォーク (0, 0.7)、シュート (−0.6, 0) | スライダー (1.2, −0.27)、カーブ (0.8, −1.83)、フォーク (0, −1.67)、シュート (−1.15, −0.33)(`bendGain` 1.8 で 0.56/−0.15、0.37/−0.99、0/−0.90、−0.54/−0.18 m) | `model/pitch/kinds.ts` | `bendGain` 経由のみ |
+| ボールの影 | 円盤 0.25・半径 ×1.2 + 太陽光の影 | 円盤 0.5・半径 ×1.8(`castShadow` なし) | `render/markers.ts` | 不透明度 0.4〜0.6 |
+| 到達の手がかり(ゾーン枠の発光) | なし(本塁の発光は採らない) | D−20ms で立ち上げ、D〜D+60ms は最大、D+260ms で 0 | `WORLD_PARAMS.cue.zonePulse`(新) | 固定 |
+| タイミング表示の表示時間 | — | 900ms | `WORLD_PARAMS.cue.timingMs`(新) | 700〜1200 |
+| スキップのヒントの位置(縦長) | 上から 50% | 打撃 30%・守備 27%(CSS) | `ui/baseball-stage.css` | ゾーン・投手・テロップと重ならない範囲 |
+| 中継カメラ中のボールの最小径 | なし(1.2〜4.8px) | 表示高の 0.95%(844px で 8px) | `WORLD_PARAMS.ball.minScreenDiameterRatio`(新) | 0.008〜0.012 |
+| 落下点のリング | なし | 半径 max(2.0m, 表示高の 3% 相当)、接触 +200ms から落下 +400ms、フライ・ライナーのみ(ファウルの飛球を含む。ホームラン・ゴロは出さない) | `WORLD_PARAMS.landingMark`(新) | 値のみ |
+| 滞空 | フライ 700 + 17d / ライナー 500 + 11d(ms、d = 距離 m) | フライ 1000 + 28d / ライナー 600 + 16d(ゴロは 250 + 30d のまま) | `WORLD_PARAMS.batted` | Q-C の結果で延長を半分に |
+| 描画負荷(`pointer: coarse`) | pixelRatio ≤ 2・影マップ 2048 | pixelRatio ≤ 1.5・影マップ 1024 | `render/look.ts`(`pixelRatioFor`)・`stadium.ts` | 固定 |
+| 打球の強さ・結果の出発点 | `linerHalfBand` 0.30、`mediumFrom` 0.18、`strongFrom` 0.42、結果表(旧) | 0.14、0.38、0.62、結果表(新。§10) | `BATTING_PARAMS`・`result-table.ts` | §10 の「動かしてよい値」 |
+| CPU 難易度(cursorSigma / timingSigmaMs) | easy 0.40/80、normal 0.34/65、hard 0.27/52 | easy 0.22/75、normal 0.15/55、hard 0.10/42(出発点) | `model/cpu/difficulty.ts` | §10 |
+
+### 1. 時間軸の変更(到達後のボール・見逃しの確定・CPU との整合)— 診断 #1
+
+「時間軸・ゲートの規約」(本書の既存節)のうち、次の点を変更する。他の規約は変えない。
+
+| 規約 | 前 | 後 |
+| --- | --- | --- |
+| 3(ボールの本塁通過とミット) | D で通過、`mittMs` 150ms かけて z 1.6 のミットへ | D で通過、**ミットへは動かさない**(着弾点で停止)。接触ありならその接触の瞬間まで着弾点で待ち、接触なしなら **D + `holdMs`(100ms)で非表示**。ボールの静止は D |
+| 6(人間打者の到達通知) | `leadMs = 0`、D + `contactWindowMs`(150ms) | `leadMs = 0`、**D + `lateCutoffMs`(250ms)**。`GameView.arriveAfterMs` が変わる。CPU 打者の前倒し(`CPU_SWING_LEAD_MS` = 150ms)は変えない |
+| 5(空振り) | 人間は `startMs = atMs`、`contactAtMs = atMs + 132` | 変更なし。**D+150〜D+250 のスイングも同じ「空振り」の演出になる**(`measureContact` が窓外で miss を返すため、新しい分岐は不要)。ボールは D+100 で消えている |
+| 4(接触とスイングの時刻) | `contactMs = max(D, base + 60)` | 変更なし。接触点の z がゾーン平面になる(§4)ので、待っていたボールと打球の始点が一致し、跳ばない |
+
+- **ボールの停止と待機**(`frame.ts` の `ballFrame`): `tMs ≤ D` は `pitchBallAt`。`tMs > D` は、(a) `plan.contactMs` があり `tMs < contactMs` なら着弾点(`zoneToWorld(landing)`)に留める(スイングの演出を待つ)、(b) それ以外は `tMs ≤ D + holdMs` まで着弾点に留め、以降は非表示。`pitch-path.ts` の `mittBallAt` は着弾点を返す `heldBallAt(flight)` に置き換える。人間が打たない見逃しは plan が D+250 まで作られないので、D+100 で消えた後にコールが出る(消えるのは「捕手が捕った」)。
+- **遅いスイング**: 人間が D+150〜D+250 に押すと、ボールはすでに消えている。スイングは空振りの演出(バットが空を切る)、カウントはストライク、テロップ「空振り!」。D+250 を超えると `PITCH_ARRIVED` が先に見逃しを確定し、スイングは無視される(`swingReady` が偽)。D+105〜D+150(窓の 70%〜100%)は接触ありのファウルになる(`contactMs = atMs + 60`。D+100 で消えたボールが接触の瞬間に再び現れて飛ぶ。遅いファウルだけの見た目で、頻度は小さい)。
+- **「D ちょうどで振っても接触姿勢が D+60」**: スイングは構えから接触姿勢まで最短 60ms 要る(S3(d) の基準。縮めると 1 フレームで飛ぶ)ので、接触は `atMs + 60` になる。その間(最大 60ms 程度の短いため)ボールは着弾点で待つ。「接触姿勢までの時間を判定時刻に合わせて縮める」案は、スイングが速すぎて見える(0.86 rad/フレーム超)ため採らない。
+- **人間の見逃し(振らない)**: 確定が D+250 なので、ボール/ストライクのテロップとカウントの更新が従来より 100ms 遅い(Q-C)。`takeSegment` の `telopStartMs = max(D, resolvedAtMs)` は変えない(`resolvedAtMs` が D+250 になる)。
+- **CPU 打者との整合**: (1) `CPU_SWING_LEAD_MS` は「結果を接触の 150ms 前に知って、スイングの演出を結果と整合させる」ためのもので、`lateCutoffMs` や到達後のボールと無関係なので変えない。(2) CPU の見逃し・空振りの `PITCH_ARRIVED` は D−150ms 付近で、`telop.startMs = max(D, resolvedAtMs)` = D。ボールが D で止まり、同時にコールが出る(前は D+150ms まで動き続けた)。(3) CPU の接触ありは `contactMs = D`(ファウル/インプレー)で、ボールは D で打球に切り替わる(待機なし)。(4) `decideCpuBat` は `resolvePitch` を通るので、§5 の当たり範囲の変更とバランスの再調整(§10)の影響を受ける。CPU のスイング時刻の分布(D に対するガウス)・早振りのバイアスは変えない。
+- **到達の手がかり**(P12)は §6。
+
+### 2. 入力の時刻(`atMs`)と遅延補正 — 診断 #2
+
+- `SwingInput.atMs` の意味(リリースからの経過ゲーム時間)は変えない。求め方を変える。
+- 純関数 `swingAtMs({ origin, nowMs, startedAtMs, timeScale })`(`model/world/sequence/swing-time.ts`、新規):
+
+  | 条件 | 結果 |
+  | --- | --- |
+  | `origin = null`(プログラムからの呼び出し) | `(nowMs − startedAtMs) × timeScale`(補正なし。従来と同値) |
+  | `origin` あり、`0 ≤ nowMs − origin.timeStamp ≤ maxEventAgeMs`(250) | `eventMs = origin.timeStamp` |
+  | `origin` あり、その範囲外(負、または 250ms 超、`NaN`、桁違いの epoch 値) | `eventMs = nowMs`(従来どおり) |
+  | `origin` あり | `atMs = (eventMs − startedAtMs) × timeScale − inputLatencyMs(origin.inputKind)`(補正は範囲外でも引く) |
+  | `startedAtMs = null`(一度も `flight` が出ていない) | 0(時計の既定と同じ。`swingReady` が偽の間は呼ばれない) |
+
+- 遅延補正の値はゲート ms 固定(`timeScale` で換算しない)。`fast=1` は開発専用で、補正は通常速度の体験のため。`inputLatencyMs` は `inputKind` の 3 値なので `switch` で引く(変数添字は lint error。[[sample-app-lint-random-and-index-access]])。
+- `SwingOrigin = { timeStamp: number; inputKind: "touch" | "mouse" | "key" }`(`types/batting.ts`)。入力元: ステージのポインタ(`pointerType === "touch"` ならタッチ、それ以外はマウス/ペン)、スイングボタンの `onPointerDown`(同じ判定)、キー(`key`)。いずれも **`event.nativeEvent.timeStamp`**(React の合成イベントの `timeStamp` は 0 のとき `Date.now()` にフォールバックするため使わない)。
+- **タップによるスイング**(§3)は、指を置いた(pointerdown)時刻の `timeStamp` を `origin` に使う(スイング自体は pointerup で発火)。許容範囲 250ms に収めるため、タップは 180ms 以内に限る。
+- `usePitchFlight` は `getSwingAtMs(origin: SwingOrigin | null): number` を返す(内部で `swingAtMs`、`performance.now()`、開始時刻 ref、`timeScale` を使う)。`useBattingControls.swingNow(origin?)` が `atMs` に使う。
+- **E2E の F1(Space でスイングの稀な失敗)への効果**: (1) timeStamp により、描画で詰まったメインスレッドの待ち(最大 250ms)が判定から除かれる。(2) 見逃し確定が D+250 になり、D+150〜D+250 に届いた入力は `called-strike` ではなく `swinging-strike` になる。(3) タッチ端末の描画負荷の削減(§9)は E2E(headless は `fast=1` で `quality: "low"`)には効かない。**残る失敗**(キーが D+500ms 超に届く)は、テスト側の有効試行ガードで除く(§13)。
+
+### 3. タッチ入力の振り分け — 診断 #4
+
+純関数 `model/world/sequence/input-route.ts` を拡張する。`holding` を hooks が直接見て分岐してはならない(既存の構造検査 9 を維持)。
+
+**pointerdown**(`routeStagePointer`。戻り値を 5 種に拡張: `"skip" | "swing" | "swing-here" | "drag-start" | "ignore"`):
+
+| 入力 | 条件(上から順に判定) | 結果 |
+| --- | --- | --- |
+| マウス/ペン | `isPrimary` かつ `button === 0` でない | `ignore` |
+| | `holding` | `skip` |
+| | `enabled` でない | `ignore` |
+| | それ以外 | `swing`(カーソルをポインタ位置へ移動して即スイング。従来どおり) |
+| タッチ・2 本目以降の指(`isPrimary = false`) | `holding` または `enabled` でない | `ignore`(2 本目の指ではスキップしない) |
+| | それ以外 | **`swing-here`**(カーソルを動かさず、現在のカーソル位置で即スイング。可否は呼び出し先が `swingReady` で判定) |
+| タッチ・1 本目の指(`isPrimary = true`) | `holding` | `skip` |
+| | `enabled` でない | `ignore` |
+| | それ以外 | `drag-start`(相対ドラッグの開始。同時に「タップ候補」を記録: 時刻・位置・その時点の `swingReady`) |
+
+**pointermove**(`routeStageMove({ holding, enabled, pointerType, dragging, held })` → `"drag" | "drag-start" | "follow" | "ignore"`):
+
+| 条件 | 結果 |
+| --- | --- |
+| `enabled` でない | `ignore` |
+| マウス/ペン | `follow`(絶対位置追従。従来どおり) |
+| タッチ・ドラッグ中 | `drag`(相対移動。従来どおり) |
+| タッチ・ドラッグ中でなく、`held`(スキップに使った指がまだ下りている)かつ `holding` でない | **`drag-start`**(その時点の指の位置と現在のカーソル位置でドラッグ開始。この move 自体ではカーソルを動かさない) |
+| それ以外 | `ignore` |
+
+**pointerup**(`routeStageRelease({ pointerType, tapCandidate, tapOk, holding, enabled })` → `"swing-here" | "none"`。`tapOk` は純関数 `isTapGesture({ downTimeStamp, upTimeStamp, movedPx })` = 持続 ≤ 180ms かつ移動 ≤ 10px。時間は **2 つのイベントの `timeStamp` の差**で測る(ハンドラの実行時刻ではない。描画で pointerup が遅れても誤判定しない)):
+
+| 条件 | 結果 |
+| --- | --- |
+| タッチの 1 本目、`tapCandidate`(pointerdown が `drag-start` で、そのとき `swingReady` が真)、`tapOk`、`enabled` かつ `holding` でない | **`swing-here`**(`origin.timeStamp` = pointerdown の `timeStamp`) |
+| それ以外(ドラッグした・長押し・pointercancel・スキップに使った指・マウス/ペン) | `none` |
+
+- **誤爆の整理**: スキップに使った pointerdown は、スイングにもタップ候補にもならない(`skip` を返した指は `held` に入るだけ)。`holding` と `swingReady` は同時に真にならない(既存の規約 13)。2 本目の指でスイングした後に 1 本目の指が(静止したまま)離れても、`swingReady` が偽なので 2 回目のスイングは起きない(reducer も 2 回目の `SWING` を無視する)。
+- **ステージ右側のタップを即スイングにするか → しない**。ステージの領域で動作を分けると、ゾーン(縦長の打撃で x 192〜346)やドラッグの開始位置と重なり、スキップの pointerdown とも衝突する。代わりに「全域で、移動 ≤10px かつ ≤180ms のタップ = スイング」とした(Q-A)。右親指 1 本でも「ドラッグで狙う → 一度離して(または別の指で)タップ」で、ボタンへの 0.4 秒の移動が無くなる。
+- 保持: `touch-action: none` は人間打撃中の入力面だけ(従来どおり)。スイングボタン(右下 92px)は残す。`useKeyboardInput` は `onSwing` に `origin`(`key`、`event.timeStamp`)を渡す変更だけ許可する(Space/Enter の排他・`defaultPrevented` の扱いは変えない。[[dom-key-input-exclusivity]])。
+- `usePointerInput` は、上の 3 つの `route*` の戻り値だけで分岐する。ドラッグ状態・タップ候補・`held` は ref。60 行・複雑度の制限のため、`handleDown`・`handleMove`・`handleUp` に分けて書く。
+
+### 4. 縦長の打撃カメラ・レイアウト別の構図・打者の位置 — 診断 #3・#5・#10(一部)
+
+**カメラ関数**(`model/world/camera/rig.ts`。いずれも状態を持たない閉形式):
+
+- `portraitBlendAt(aspect)`: `k = smoothstep(clamp((landscapeFullAspect − aspect) / (landscapeFullAspect − portraitFullAspect), 0, 1))`。`portraitFullAspect = 0.7`(以下は縦長 100%)、`landscapeFullAspect = 1.0`(以上は横長 100%)。非有限・0 以下は横長(`k = 0`)。
+- `battingCameraFor(aspect, layout) → CameraPose`(`layout` = `"batting"` | `"pitching"`): `position`・`target` は横長と縦長を `k` で線形補間(縦長の姿勢はレイアウトによらず同じ)。水平半幅 tan = `lerp(0.37, 縦長の値(打撃 0.25 / 守備 0.38), k)`。`fovDeg = max(34, 2·atan(水平半幅 tan / aspect))`(度)。`lift = framingLiftFor(aspect, layout)`。**`k = 0`(アスペクト ≥ 1.0)では従来の `battingCamera()` と FOV まで一致する**(従来の `fovFor` と同じ式。横長は両レイアウトで同じ姿勢)。`battingCamera()`(引数なし)は横長の姿勢として残す。
+- `framingLiftFor(aspect, layout)`: アスペクト ≥ 1.2 で 0、≤ 0.7 で縦長の値(打撃 0.25 / 守備 0.27)、その間は線形。
+- `chaseCamera(ball, aspect, layout)`: 位置・注視点の式は従来どおり(`kLook` だけ `lerp(0.6, 0.4, k)`)。`fovDeg = max(34, 2·atan(0.37 / aspect))`(従来の `fovFor`。**打撃の 0.25 を中継カメラに持ち込まない**: 縦長の中継カメラを狭めると野手が画面外になるため、定数 `chaseMinHalfWidthTan` を別に持つ)。`lift = framingLiftFor(aspect, layout)`(打撃カメラと同じなので、blend 中に画面が上下に跳ねない)。
+- `blendCamera` は `lift` も線形補間する。`ballScaleFor(camera, ball)` は §8。
+- **blend の起点**: 接触後の打撃カメラ → 中継カメラの blend(`cameraFrame`)は、`battingCameraFor(input.aspect, input.layout)`(= 接触前の `frame.camera` と同じ姿勢)から始める。ステージ側で打撃カメラだけ差し替えると、接触の瞬間にカメラが跳ぶ(比較画像の作成中に確認)。`frame.camera` は model が常に最終の姿勢(FOV・lift まで)を作り、render はそのまま適用する。
+
+**レイアウト別の値(390×844 での設計値。診断 §6 案 B' と上の式、比較画像の実測から計算。H12 で実測して確定)**:
+
+| 項目 | 現状 | 打撃レイアウト(縦長) | 守備レイアウト(縦長) |
+| --- | --- | --- | --- |
+| カメラ姿勢 | (0, 1.25, 3.4) → (0, 1.0, −18) | (−0.25, 1.75, 2.6) → (−0.25, 0.55, −18) | 同じ |
+| 水平半幅 tan / 縦 FOV | 0.37 / 77.4° | 0.25 / 56.8° | 0.38 / 79.4° |
+| lift | 0.2 | 0.25 | 0.27 |
+| ゾーン枠 | 81×94px(x 154〜235、y 283〜376) | **154×174px**(x 約 192〜346、y 約 385〜559) | 101×117px(x 約 193〜295、y 約 307〜424) |
+| 5×5 格子(守備のみ表示) | 135×157px(y 約 252〜408) | — | 169×195px(x 約 159〜329、y 約 268〜464) |
+| カーソル(ミート能力 56) | 59×41px | **112×76px**(判定の当たり範囲 = 楕円 + ボール半径は約 147×110px) | — |
+| ボール径(リリース / ゾーン面) | 4.9 / 31px | 7.5 / 59px | 約 5 / 39px |
+| 画面上の軌跡 / 投手の体から離れる時刻 | 88px / 到達の 160ms 前 | 285px / 到達の 377ms 前以上(時間写像でさらに早まる) | — |
+| 投手(足元 y / 頭 y / 中心 x) | 271 / 約 230 / 195 | 約 219 / 約 171 / 204 | 約 202 / 約 167 / 201 |
+| 打者の頭の中心 x | −48(半分以上が画面外) | 約 73(左端は少し切れる) | 約 114 |
+| 下のオーバーレイの上端(ティッカー) | 打撃 y 663 / 守備 y 476 | 663(ゾーン下端 559 と 100px 空く) | 476(格子の下端 464 と 12px 空く) |
+
+- **守備レイアウトを分ける理由**: 縦長の守備は、下の 476px 以下が操作バー(球種チップ+5×5 グリッド+投げる)とティッカーで覆われる(比較画像 #1: B' のゾーン y 376〜550 の下 42% が隠れ、グリッド下段・着弾付近も見えない)。打撃と同じ大きなゾーンのままでは両立しないので、守備はゾーンを小さく(水平半幅 tan 0.38 = 現行の 0.37 並み)して、**格子全体(ゾーンの 5/3 倍)をティッカーの上(≤ 464px)に収める**。投手の頭がネームプレートの下端(155px)に掛からないよう lift も同時に決めた(守備 0.27 で投手の頭 y≈167、打撃 0.25 で y≈171)。守備ではタップ精度を要求しないので、ゾーンが 101×117px でも操作に支障はない(S6(a) の基準は幅 70px 以上)。
+- **打者の配置(比較画像 #7 の結論)**: 打者の位置だけでは 3 条件を同時に満たせない。組み合わせで決める。(1) **頭を入れる**: 縦長のカメラを −0.25m 横にずらす(位置と注視点の両方。向きは変えない)。頭の x は `195 + 780·(打者の x − カメラの x) / 奥行き` で計算でき、打者 x −0.65・奥行き 2.55 で約 73px。(2) **バットとボールを合わせる**: バットとボールの画面上のずれは、接触点の z と打者の z の差で決まる(比較画像: 打者の z 0.05 で 31px 下、−0.25 で 6px 上、−0.5 で 31px 上、−1.2 で 85px 上)。z を動かして頭を入れると接触点とずれるので、打者の z は 0.05 のまま、**接触点の z(`batted.contactZ`)を −0.2 → ゾーン平面の 0.03 にする**(バットの高さは既存の `batHeightInRoot` が接触の高さ = ボールの高さにそろえる)。これでバットとボールの奥行きがそろい、ずれは約 0px。ボールが着弾点で待つ(§1)ので、待っていたボールと打球の始点も一致する。(3) **ゾーンを隠さない**: 打者の手の位置は x≈−0.35(画面で約 164px)で、ゾーン枠の左端(192px)から 28px 離れる(x −0.45 の案では手がゾーン上内側に入った)。縦長の打者の x は `portraitBlendAt` の `k` で補間する(横長は −0.8)。H12 で、頭の中心 x ≥ 60px、バットとボールの中心のずれ ≤ 20px(ゾーン中央と四隅)、手・腕とゾーン枠の重なり 0 を確認し、足りなければ x を −0.55〜−0.75 の範囲で動かす。
+- **ゾーンが画面右寄りになる**(打撃: 中心 x 約 269/390、右の余白 44px)。ボールの着弾が右端を超える外角(ゾーン単位 +1.8 以上)は画面外になりうるが、狙いのセル(+1.33)は見える(x 約 372px)。カーソルの移動範囲(±1.8)は x 約 130〜408px(右端は画面端)。
+- **render の変更**: `look.ts` の `fovFor`・`framingLift`・`MIN_HALF_WIDTH_TAN`・`PORTRAIT_LIFT`・`LIFT_*_ASPECT` を削除する。`stage.ts` の `placeCamera` は `pose.fovDeg` と `pose.lift` をそのまま使う。`StageOptions.battingCamera` を `battingCameraFor: (aspect: number, layout: StageLayout) => CameraPose` に変える。`SceneFrame.layout` を受けたステージが、レイアウトが変わったときにゾーン矩形を再計算し、`onResize` で通知する(`useStage3d` の `zoneRect` が追従する)。
+- **ゾーン座標 ⇔ 画面座標への影響**: (1) `zoneScreenRect()` は、最後に `apply` したレイアウトの `battingCameraFor(現在のアスペクト, layout)` の矩形(中継カメラ中でも不変)。縦長の打撃で 154×174px、守備で 101×117px。(2) `pickPlane` は最後に `apply` したカメラ(`setViewOffset` 込み)を使うので変更不要。(3) タッチのドラッグは `zoneDeltaFromScreenDelta(指の移動量, ゾーン矩形)` で 1 : 1 の画面対応のまま。打撃ではゾーンが大きくなる分、同じ指の移動でのゾーン単位の移動量は約 0.5 倍になり、細かい調整がしやすい。(4) `useStage3d` は現在のアスペクト(`getAspect`)を保持して director に渡す。
+- **E2E テスト5(オーバーレイの幾何検証。設計書の番号)への影響**: 縦長(390×844)の人間打撃・人間守備の 2 条件で、ゾーン矩形(`data-zone-rect`)が `scoreboard`・`name-plates`・`ticker`・`action-bar` のいずれとも 4px の余白つきで交差しないことを確認する(打撃はゾーン下端 559 とティッカー上端 663、守備は 424 と 476)。テスト5に、縦長の打撃で「ゾーン幅 ≥ 140px・高さ ≥ 155px、ビューポート内で左右の余白 ≥ 40px」、縦長の守備で「ゾーン矩形を 5/3 倍に広げた矩形(格子)もオーバーレイと交差しない」「ゾーン幅 ≥ 90px」を追加する(§13)。デスクトップ(1280×720)は従来どおり。
+- **カーソル寸法はカメラ変更で足りる**: 診断の数値で、現状 59×41px(約 10×7mm)が打撃レイアウトで 112×76px(約 18×12mm)になり、指先(約 10〜20mm)と同等になる。`meetBaseRx` などのカーソル半径のパラメータは変えない(診断の代替案 = タッチだけ `meetBaseRx` 0.65 は採らない)。判定の当たり範囲は §5 のボール半径でさらに広がる。
+- **小さい端末**: 高さ 700px 未満(360×640 など)では守備のバー(約 340px)で格子の下端が掛かりうる。H12 で 360×640 を実測し、掛かる場合は守備時のグリッドのセルを 44 → 40px にする、またはティッカーを守備時に隠す(CSS のみ)かを決める。受け入れ基準は 390×844 と 1280×720(E2E の 4 条件)。
+
+### 5. 判定(打撃)の見直し — 診断 #6
+
+- `measureContact`(`model/batting/contact.ts`): 接触 = `ellipseDistance(landing, cursor, reach) ≤ 1` かつ `|Δt| ≤ 窓`。`reach = { rx: rx + ballReachX, ry: ry + ballReachY }`(`rx`・`ry` は `effectiveRadii` = 打者の半径 × 強振補正 × 球種の `cursorScale`)。`q = max(0, 1 − d)·(1 − |Δt|/窓)·edgeFactor` の `d` は**元の楕円(reach を足す前)の中心距離**。`height`(打球タイプの入力)も元の `ry` で割る。楕円の外側(reach の内側)の接触は `q = 0`(かすった当たり = 弱い打球)になる。
+- `scaleRadiiForPitch(radii, pitchKind) → CursorRadii`(`contact.ts` に export。`effectiveRadii` もこれを使う): 球種の `cursorScale` を掛けるだけの純関数。director が飛行中の表示カーソルの半径に使い、**表示と判定の `cursorScale` を一致させる**。
+- ボールの描画順(P10)は §6 の render の項。
+- 縁が触れて見える範囲と判定範囲の面積比: 診断の 2.6 倍 → 約 1.4 倍(ミート能力 56: 見た目 0.288×0.230m 対 判定 0.248×0.190m)。受け入れ基準は ≤ 1.5 倍。
+
+### 6. 投球の軌道・影・到達の手がかり・描画順 — 診断 #7・#8・#9
+
+- **`PitchSpec.bend` の再定義**(`types/pitch.ts` の説明、`kinds.ts` の値): 「終盤の曲がり量(ゾーン単位、`bendGain` を掛ける前)。x は + がライト側(画面右)、y は + が上」。右投手の実際の向きにする。
+
+  | 球種 | 前 | 後(ゾーン単位) | 後(m、`bendGain` 1.8) | 見え方 |
+  | --- | --- | --- | --- | --- |
+  | straight | (0, 0) | (0, 0) | (0, 0) | 直進(山なりの持ち上げのみ) |
+  | slider | (0.6, 0) | (1.2, −0.27) | (+0.56, −0.15) | グラブ側(右打者から離れる向き)へ切れ、わずかに沈む |
+  | curve | (0.3, 0.8) | (0.8, −1.83) | (+0.37, −0.99) | グラブ側へ少し、大きく落ちる |
+  | fork | (0, 0.7) | (0, −1.67) | (0, −0.90) | まっすぐ落ちる |
+  | shoot | (−0.6, 0) | (−1.15, −0.33) | (−0.54, −0.18) | 腕側(右打者の内側)へ食い込み、わずかに沈む |
+
+- **`pitchBallAt`**(`model/world/path/pitch-path.ts`): `p = clamp(elapsed / D, 0, 1)`。`pos(p) = lerp(release, landing, g(p)) + break·(pⁿ − p) + (0, 4·arcHeight·p(1−p), 0)`。`g(p) = p + speedProfile·p(1−p)`(`speedProfile` = 0.5)、`break = (bend.x·halfWidth, bend.y·halfHeight, 0)·bendGain`、n = 2.2、`bendGain` = 1.8、`arcHeight` = 0.12(従来どおり)。`p = 0` は `RELEASE_POINT`、`p = 1` は `zoneToWorld(landing)` に厳密一致。z は単調増加(`g` が単調)、y は 0〜3。初速は着弾点に向かう直線から `−break` の側へずれる(内側に放って曲がり込む)。
+- **時間写像 `g` の意味と根拠**(比較画像 #4): 遠近法で画面上の速さは 1/奥行きに比例するので、世界で一定の速さで進めると、画面上の動きの 71〜80% が最後の 300ms に集中し、出だしは止まって見える。`g` は世界での進行を「出だしを約 1.5 倍速く、到達時を約 0.5 倍の速さ」にして、画面上の速さを均す。到達時刻 D(判定の基準)は変わらない。到達時に遅くなるので、到達の瞬間を捉えやすくなる効果もある(ゾーン枠の発光 = P12 と組み合わせる)。物理的には不自然(球が減速する)だが、野球ゲームで一般的な見かけの誇張として許容する。違和感があれば `speedProfile` を 0.3 まで下げる(0 で無効)。
+- **変化量の誇張の根拠**(比較画像 #4): 捕手後方のカメラは投球線のほぼ延長上にあるため、横の曲がりは画面上でほとんど見えない(現行の式のままだと 0.4〜10px)。`bendGain` 1.8 は、診断の目安値(スライダー 0.31m など)の約 1.8 倍の誇張で、画面上の弦からのずれをスライダー・シュートで 12px 以上、カーブの横で 7px 以上にする。縦の変化(カーブ・フォークの落ち)は投球線と同じ向きなので、画面上の直線からのずれにはならず、「同じ着弾のストレートとの同時刻の差」と、**地面の影との間隔の変化**(落ちるとボールが影に近づく)で見せる。影を 1 つ・濃くする(下)のはこのためでもある。
+- **守備側の見え方**も同じ関数(人間が投げる投球も `pitchBallAt`)。**旧 2D の `model/pitch/flight.ts`(`ballPositionAt`)は削除する**(未使用で、旧い `bend` の意味に依存して再定義後は誤った向きを返すため)。あわせて `flight.test.ts`・`types/pitch.ts` の `BallPosition`・`PITCH_PARAMS.startPoint`・`startScale` も削除する(Knip の未使用 export も減る)。`PITCH_PARAMS.ballRadius` など `GameView.geometry` 用の 2D 残置分は触らない。
+- **画面上の軌道の検証**(診断の投影スクリプトの再現): `model/world/path/pitch-screen.test.ts`(新規)が、`pitchBallAt` と `camera/project.ts` で、スマホ 390×844 の打撃レイアウトの画面座標を計算して次を守る(§15): (M1) 弦(リリース→着弾の画面上の直線)からの最大ずれ、(M2) 同じ着弾のストレートとの同時刻の画面上の最大差、(S300) 最後の 300ms の画面上の移動の割合。
+- **影**(`render/markers.ts`): ボール本体の `castShadow` を外す。地面の円盤を不透明度 0.5・半径 `ballRadius × 1.8` にし、`ball.scale`(§8)を掛ける。太陽光の影は人物とベースに残す。
+- **到達の手がかり = ゾーン枠の発光**: `SceneFrame.zone.pulse`(0〜1)を model が計算(`zonePulseAt(durationMs, tMs)`)。D−20ms で 0 → 1 へ立ち上がり、D〜D+60ms は 1、D+60〜D+260ms で 0 へ減衰。投球(`flight`)があり `phase` が `flight`/`play` のときだけ(ゾーン枠が見えている間)。`render/markers.ts` は、ゾーン枠の線の色を白から黄(`PALETTE.accent`)へ `pulse` で寄せ、ゾーン内側を覆う板(`MeshBasicMaterial`、黄、不透明度 = `pulse × 0.25`、`depthTest: false`)を重ねる。**本塁の発光は採らない**(本塁・影は到達時にティッカーの下か画面外になり、手がかりにならない。比較画像 #2)。
+- **ボールの描画順**(P10・比較画像 #8): ボール(本体と輪郭)を `transparent: true`(透明パス)にして `depthTest: false`・renderOrder 12(輪郭線 11.5)にする。カーソルの **Group の `renderOrder` を外し**(Group の値が子全体の第1キーになるため)各メッシュに個別に付け(塗り 11・リング 11・中心点 11)、カーソルの塗りは `depthWrite: false` にする。副作用として、ボールが人物の裏に回る場面でも見える(打者の内角では x が離れているので影響は小さい)。
+
+### 7. タイミング表示 — 診断 #1
+
+- **純関数**(`model/world/sequence/timing-cue.ts`、新規): `timingCueOf(dtMs, windowMs) → TimingCue`(`label`: `|dtMs| < windowMs × centerRatio` なら `just`、`dtMs < 0` なら `early`、それ以外は `late`。`dtMs` は四捨五入した整数に丸めて持つ)。`timingAt(plan, tMs) → TimingCue | null`(`plan.timing.startMs ≤ tMs < endMs` のとき)。
+- **`PlayPlan.timing`**: `{ label, dtMs, startMs, endMs } | null`。`planPlay` が、人間のスイング入力があるとき `dtMs = swing.atMs − flight.durationMs`、`windowMs = swingWindowMs(swing.kind)`、`startMs = swing.atMs`、`endMs = startMs + WORLD_PARAMS.cue.timingMs`(900)で作る。見逃し・CPU 打者は `null`。
+- **表示**: `StageView` がゾーン枠の矩形(`zoneRect`)の上端中央の直上に小さなピル(`bb-stage__timing`、`aria-hidden`、`pointer-events: none`)を出す。文言: ジャスト = 「ジャスト!」(黄 #ffd23f)、早い = 「早い −62ms」(青 #6ec1ff)、遅い = 「遅い +48ms」(橙 #ff9f43)。表示は 900ms、スキップ時に消す。打撃レイアウトでは、ゾーン枠の上端(y 385)の上は投手(足元 y≈219)とテロップ(上から 38% = y 321)の間に収まる。テロップとぶつかる場合の代替は、ゾーン枠の下端中央の直下(H12 で確認)。
+- **`data-*` ミラー**(E2E・手動確認用): `stage-3d` に `data-timing`(`early`/`just`/`late`)・`data-timing-ms`(符号つき整数)。次の投球の `flight` が出るまで保持し、値が無いときは属性ごと出さない。**この属性が出ていることが「スイングが受理された」ことの目印**になる(§13 の E2E)。
+- 範囲外のスイング(窓 ±150ms を超える大きなずれ)でも「早い/遅い」と `ms` を出す(空振りの理由が分かる)。
+- **スキップのヒント**(診断 §7・比較画像 #6): 縦長で新しいゾーンの上中央に重なるため、CSS でレイアウト別に上へ移す(打撃 `top: 30%`、守備 `top: 27%`。`.bb-game--batting`/`--pitching` の配下のセレクタ)。ゾーン・投手・テロップ(上から 38%)と重ならないことを H12 で確認する。文言は `pointer: coarse` では「タップでスキップ」、それ以外は従来の「タップ / Space でスキップ」(CSS の `@media` で 2 つの `span` を切り替える)。
+
+### 8. 打球の見え方(中継カメラ)— 診断 #10
+
+- **最小表示径**: `ballScaleFor(camera, ball) = max(1, minRatio·dist·2·tan(fov/2) / (2·ballRadius))`(`dist` = カメラからボールまでの距離、`minRatio` = `WORLD_PARAMS.ball.minScreenDiameterRatio` 0.0095 = 表示高の 0.95%。844px で 8px、720px で 6.8px)。`SceneFrame.ball.scale` に入れる。**中継カメラへ移り始めてから(`ctx.chase !== null`)だけ**適用し、投球中・接触前は 1。render は `ball` のメッシュと影の円盤にこの倍率を掛ける。
+- **落下点のリング**: `SceneFrame.landingMark = { visible, position, radius }`。打球が**フライまたはライナーでホームランでないとき**(ファウルの飛球を含む。ゴロ・ホームランは出さない)、接触 +200ms から落下 +400ms まで、`batted.end` の地面(y 0.07)に黄色の半透明のリング。半径 = `max(2.0m, 0.03·2·dist·tan(fov/2))`(画面で表示高の 3%)。
+- **滞空の延長**: フライ `1000 + 28d`、ライナー `600 + 16d`(ms)。見かけの重力: 外野フライ(81m)は 3.7G → 約 1.5G、ライナー(61m)は 2.9G → 約 1.6G、ファウルの飛球(43m)は 4.1G → 約 1.7G、ホームラン(124m)は 3.1G → 約 1.2G。野手の走行時間は滞空 × 1.15 に連動して伸びる(走る速さは遅くなるが、距離は変わらない)。`play-plan.test.ts` の `endMs ≤ D + 6000` は最長の滞空 + テロップ + 余韻から計算する式に変える(ホームランで約 D + 5800ms になるため)。
+- **縦長の `kLook`**: 中継カメラの注視点の高さ係数を 0.6 → 0.4(縦長のみ。`k` で補間)。ホームランの頂点が上部の HUD の帯(上から約 130px)に入らないようにする。H12 で確認し、入るなら 0.3 まで下げてよい。
+- 中継カメラの位置の式・blend 時間(500ms/250ms)は変えない。FOV の式は `chaseCamera(ball, aspect, layout)` に移る(§4)。
+
+### 9. 描画負荷(タッチ端末)— 診断 #2
+
+- `render/look.ts` の `pixelRatioFor(quality, devicePixelRatio, coarsePointer)`: `low` は 1 固定(従来)。`normal` は `min(coarsePointer ? 1.5 : 2, dpr)`。
+- `buildStadium(geometry, crowd, options)` の `options.shadowMapSize`: `coarsePointer` なら 1024、それ以外は 2048(`LIGHT_LOOK.sun.shadow.mapSize`)。
+- `coarsePointer` は `render/stage.ts` が `window.matchMedia("(pointer: coarse)")` で一度だけ判定する(`window` に触れてよいのは `stage.ts` のみ、の既存規約どおり)。`matchMedia` が無い環境は偽。
+- 効果: メインスレッドとレンダリング負荷を下げて、入力→画面の遅れとフレーム落ちを減らす(遅延補正 70ms の前提を満たしやすくする)。実機の数値は計測しない(実機は人間の試遊)。E2E は `quality: "low"` で影響を受けない。
+
+### 10. バランス再調整の方針と検証 — 診断 §0・§4
+
+**問題**: 操作性を直す(ずれを減らす・当たり範囲を広げる・カメラで精度が上がる)と、ボット B(スマホ標準)の安打が 32% → 75%(見逃し猶予 +250ms・ボール半径・meetBaseRx 0.6 の案 ⑥)になる。ボットの位置誤差は、新しいカメラでは「ゾーン単位で約 0.5 倍」(px が約 1.9 倍になるため)になり、カーソルの中心で捉えて打球が**ほぼ全てライナー**になり、結果表のライナー行の安打率(40〜85%)がそのまま出る。
+
+**目標**:
+
+| 対象 | 目標 |
+| --- | --- |
+| ボット B(スマホ標準) | 無効(見逃し扱い)0%、**安打率 30〜35%**(ストライクを振った球に対する割合) |
+| CPU 打者(ふつう) | 打率(`balance.test.ts` の定義 = 安打 ÷ (打席 − 四球))が .23〜.29(既存の許容 .18〜.34 の内側)。ボット B と同程度の精度。easy ≈ C、hard ≈ A |
+| 技量の勾配 | A > B > C(安打率が各 3 ポイント以上離れる) |
+| 強振 | ミートより当たりにくい(空振り・ファウルが増える)が、期待値が支配的に高くならない(安打率 ≤ ミートのボット + 8 ポイント) |
+
+**方針(構造は変えず、数値で合わせる)**:
+
+1. 打球形成の 5 段構造(接触 → 高さ → 方向 → 強さ → 結果表)は変えない。変えるのは §5 の当たり範囲(構造)と、次の数値。
+2. **打球タイプの帯**(`linerHalfBand`): 0.30 → **0.14**(カーソルの縦の中心から外れるほどゴロ/フライ)。位置が正確なほどライナーが増える関係は残すが、ボット B で約 40% に抑える。
+3. **強さのしきい値**: `mediumFrom` 0.18 → **0.38**、`strongFrom` 0.42 → **0.62**。q が平均 0.5 のとき「中」が中心になり、強い当たりは良い質(中心・ジャスト)のときだけ。
+4. **結果表**(ライナー行の安打率を下げ、フライとゴロの行はほぼ維持。各行の合計は 100。出発点):
+
+   | タイプ | 強さ | groundout | doublePlay | flyout | lineout | single | double | triple | homerun | error |
+   | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+   | ground | weak | 55 | 38 | - | - | 7 | - | - | - | - |
+   | ground | medium | 46 | 32 | - | - | 20 | - | - | - | 2 |
+   | ground | strong | 32 | 25 | - | - | 36 | 5 | - | - | 2 |
+   | liner | weak | - | - | - | 62 | 33 | 5 | - | - | - |
+   | liner | medium | - | - | - | 42 | 42 | 14 | 2 | - | - |
+   | liner | strong | - | - | - | 22 | 40 | 28 | 4 | 6 | - |
+   | fly | weak | - | - | 97 | - | 3 | - | - | - | - |
+   | fly | medium | - | - | 80 | - | 6 | 9 | 1 | 4 | - |
+   | fly | strong | - | - | 42 | - | - | 18 | 3 | 37 | - |
+
+   既存の不変条件(タイプと矛盾する結果は 0、`doublePlay` は ground のみ、強さに対して安打の重みが単調非減少、fly strong の本塁打 > liner strong の本塁打、ground の本塁打・三塁打は 0)は守る。
+5. **机上見積もり**(ボット B: 位置 σ 約 0.12 ゾーン単位、時刻 σ 50ms): ライナー約 38%・ゴロ約 31%・フライ約 31%、強さ 弱 24%・中 52%・強 24% で、インプレー内の安打率 約 37%、×(インプレー 92%)≒ **34%**。**実測ではなく出発点の見積もり**。ボット試算(下)で確認し、帯に入るまで調整する。
+6. **CPU 難易度**: ふつうの `cursorSigma` 0.34 → 約 0.15、`timingSigmaMs` 65 → 約 55(「ふつう ≈ ボット B」)。easy は 0.22/75、hard は 0.10/42 を出発点にする。理由: 判定にボール半径を加えたうえで強さのしきい値を上げたため、旧い精度(0.34)のままでは CPU の q が低く弱い当たりばかりになり、打率が下限(.18)を割る。難易度の順序(easy > normal > hard のノイズ)は保つ。
+
+**動かしてよい値**(この順に調整): `linerHalfBand`(0.08〜0.22)、`mediumFrom`(0.30〜0.45)、`strongFrom`(0.52〜0.72)、`RESULT_TABLE` の重み(上の不変条件を守る範囲で、各セル ±8)、`foulRatio`(0.6〜0.8)、`trajectoryShiftPerLevel`(0.05〜0.15)、`powerBase`/`powerPerAbility`/`kindFactor`/`directionFactor`(強振の調整のため ±15%)、CPU 難易度の `cursorSigma`/`timingSigmaMs`/`zoneSwingRate`/`chaseSwingRate`。**動かさない値**: `contactWindowMs`・`powerWindowScale`・`centerRatio`(P13 の「ジャスト」と整合)、`meetBaseRx`・`aspect`・`powerScale`、`ballReachX/Y`、`lateCutoffMs`、`inputLatencyMs`、`PITCH_PARAMS`、`LANDING_BANDS`、選手の能力値、チームデータ。
+
+**検証方法 = 人間代理ボットを単体テストとして持つ**(診断の `bot-sim.ts` の再現):
+
+- `model/game/bot-sim.ts`(新規): 診断のボットと同じ定義 —— 遅延 L・時刻のばらつき σt・反応時間 RT・位置のばらつき σpos(px)・端末(スマホ/PC)・追跡(直線外挿)・到達の手がかりのずれ。1 球ごとに `chooseCpuPitch` → `deliverPitch` → ボットの `atMs = D + 手がかりのずれ + L + N(0, σt) − 遅延補正`、`atMs > D + lateCutoffMs` なら「無効」(見逃し扱い)、そうでなければカーソル位置を `pitchBallAt` の直線外挿 + N(0, σpos px ÷ px/ゾーン単位) として `resolvePitch`。ストライクだけ振る。ボット側の乱数は独自の mulberry32(`Math.random` 禁止)、ゲーム側は `createRng`。
+- px/ゾーン単位: スマホ(390×844、打撃レイアウト)はカメラ設計値から x 77・y 87、PC(1280×720)は x 90.7・y 104.5。**H10 で `camera/project.ts` の計算値と ±8% 以内に一致することをテストで固定する**(カメラを調整したらここが失敗して気づける)。
+- `model/game/bot-balance.test.ts`(新規): 固定シードで各ボット 4000 球。実行は数秒。受け入れの帯:
+
+  | ボット | L / σt / RT / σpos | 無効 | 空振り | ファウル | 安打率 |
+  | --- | --- | --- | --- | --- | --- |
+  | A 上手い人 | L = 補正量(正味 0) / 35 / 150 / 5px | 0% | ≤ 3% | ≤ 20% | 38〜55% |
+  | **B スマホ標準** | 80 / 50 / 200 / 8px(タッチ補正 70) | **0%(≤ 0.5%)** | ≤ 8% | 6〜20% | **30〜35%** |
+  | C スマホ初心者 | 100 / 70 / 250 / 12px | ≤ 2% | ≤ 15% | ≤ 25% | 20〜30% |
+  | D B + 到達を遅く感じる(+60ms) | 〃 | ≤ 2% | ≤ 15% | ≤ 30% | 18〜32% |
+  | E PC マウス | 40 / 40 / 150 / 10px(補正 20) | 0% | ≤ 5% | ≤ 15% | 33〜48% |
+  | B-強振(強振スイング) | B と同じ | 0% | ≤ 20% | ≤ 25% | 25〜45%、本塁打 ≤ 8% |
+  | CPU ふつう(参考。同じ定義 = ストライクを振った球あたり) | — | — | — | — | 24〜30% |
+
+  帯の根拠: 診断のボット試算(現状 B = 無効 8%・空振り 2%・ファウル 22%・安打 32%、CPU ふつう相当 = 28%)を、無効 0%・安打 30〜35%(B)に揃える。これは人間の代理モデルであり、実際の人間の手触りを保証しない(ゲート2の試遊で確認する)。
+- `balance.test.ts` の既存の基準は**変えない**(CPU の数値で吸収する)。変えざるを得ない場合は、変更前後の値と理由(例: 打率の許容を .18〜.34 → .20〜.34 など)を完了報告に書き、設計の見直しとして orchestrator に上申する。
+- 固定シードの期待値に依存する既存テスト(`reducer.test.ts`・`cpu-batter.test.ts` など)は、性質(単調性・不変条件)を保ったまま期待値を再導出する。しきい値を緩めてテストを通さない。
+- E2E の seed(`GAME_SEED` 47・`SKIP_SEED` 7・`SWING_SEED` 1)は判定の変更で結果が変わりうる。H11 で再探索する(spec のコメントの手順)。
+
+### 11. 契約の変更(`types/`・`WORLD_PARAMS`・主要な関数)
+
+`types/` は並列実装の契約で、**ステップ H0 で凍結**する。並列中の不足は編集せず完了報告で上申する(orchestrator がウェーブ間で直列に反映する。既存のルールどおり)。
+
+- `types/scene.ts`:
+  - `CameraPose = { position: Vec3; target: Vec3; fovDeg: number; lift: number }`(`lift` = シーンを上へずらす量、画面高に対する比、0 以上。render が `setViewOffset` で適用)。
+  - `SceneLayout = "batting" | "pitching"`(構図のレイアウト)。`SceneFrame.layout: SceneLayout`(ステージがゾーン矩形の再計算に使う)。
+  - `SceneFrame.ball = { visible; position; scale: number }`(`scale ≥ 1`)。
+  - `SceneFrame.zone = { visible; grid; pulse: number }`(`pulse` = 到達の手がかりの発光、0〜1)。
+  - `SceneFrame.landingMark = { visible: boolean; position: Vec3; radius: number }`(m)。
+- `types/stage.ts`: `StageOptions.battingCamera: CameraPose` → `battingCameraFor: (aspect: number, layout: SceneLayout) => CameraPose`。`onResize` は「サイズまたはゾーン矩形が変わった」通知として、レイアウトの変更でも呼ぶ。
+- `types/batting.ts`: `SwingInputKind = "touch" | "mouse" | "key"`、`SwingOrigin = { timeStamp: number; inputKind: SwingInputKind }`、`TimingLabel = "early" | "just" | "late"`、`TimingCue = { label: TimingLabel; dtMs: number }`。
+- `types/pitch.ts`: `BallPosition` を削除。`PitchSpec.bend` の説明を §6 に更新。
+- `hooks/useGameStage.ts` の `GameStageViewProps`(H0 で型だけ追加し、値は `null` 固定で返す。実装は H9): `timingCue: TimingCue | null`(表示中)、`lastTiming: TimingCue | null`(`data-*` ミラー用。次の投球まで保持)。
+- `model/world/space/params.ts`(`WORLD_PARAMS`、H0 で値まで入れる): `catch { holdMs }`(`mitt` は削除)、`pitch.breakExponent`・`bendGain`・`speedProfile`、`battingCameraPortrait`、`framing`(`landscapeMinHalfWidthTan` 0.37・`chaseMinHalfWidthTan` 0.37・`portraitMinHalfWidthTan { batting 0.25, pitching 0.38 }`・`portraitFullAspect` 0.7・`landscapeFullAspect` 1.0・`lift { batting 0.25, pitching 0.27, fullAspect 0.7, zeroAspect 1.2 }`)、`actors.batter.portraitX`、`batted.contactZ`(0.03)・`batted.fly/liner`、`chaseCamera.portraitKLook`、`ball.minScreenDiameterRatio`、`landingMark`、`cue { zonePulse { leadMs 20, holdMs 60, fadeMs 200 }, timingMs 900 }`。
+- `model/batting/params.ts`(`BATTING_PARAMS`、H0 で構造と出発値を入れ、H3 が調整): `lateCutoffMs`・`ballReachX`・`ballReachY`・`inputLatencyMs { touch, mouse, key }`・`maxEventAgeMs`、`linerHalfBand`・`mediumFrom`・`strongFrom` の出発値。
+- 主要な関数のシグネチャ(実装は担当ステップ):
+  - `camera/rig.ts`: `portraitBlendAt(aspect)`、`battingCameraFor(aspect, layout)`、`battingCamera()`(横長。残す)、`framingLiftFor(aspect, layout)`、`fovForAspect(baseFovDeg, aspect, minHalfWidthTan)`、`chaseCamera(ball, aspect, layout)`、`blendCamera(a, b, k, targetK?)`(`lift` も補間)、`ballScaleFor(camera, ball)`。
+  - `camera/project.ts`(新規): `projectPoint(pose, size, point) → { x, y, depth }`(ピンホール投影 + `lift`)、`zoneRectOf(pose, size, zone) → ScreenRect`。
+  - `path/pitch-path.ts`: `pitchBallAt(flight, elapsedMs)`(§6)、`heldBallAt(flight)`(着弾点。`mittBallAt` を置き換える)。
+  - `sequence/swing-time.ts`(新規): `swingAtMs(...)`(§2)。`sequence/timing-cue.ts`(新規): `timingCueOf`・`timingAt`(§7)。`sequence/input-route.ts`: `routeStagePointer`(拡張)・`routeStageMove`・`routeStageRelease`・`isTapGesture`(§3)。
+  - `sequence/frame.ts`: `SceneFrameInput` に `aspect: number`(非有限・0 以下は 16/9 とみなす)と `layout: SceneLayout` を追加。`sceneFrameAt` が `battingCameraFor(aspect, layout)`・`chaseCamera(ball, aspect, layout)`・打者の x(`portraitBlendAt` で補間)・`ball`(停止・待機・非表示・`scale`)・`zone.pulse`・`landingMark` を作る。`zonePulseAt(durationMs, tMs)` は `frame.ts` の内部関数(単体テストのため export)。
+  - `batting/contact.ts`: `scaleRadiiForPitch(radii, pitchKind)`(新規 export)、`measureContact`(reach)。
+- `model/world/` の依存許可リストに `batting/contact` を追加する(`swingWindowMs` を `timing-cue.ts` が使うため。`game/`・`cpu/`・`data/` を import しない規則は変えない)。
+
+### 12. 変更ファイル(概要)
+
+パスは `sample-app/frontend/src/features/baseball/` 相対(E2E・ドキュメントを除く)。担当は修正の実装ステップ。
+
+| 区分 | ファイル | 内容 | 担当 |
+| --- | --- | --- | --- |
+| 変更 | `types/{scene,stage,batting,pitch}.ts` | 契約(§11) | H0(`pitch.ts` は H1) |
+| 変更 | `model/world/space/params.ts`、`model/batting/params.ts` | 新しい定数・出発値 | H0(`batting/params.ts` の値の調整は H3) |
+| 変更 | `hooks/useGameStage.ts`(型のみ) | `GameStageViewProps` に 2 項目 | H0 → H9 で実装 |
+| 変更 | `model/world/path/pitch-path.ts`(+test)、`model/pitch/kinds.ts`(+test)、`model/pitch/params.ts` | 軌道の式・時間写像・誇張・曲がりの符号・`heldBallAt`・2D の定数削除 | H1 |
+| 削除 | `model/pitch/flight.ts`、`model/pitch/flight.test.ts` | 旧 2D の `ballPositionAt` | H1 |
+| 変更/新規 | `model/world/camera/rig.ts`(+test)、`camera/project.ts`(+test) | 縦長カメラ・レイアウト別の構図・補間・lift・投影 | H2 |
+| 変更 | `model/batting/{contact,batted-ball,result-table}.ts`(+test)、`model/cpu/difficulty.ts`(+test)、`model/game/view.ts`(+test) | 当たり範囲・帯・表・CPU・`arriveAfterMs` | H3 |
+| 新規 | `model/game/bot-sim.ts`、`model/game/bot-balance.test.ts` | 人間代理ボット | H3 |
+| 変更/新規 | `model/world/sequence/{input-route.ts,swing-time.ts,timing-cue.ts}`(+test) | 入力の時刻・振り分け・タイミング表示 | H4 |
+| 変更 | `render/{look,markers,stadium,stage}.ts`(+test) | `fovFor`/`framingLift` 削除、ボールの描画順(透明パス)・影・ゾーン枠の発光・リング・最小径・coarse・レイアウト追従 | H5 |
+| 変更 | `ui/{StageView,SwingControls,GameLayout}.tsx`、`ui/baseball-stage.css` | タイミング表示・`data-timing`・ヒントの位置と文言・`onSwing` の型 | H8 |
+| 変更 | `model/world/sequence/{frame,play-plan}.ts`(+test) | aspect・layout・ball(停止/待機/非表示/scale)・zone.pulse・landingMark・timing | H6 |
+| 変更 | `hooks/{usePitchFlight,usePointerInput,useBattingControls,useKeyboardInput,useStage3d}.ts` | `getSwingAtMs`・タッチの振り分け・`battingCameraFor`・`getAspect` | H7 |
+| 変更 | `hooks/{useStageDirector,useGameStage}.ts` | aspect・layout・カーソルの `cursorScale`・タイミング表示の配線 | H9 |
+| 新規 | `model/world/path/pitch-screen.test.ts` | 画面上の軌道の検証(M1・M2・S300) | H10 |
+| 変更 | `sample-app/frontend/e2e/baseball.spec.ts` | テスト5の追加・Space テストの安定化・タッチのテスト・seed の再探索 | H11 |
+| 変更 | `sample-app/README.md`、`docs/process/sample-app-dev.md` | 操作(ドラッグで狙う・タップ/2 本目の指でスイング)・ボット試算のテスト | H11 |
+| 不変 | backend、`@sample-app/shared`、`routes/`、`App.tsx`、`ci.yml`、`GameScreen.tsx`、`useKeyboardInput` の Space/Enter 排他、reducer・`GameState` | — | — |
+
+### 13. テスト戦略の変更
+
+**自動テストを新規作成するか:** する。合格基準は本書の既存「テスト戦略」を引き継ぎ、次を変更・追加する。期待値は `WORLD_PARAMS`/`BATTING_PARAMS` から計算し、H12 で調整してよい値のリテラルを書かない。
+
+**単体テスト(vitest、node)**:
+
+- `pitch-path.test.ts`: 端点・単調性・クランプは維持。「ストレートは直線」は `lerp(release, landing, g(p))`(中点は `g(0.5)` = 0.625)に更新。**曲がりの向きの固定**: 終盤(p = 0.9〜1)の弦からのずれの変化の向きが、スライダー・カーブで +x、シュートで −x、カーブ・フォークで −y(落ちる)。初速の向きが `−break` の側。弦からのずれが `|break|·(p − pⁿ)`(`bendGain` 込み)に一致(1e-9)。既存の「p = 0.9 のずれは p = 0.6 より小さい」は維持(説明文の `(p − p³)` を `(p − pⁿ)` に)。`g` が単調で `g(0) = 0`・`g(1) = 1`。`heldBallAt` が `pitchBallAt(flight, D)` に厳密一致。旧 `mittBallAt` のテストは削除。
+- `kinds.test.ts`: straight は (0, 0)。曲がりの符号(slider.x > 0、curve.x > 0、shoot.x < 0、curve.y < 0、fork.y < 0)と大きさ(各 ≤ 2.0)。`flight.test.ts` は削除。
+- `rig.test.ts`: `battingCamera()`(横長)は従来の固定値 `(0, 1.25, 3.4)/(0, 1.0, −18)/34°` に **`lift: 0`** を加えた形で一致(リテラルのまま。横長は変えないため)。`battingCameraFor(16/9, layout)` が両レイアウトで `battingCamera()` に一致。`battingCameraFor(1.0, …)` は横長、`≤ 0.7` は縦長(`WORLD_PARAMS.battingCameraPortrait` と `framing` から計算。打撃/守備で水平半幅 tan と lift が違う)。`portraitBlendAt` が単調で 0〜1。アスペクトを走査して、水平半幅 tan(= `tan(fov/2)·aspect`)が `lerp(0.37, 縦長の値, k)` 以上、FOV ≥ 34°、連続(隣接 0.01 の差が小さい)。`chaseCamera(ball, aspect, layout)`: 位置・注視点は `WORLD_PARAMS.chaseCamera` から計算(縦長で `kLook` が 0.4)、**FOV は縦長でも従来の `fovFor`(水平半幅 tan 0.37)と同値で、打撃の 0.25 にならない**。`blendCamera` が `lift` を補間。**blend の起点が接触前のカメラと一致する**(`k = 0` の blend が `battingCameraFor(aspect, layout)` に厳密一致)。
+- `project.test.ts`: 390×844 の縦長・打撃で、ゾーン矩形の幅 ≥ 140・高さ ≥ 155(設計値 154×174 の許容)、矩形がビューポート内で左右の余白 ≥ 40px。縦長・守備で、ゾーン幅 ≥ 90、格子(ゾーンを中心から 5/3 倍)の下端 ≤ 468px(ティッカー上端 476 − 余白)。横長 1280×720 で従来の 181×209px(±2)。診断の案 B'(位置 (0, 1.75, 2.6)・注視 (0, 0.55, −18)・minTan 0.25・lift 0.26)を `projectPoint` に与えると x 117〜271・y 376〜550(±2px)になる**検算テスト**(投影の式が three と一致することの根拠)。打者の頭の位置(`195 + 780·(x − cx)/奥行き` 相当)が、縦長・打撃で ≥ 60px。
+- `contact.test.ts`: 「d > 1 は空振り」を更新 —— 接触の境界は `(rx + ballReachX)`・`(ry + ballReachY)`。`rx·1.01` は接触(q = 0)、`(rx + ballReachX)·1.01` は空振り。`q` の式(中心距離ベース、`max(0, 1 − d)`)・`height`・窓の境界・強振・ミート能力の既存テストは維持。`scaleRadiiForPitch` が `effectiveRadii` と一致。
+- `batted-ball.test.ts`・`result-table.test.ts`: パラメータを import しているので原則そのまま通る。表の不変条件(§10)が維持されていることを確認。
+- `view.test.ts`: 人間打者の `arriveAfterMs` = `durationMs + BATTING_PARAMS.lateCutoffMs`。
+- `bot-balance.test.ts`(新規): §10 の帯。`bot-sim` の px/ゾーン単位が `project.ts` の値と ±8%、遅延補正が `BATTING_PARAMS.inputLatencyMs` と一致(H10)。
+- `balance.test.ts`: 基準は不変(§10)。
+- `difficulty.test.ts`: 難易度の順序(ノイズが easy > normal > hard)・下限(0 にならない)を維持。
+- `input-route.test.ts`: §3 の 3 つの表の**全組み合わせ**を走査 —— (1) 2 本目以降のタッチ(`holding` でも `enabled` でもない) は `swing-here`/`ignore` のみ(`skip` にならない)。(2) `holding` が真で 1 本目の主ポインタは必ず `skip`(`swing`/`swing-here`/`drag-start` は返らない。既存の性質を維持)。(3) 1 本目のタッチは `holding` が偽で `enabled` なら `drag-start`、マウス/ペンは `swing`。(4) 主ポインタ操作でないマウス/ペンは `ignore`。`routeStageMove`: `held` かつ `holding` でない最初の move が `drag-start`、`holding` 中は `ignore`、ドラッグ中は `drag`。`routeStageRelease`/`isTapGesture`: 境界(180ms ちょうど・10px ちょうど)、スキップに使った指・ドラッグした指・マウスは `none`。`isSkipKey` は不変。
+- `swing-time.test.ts`: §2 の表を全行。timeStamp が新しい/古い(251ms)/未来(負)/`NaN`/epoch 値のとき `now` が使われ、補正は引かれる。`timeScale` 8 で補正が換算されない。入力種別 3 つ。
+- `timing-cue.test.ts`: `just` の境界(ミート ±37.5ms 未満、強振 ±28.125ms 未満)、早い/遅いの符号、`timingAt` の区間(`startMs` 以上 `endMs` 未満)。
+- `frame.test.ts`: `aspect`・`layout` 入力で `camera` が `battingCameraFor(aspect, layout)` に一致(`16/9` では従来どおり `battingCamera()`)。打者の x が `k` で補間(z は不変)。**ボール**: `tMs ≤ D` は `pitchBallAt`、接触ありの plan は `tMs < contactMs` で着弾点に留まり `contactMs` で打球の始点(= 着弾点)に切り替わる(位置が連続)、接触なし・plan なしは `D + holdMs` まで着弾点、以降は非表示。`ball.scale` が `ctx.chase = null` で 1、中継カメラ中は表示高比 `minRatio` を満たす最小の倍率(`ballScaleFor` と一致)。`zone.pulse` が D−20ms 前 0、D〜D+60ms で 1、D+260ms 以降 0。`landingMark` がフライ/ライナー(ファウルの飛球を含む)で出て、ゴロ・ホームランで出ない。既存の性質(決定論・入力を変更しない・全数値が有限)を維持。
+- `play-plan.test.ts`: 人間の見逃しの `resolvedAtMs` を `D + lateCutoffMs` に。**D+150〜D+250 の人間スイングは `swinging-strike` の空振り**(`startMs = atMs`、`contactAtMs = atMs + 132`)になる。`timing` の有無と値。`batted.start` の z が `WORLD_PARAMS.batted.contactZ`(= ゾーン平面)。`endMs ≤ D + 上限` を `WORLD_PARAMS` の最長の滞空(ホームラン級)+ テロップ + 余韻から計算する式に。
+- `look.test.ts`・`markers.test.ts`・`stadium.test.ts`(render の smoke): `fovFor`/`framingLift` のテストを削除し、`pixelRatioFor` の coarse(≤ 1.5)、`buildStadium` の `shadowMapSize`、ボール材質が `transparent: true` かつ `depthTest === false` でカーソルの塗り・リングより `renderOrder` が大きい、カーソルの塗りの `depthWrite === false`、カーソルの Group の `renderOrder` が 0、影の円盤の不透明度、ゾーン枠の発光板・リングの生成と破棄を確認。
+- `pitch-screen.test.ts`(新規、H10): スマホ 390×844 の打撃レイアウトで、5 球種 × 着弾(ゾーン中央・四隅・外角低め)の画面座標を `pitchBallAt` と `projectPoint` で計算し、§15 の M1・M2・S300 を満たす。
+
+**E2E(Playwright)**:
+
+- テスト5(オーバーレイの幾何検証): 縦長(390×844)の打撃に「ゾーン幅 ≥ 140px・高さ ≥ 155px、ビューポート内で左右の余白 ≥ 40px」、守備に「ゾーン幅 ≥ 90px、ゾーン矩形を 5/3 倍に広げた矩形(格子)がオーバーレイと交差しない」を追加。4 条件(デスクトップ/スマホ縦 × 打撃/守備)でゾーンがオーバーレイと交差しない検証は維持(レイアウト別の構図が効いているかの機械確認)。レイアウト(打撃/守備)の切り替え後に `data-zone-rect` が更新されることも確認する。
+- **Space でスイング(F1 の安定化)**: 「飛行中に Space を押す → `swinging-strike`」を保つ。ページ内のトレースに、keydown の `event.timeStamp` と飛行開始時刻(MutationObserver の `performance.now()`)の差を記録し、**有効試行の条件**を「keydown が `data-duration-ms` + 250(= `lateCutoffMs`。spec 内の定数にコメントで関連を書く)− 100ms 以内に届いた」とする。無効な試行(環境が遅くて遅れた)は失敗にせず、次の投球で最大 5 回まで再試行する。有効な試行では、`data-timing` が出ている(スイングが受理された)、`data-play-kind` が `swinging-strike`、`data-timing` が `early` であることを検証する。有効な試行が 5 回得られなければ「環境が遅すぎる」と明示して失敗させる。有効な試行でスイングが受理されなかった場合は**必ず失敗**(回帰の検出)。`--repeat-each=10 --workers=2` で 0 件失敗を目標にする。
+- **タッチ(新規)**: `hasTouch`・390×844 で人間打撃。(1) `page.touchscreen.tap` で飛行中にステージをタップ → `data-timing` が出て `data-play-kind` がスイング結果(`swinging-strike`/`foul`/`in-play`)。(2) CDP `Input.dispatchTouchEvent` で 1 本目をドラッグ中に 2 本目の指でステージをタップ → 同様にスイング。どちらも有効試行のガード(`data-timing` の有無で受理を判定し、受理されない遅い試行は再試行)。押しっぱなしの指(`held`)は `routeStageMove` の単体テストと手動確認で担保する(CDP での再現が不安定なため)。
+- **seed の再探索**: `GAME_SEED`(延長なし)・`SKIP_SEED`(後攻・中央ストレートの 1 球目が in-play)は判定・CPU の変更で変わる。spec のコメントの手順で探し直して定数化する。`SWING_SEED` は「早いスイングは必ず空振り」にだけ依存するので原則そのまま。
+- 起動パラメータ・待ち合わせ・固定 sleep を使わない方針は変えない。
+
+**構造検査(`/test`・`code-reviewer` が grep)の更新**: 既存の 1〜12 に加えて —— (13) `from "three"` が引き続き `render/` のみ、`render/` に `fovFor`・`framingLift` が無い。(14) `render/` が縦横比・レイアウトで構図を分岐していない(`aspect` は `placeCamera` の `camera.aspect` とリサイズ、`layout` は `battingCameraFor` に渡すだけ)。(15) `model/pitch/flight.ts`・`ballPositionAt`・`BallPosition`・`mittBallAt`・`WORLD_PARAMS.mitt` が無い。(16) `usePointerInput` が `routeStagePointer`/`routeStageMove`/`routeStageRelease` の戻り値で分岐し、`holding` を直接参照していない。(17) 既存の検査 9 のうち「`useKeyboardInput.ts` が変更されていない」は、**`onSwing` に `origin` を渡す変更だけ許可**に読み替える(Space/Enter の排他は不変)。(18) スイング時刻を `performance.now()` の差だけで求めている箇所が無い(`swingAtMs` を経由する)。
+
+**手動確認(ゲート2の試遊の前に tester が実施)**: ① スマホ縦(390×844、`hasTouch`)で、ゾーン・投手・打者・ボールの見え方(修正前後の画像と比較)と、守備の格子がティッカーに隠れない。② 1 本指のドラッグ → タップでスイング、ドラッグ中の 2 本目の指でスイング、スキップ後に置いたままの指でドラッグが始まる。③ 早い/遅い/ジャストの表示が出て、窓外の遅いスイング(D+150〜D+250)でも空振りの演出が返る。④ 変化球 4 種の曲がりの向き・曲がり方の見え方と、D の瞬間のゾーン枠の発光・影。⑤ D ちょうどで振ったとき、ボールが着弾点で待ってから打球になり、跳ばない。⑥ 打球の追従(ボールが見える・リング・ホームランの頂点が HUD に入らない)、接触時にカメラが跳ばない。⑦ ボットの試算結果(`bot-balance.test.ts` の出力)を完了報告に貼る。
+
+### 14. 修正の実装ステップ(H0〜H12)
+
+実装順のチェックリスト。**同じファイルを複数ステップで触らない**(例外: H0 が型・定数を先に入れる `batting/params.ts` と `useGameStage.ts`(型のみ)を、後続の H3・H9 が別ウェーブで引き継ぐ)。「並列」欄のステップ同士は同時に dispatch できる(ファイル所有が重ならず、依存も無い)。実装者は担当ファイル以外を編集しない。`types/` は H0 で凍結し、型の変更が必要になったら編集せず報告する。
+
+| ウェーブ | ステップ | 並列 |
+| --- | --- | --- |
+| 1 | H0 | — |
+| 2 | H1, H2, H3, H4, H5, H8 | 並列可(6 ステップ。H8 は H0 の型だけに依存し、他と所有ファイルが重ならない) |
+| 3 | H6, H7 | 並列可(H6 は H1・H2・H4 の後、H7 は H2・H4・H5 の後) |
+| 4 | H9 | — |
+| 5 | H10 | — |
+| 6 | H11, H12 | 並列可 |
+
+**H0〜H9 の間は全体の typecheck が緑にならない**: H0 で `CameraPose`・`SceneFrame`・`StageOptions` の型を変えるため、担当外ファイル由来の typecheck エラーが残る(各ステップは担当ファイルの lint と単体テストで完了とし、他タスクの未完成ファイル起因のエラーは完了報告に記す)。**全体の lint・typecheck・build・単体テストの緑は H10 の完了条件**。この間のコミットは出荷しない(既存の A2〜E のときと同じ扱い)。
+
+共通の完了条件(各ステップ): 担当ファイルが `cd sample-app && npx eslint <担当パス>` で 0 件。テストがあるステップは `cd sample-app/frontend && npx vitest run <担当パス>` が成功。コミット・共有メモリへの書き込みは並列 dispatch 中は行わない(orchestrator が集約)。
+
+- [ ] **ステップ H0: 契約と定数の凍結**(直列)
+  - 依存: なし。担当ファイル: `types/{scene,stage,batting}.ts`、`model/world/space/params.ts`、`model/batting/params.ts`、`hooks/useGameStage.ts`(`GameStageViewProps` の型と `null` 固定の値のみ)
+  - やること: §11 のとおり型を定義する(`pitch.ts` は H1)。`WORLD_PARAMS` に §「決定値の一覧」の新しい値を入れ、`mitt` を削除して `catch` を入れ、滞空(`batted.fly/liner`)と `batted.contactZ`(0.03)を新しい値に更新する。`BATTING_PARAMS` に `lateCutoffMs`・`ballReachX/Y`・`inputLatencyMs`・`maxEventAgeMs` を入れ、`linerHalfBand`・`mediumFrom`・`strongFrom` を出発値にする(結果表と CPU は H3)。
+  - 完了条件: 担当ファイルの lint 0 件。`types/` が他セグメントを import していない。既存のテストが `WORLD_PARAMS` の滞空・`contactZ`・`linerHalfBand` などを参照して通る(リテラルで固定していない)ことを確認し、落ちるもの(`mitt` を参照するテスト等)は担当ステップに申し送る。
+
+- [ ] **ステップ H1: 投球の軌道・球種の曲がり・旧 2D の削除**(並列: H2, H3, H4, H5, H8)
+  - 依存: H0。担当ファイル: `model/world/path/pitch-path.ts`(+test)、`model/pitch/kinds.ts`(+test)、`model/pitch/params.ts`、`types/pitch.ts`、削除: `model/pitch/flight.ts`・`model/pitch/flight.test.ts`
+  - やること: §6 のとおり式(時間写像 `g`・誇張・`break`)・`bend` の符号と値・`heldBallAt`(`mittBallAt` を置き換え)を実装し、テストを更新する(§13)。旧 2D の `ballPositionAt`・`BallPosition`・`PITCH_PARAMS.startPoint`/`startScale` を削除する。
+  - 完了条件: 担当の `vitest run` 成功(曲がりの向きの固定・端点の厳密一致・弦からのずれの形・`g` の単調性)。`grep -rn "ballPositionAt\|BallPosition\|startScale\|mittBallAt" sample-app/frontend/src` が `frame.ts`・`frame.test.ts`(H6 が直す)以外で 0 件。
+
+- [ ] **ステップ H2: カメラ・構図・投影**(並列: H1, H3, H4, H5, H8)
+  - 依存: H0。担当ファイル: `model/world/camera/rig.ts`(+test)、`model/world/camera/project.ts`(+test、新規)
+  - やること: §4 のとおり `portraitBlendAt`・`battingCameraFor(aspect, layout)`・`framingLiftFor`・`fovForAspect`・`chaseCamera(ball, aspect, layout)`・`blendCamera`(`lift` 補間)・`ballScaleFor` と、ピンホール投影 `projectPoint`・`zoneRectOf` を実装する。three は import しない。診断の案 B' の検算テスト、打撃/守備の格子の収まりテストを書く。
+  - 完了条件: 担当の `vitest run` 成功(横長は従来と一致・縦長・打撃のゾーン幅 ≥ 140・守備の格子の下端 ≤ 468・B' 検算・連続性・中継カメラの FOV が 0.37 のまま・blend の起点が一致)。`from "three"` が無い。
+
+- [ ] **ステップ H3: 判定・CPU・バランス・ボット検証**(並列: H1, H2, H4, H5, H8)
+  - 依存: H0。担当ファイル: `model/batting/{params,contact,batted-ball,result-table}.ts`(+test)、`model/cpu/difficulty.ts`(+test)、`model/game/view.ts`(+test)、`model/game/bot-sim.ts`・`model/game/bot-balance.test.ts`(新規)、固定シードの期待値に依存する既存テスト(`reducer.test.ts`・`cpu-batter.test.ts` など)の再導出、`balance.test.ts`(原則無改変)
+  - やること: §5(`measureContact` の reach・`scaleRadiiForPitch`)と §10(出発値の設定 → ボット試算 → 調整)を実装する。`arriveAfterMs` を `lateCutoffMs` に。`bot-sim.ts` のスマホ px/ゾーン単位は暫定の固定値(x 77・y 87、PC は x 90.7・y 104.5)でよい(整合テストは H10)。調整内容(各値の前→後)と最終的なボット試算の表を完了報告に書く。
+  - 完了条件: 担当の `vitest run` 成功。`balance.test.ts` が**基準を変えずに**成功。`bot-balance.test.ts` の帯(§10 の表)をすべて満たす。満たせない帯があれば、緩めずに理由と最良の値を報告する(設計の見直しとして上申)。
+
+- [ ] **ステップ H4: 入力の時刻・振り分け・タイミング表示(純関数)**(並列: H1, H2, H3, H5, H8)
+  - 依存: H0。担当ファイル: `model/world/sequence/{input-route.ts,swing-time.ts,timing-cue.ts}`(+test。`swing-time.ts`・`timing-cue.ts` は新規)
+  - やること: §2・§3・§7 のとおり実装する。`input-route.test.ts` は表の全組み合わせを走査する。
+  - 完了条件: 担当の `vitest run` 成功(全組み合わせ・境界・`timeScale`)。`world/` が `game/`・`cpu/`・`data/` を import していない。`from "react"`・`document`・`window`・`performance` が無い。
+
+- [ ] **ステップ H5: render**(並列: H1, H2, H3, H4, H8)
+  - 依存: H0。担当ファイル: `render/{look,markers,stadium,stage}.ts`(+`look|markers|stadium` の test)
+  - やること: §4(`fovFor`/`framingLift`/定数の削除、`placeCamera` が `pose.fovDeg`/`pose.lift` を使う、`battingCameraFor(aspect, layout)` でゾーン矩形、`SceneFrame.layout` の変化で矩形を再計算して `onResize`)、§6(影、ゾーン枠の発光板、ボールの描画順)、§8(`ball.scale`・落下点のリング)、§9(`pixelRatioFor` の coarse・`shadowMapSize`・`matchMedia`)を実装する。`render/` は `types/` と `three` だけを import する。
+  - **描画順の実装上の注意(比較画像 #8)**: ボール(本体と輪郭)の材質を `transparent: true`(透明パス。不透明のままだと renderOrder に関わらず透明パスのカーソルより先に描かれる)・`depthTest: false`・`depthWrite: false` にして renderOrder をカーソルより大きくする(輪郭 11.5・本体 12)。カーソルの `Group` の `renderOrder` は外し(Group の値が子全体の第1キーになる)、塗り・リング・中心点のメッシュに個別に付ける。カーソルの塗りは `depthWrite: false`。ゾーン枠の発光板も透明で `depthTest: false`(renderOrder 10)。
+  - 完了条件: 担当の `vitest run` 成功。`import * as THREE` が無い。`document`・`window`・`matchMedia` を使うのが `stage.ts` のみ。`render/` に `fovFor`・`framingLift` が無い。
+
+- [ ] **ステップ H8: UI(タイミング表示・ヒント・型)**(並列: H1, H2, H3, H4, H5)
+  - 依存: H0。担当ファイル: `ui/{StageView,SwingControls,GameLayout}.tsx`、`ui/baseball-stage.css`
+  - やること: §7(ゾーン枠の上端中央の直上のピル `bb-stage__timing`、`data-timing`/`data-timing-ms`、スキップのヒントのレイアウト別の位置と coarse の文言)、`SwingControls`・`GameLayout` の `onSwing` の型を `PointerEventHandler<HTMLButtonElement>` に変える。props のみのコンポーネントに hooks を呼ばない。
+  - 完了条件: 担当の lint 0 件。`ui/` から `../model`・`../render` を import していない。`bb-stage__timing` が `pointer-events: none`。
+
+- [ ] **ステップ H6: sequence の合成(frame・play-plan)**(並列: H7)
+  - 依存: H0, H1, H2, H4。担当ファイル: `model/world/sequence/{frame,play-plan}.ts`(+test)
+  - やること: §1(`ballFrame` の停止・待機・非表示、`mittBallAt` → `heldBallAt`、遅いスイングの空振りの確認)、§4(`aspect`・`layout` 入力、打者の x、`contactZ`)、§6(`zonePulseAt`)、§7(`PlayPlan.timing`)、§8(`ball.scale`・`landingMark`)を実装する。
+  - 完了条件: 担当の `vitest run` 成功(§13 の `frame.test`・`play-plan.test`)。`frame.ts` の各関数が 60 行以内。`grep mittBallAt` が 0 件。
+
+- [ ] **ステップ H7: hooks の部品**(並列: H6)
+  - 依存: H0, H2, H4, H5。担当ファイル: `hooks/{usePitchFlight,usePointerInput,useBattingControls,useKeyboardInput,useStage3d}.ts`
+  - やること: §2(`getSwingAtMs`、`swingNow(origin?)`、スイングボタン用の `swingFromButton`、キーの `origin`)、§3(`usePointerInput` の 3 つの `route*` による分岐、タップ候補・`held` の ref)、§4(`useStage3d` が `battingCameraFor` を渡し、`getAspect` を返す)を実装する。全ての effect に cleanup を付ける(既存の例外規則は維持)。
+  - 完了条件: 担当の lint 0 件。`hooks/` から `three` を import していない。`usePointerInput` が `holding` を直接参照していない。`useKeyboardInput` の変更が `origin` の受け渡しだけ。
+
+- [ ] **ステップ H9: director と統合 hooks**(直列)
+  - 依存: H6, H7, H8。担当ファイル: `hooks/{useStageDirector,useGameStage}.ts`
+  - やること: `getAspect` を director に渡して `SceneFrameInput.aspect` に入れ、`layout`(`aimCell !== null` なら `"pitching"`、それ以外 `"batting"`)を入れる。飛行中の表示カーソルの半径に `scaleRadiiForPitch(…, session.flight.kind)` を掛ける(P9)。`plan.timing` から `timingCue`/`lastTiming` を作り(`Shown` に追加、スキップで消す、次の `flight` で `lastTiming` を消す)、`GameStageViewProps` に値を入れる。`useGameStage` が `swingNow` に `swingFromButton` を返す。
+  - 完了条件: 担当の lint 0 件。`skip()` が reducer に触れていない。`stage === null` でも plan を進めている(既存の検査 8)。
+
+- [ ] **ステップ H10: 統合確認**(直列)
+  - 依存: H9。担当ファイル: 残った型エラーの解消に必要な最小限のファイル(担当外のファイルを直す場合は完了報告に明記)、`model/game/bot-balance.test.ts`(整合テストの追加のみ)、`model/world/path/pitch-screen.test.ts`(新規)
+  - やること: `cd sample-app && npm run typecheck && npm run lint && npm run test && npm run build` を通す。`bot-sim` の px/ゾーン単位が `project.ts` と ±8% で一致し、遅延補正が `BATTING_PARAMS.inputLatencyMs` と一致することをテストで固定する。`pitch-screen.test.ts` で §15 の M1・M2・S300 を守る(満たせない場合は `bendGain`・`speedProfile` を範囲内で調整し、調整値を報告する)。構造検査(§13)を grep で確認する。`index` チャンクのサイズが 201.04KB から +5KB 以内であることを確認する。
+  - 完了条件: 上記がすべて成功。構造検査 1〜18 が pass。
+
+- [ ] **ステップ H11: E2E とドキュメント**(並列: H12)
+  - 依存: H10。担当ファイル: `sample-app/frontend/e2e/baseball.spec.ts`、`sample-app/README.md`、`docs/process/sample-app-dev.md`
+  - やること: §13 の E2E(テスト5の追加・Space テストの有効試行ガード・タッチのテスト・seed の再探索)。README に操作(ドラッグで狙う・タップまたは 2 本目の指でスイング・スイングボタン)、`sample-app-dev.md` に `bot-balance.test.ts` の見方を追記する。「パワプロ」等の名称は書かない。
+  - 完了条件: `cd sample-app && npm run test:e2e --workspace frontend` が 3 回連続で成功(`home.spec.ts` は無改変)。Space テストを `--repeat-each=10 --workers=2` で実行して失敗 0 件(有効試行が得られず失敗した場合は件数を報告)。
+
+- [ ] **ステップ H12: 見た目の確認と調整**(並列: H11)
+  - 依存: H10。**例外として次を調整してよい**: `WORLD_PARAMS` の「調整可」の値(§「決定値の一覧」の範囲内)、`render/{look,markers,stadium}.ts` の見た目の値、`ui/baseball-stage.css`。それ以外が必要なら変更せず報告する。
+  - やること: 390×844(`hasTouch`)と 1280×720 で修正前後のスクリーンショット(仮想時計+手動 rAF のハーネスで決定論的に撮る。[[swiftshader-playwright-input-latency]])を比較し、§「受け入れ基準」の表を計測して〇×を付ける。特に(1)縦長の打撃・守備のゾーン(格子)・投手・打者・HUD の重なり、(2)曲がりの向き・弦からの最大ずれ・最後の 300ms の割合、(3)タイミング表示の位置(テロップと被るなら下端の直下へ)、(4)ホームランの頂点と HUD、(5)360×640 の守備のバー、(6)ボールの停止・待機・消失の違和感(消える/待つが不自然なら `holdMs` や非表示の扱いを調整)、(7)打者の頭・バット・手の位置(§4)、(8)スキップのヒントの位置、(9)時間写像の違和感(強ければ `speedProfile` を下げる)、(10)接触時にカメラが跳ばない。画像(1 枚 500KB 以下、20 枚程度)を `docs/tests/assets/2026-10-13-baseball-game-feel/` に保存する。最大 3 ラウンドで未達の項目は理由を報告してゲートへ引き継ぐ。
+  - 完了条件: 受け入れ基準の表がすべて〇、または未達の理由が報告されている。`npm run lint`・`typecheck`・`test` が成功。**H11 と H12 の両方が完了した後に、orchestrator が E2E を最終実行して成功を確認する。**
+
+### 15. 受け入れ基準(診断の計測を再実行したときの目標値)
+
+測り方は、診断と同じ手順(実装の `pitchBallAt`・`heldBallAt`・`battedBallAt`・`chaseCamera` を three の `PerspectiveCamera` で投影、実画面は G の仮想時計+手動 rAF ハーネス、ボットは `bot-balance.test.ts`)。単体テストで機械的に守れるものは担当ステップに書いた。画面上の軌道の指標(M1・M2・S300)は次の定義。
+
+- **M1**: 弦(リリース点→着弾点の画面上の直線)からのボール中心の最大ずれ(px)。
+- **M2**: 同じ着弾のストレートとの、同時刻のボール中心の画面上の最大差(px)。
+- **S300**: 最後の 300ms に動く画面上の距離 ÷ 全体の距離(%)。
+
+| # | 指標 | 診断時(現状) | 目標 | 測り方・守る場所 |
+| --- | --- | --- | --- | --- |
+| 1 | スマホ 390×844 のゾーン枠(打撃) | 81×94px | 幅 ≥ 140px かつ 高さ ≥ 155px(設計値 154×174) | `project.test.ts`、E2E テスト5(`data-zone-rect`) |
+| 2 | 同(守備)のゾーン枠・5×5 格子 | 81×94px・格子の下端 y 408 | 幅 ≥ 90px(設計値 101×117)、格子の下端 ≤ 468px(ティッカー上端 476 − 余白。設計値 464) | `project.test.ts`、E2E テスト5 |
+| 3 | カーソル(ミート能力 56)/ 判定の当たり範囲(打撃) | 59×41px / (楕円のみ) | ≥ 100×68px / ≥ 130×100px(設計値 112×76 / 147×110) | `project.test.ts` + 半径 |
+| 4 | ボール径(リリース / ゾーン面。打撃) | 4.9 / 31px | ≥ 7 / ≥ 50px(設計値 7.5 / 59) | 投影計測(H12) |
+| 5 | 画面上の軌跡の長さ(打撃) | 88px | ≥ 250px(設計値 285) | `pitch-screen.test.ts` |
+| 6 | 投手の体から離れて見える時間(到達の何 ms 前から。打撃) | 160ms 前 | ≥ 350ms 前(設計値 377 以上) | `pitch-screen.test.ts` |
+| 7 | 縁が触れて見える範囲 ÷ 判定範囲(面積比) | 約 2.6 | ≤ 1.5(設計値 1.4) | 単体テスト(半径から計算) |
+| 8 | ボールの静止 − D / 到達後の画面上の移動 | +150ms / D→D+150ms で 95px 以上(ミットへ飛ぶ) | 0 / D→接触または D+100ms の間 0px(止まる)。接触の瞬間の打球の始点が待機位置と一致(跳びなし) | `frame.test`、画像(H12) |
+| 9 | 人間の見逃し確定 | D+150ms | D+250ms。D+150〜250 のスイングは空振りの演出が返る | `view.test`・`play-plan.test` |
+| 10 | スイング時刻の遅延補正(タッチ/マウス・キー) | 0 | 70ms / 20ms。timeStamp の許容 0〜250ms | `swing-time.test` |
+| 11 | ボット B の無効率 / 空振り / ファウル / 安打率 | 8% / 2% / 22% / 32% | **0% / ≤ 8% / 6〜20% / 30〜35%** | `bot-balance.test.ts` |
+| 12 | ボット D(到達を +60ms 遅く感じる)の無効率 | 42%(+130ms は 88%) | ≤ 2% | `bot-balance.test.ts` |
+| 13 | ボット C(初心者)の安打率 | 17% | 20〜30% | `bot-balance.test.ts` |
+| 14 | ボット A > B > C の安打率の勾配 | — | 各 3 ポイント以上 | `bot-balance.test.ts` |
+| 15 | CPU ふつうの安打率(ストライクを振った球あたり)/ 打率 | 28%(診断の参考値)/ 未計測 | 24〜30% / .23〜.29。`balance.test.ts` 全項目が基準不変で成功 | `bot-balance.test.ts`・`balance.test.ts` |
+| 16 | 片手(右親指 1 本)で 狙う→振る | ボタンまで約 0.4 秒、空振り 45% | 指を離さずタップで 0 秒。タップまたは 2 本目の指で受理 | E2E(タッチ)・手動確認 |
+| 17 | 変化球の曲がりの向き(右投手) | 逆(スライダーは右打者側へ) | スライダー・カーブ = +x、シュート = −x、カーブ・フォーク = 落ちる | `pitch-path.test`・`kinds.test` |
+| 18 | M1: 弦からの画面上の最大ずれ(スマホ・打撃) | スライダー 8〜10px、カーブ 5〜8px、フォーク 0px(新しい式のみ・B' でも 10/5/0) | スライダー・シュート ≥ 12px、カーブ ≥ 7px(フォークは縦のみのため対象外) | `pitch-screen.test.ts` |
+| 19 | M2: 同じ着弾のストレートとの同時刻の最大差(スマホ・打撃) | — | スライダー・シュート ≥ 12px、カーブ・フォーク ≥ 20px | `pitch-screen.test.ts` |
+| 20 | S300: 最後の 300ms の画面上の移動の割合(スマホ・打撃) | 66〜80%(現行 66〜78%、B' + 新しい式 72〜80%) | ストレート・スライダー・シュート・カーブ ≤ 62%、フォーク ≤ 68%(設計値: ストレート 約 57%) | `pitch-screen.test.ts` |
+| 21 | 影の数・濃さ | 2 つ・10×2px・不透明度 0.25 | 1 つ・不透明度 0.5・円盤半径 ×1.8 | `markers.test`、画像 |
+| 22 | 到達の手がかり(ゾーン枠の発光) | 本塁・影(到達時にティッカーの下か画面外) | D−20ms で立ち上げ、D+260ms で消灯。打撃・守備・デスクトップのすべてで画面内 | `frame.test`、画像 |
+| 23 | 中継カメラ中のボール径(スマホ) | 1.2〜4.8px | ≥ 表示高の 0.95%(844px で 8px) | `frame.test`(`ballScaleFor`) |
+| 24 | 滞空(外野フライ 81m / ライナー 61m / ホームラン 124m) | 2081 / 1177 / 2807ms | ≥ 3000 / ≥ 1500 / ≥ 4000ms(設計値 3268 / 1576 / 4472) | `batted-path.test`(`WORLD_PARAMS` から計算) |
+| 25 | 打球の見かけの重力 | 2.9〜4.1G | ≤ 2G | `batted-path.test`(8·頂点 ÷ 滞空²) |
+| 26 | ホームランの頂点が上部の HUD の帯(上から約 130px)に入らない(スマホ縦) | 入る | 入らない | 画像(H12) |
+| 27 | 打者の頭の中心 x / バットとボールの中心のずれ / 手とゾーン枠の重なり(スマホ縦・打撃) | −48px / 31px(下) / 0 | ≥ 60px(設計値 73)/ ≤ 20px(ゾーン中央と四隅)/ 0 | `project.test`(頭)、画像(H12) |
+| 28 | スマホ縦のオーバーレイとの重なり(ゾーン・格子・投手・打者・スキップのヒント) | ヒントがゾーンに重なる・投手の頭がネームプレートの 2px 下 | 0(投手の頭とネームプレート下端の間 ≥ 8px) | E2E テスト5(ゾーン・格子)、画像(H12) |
+| 29 | 接触時のカメラの跳び | 打撃カメラを差し替えると跳ぶ | 接触前後で `frame.camera` が連続(blend の起点 = 接触前のカメラ。16ms あたりの移動 ≤ 1.5m) | `rig.test`・`frame.test` |
+| 30 | E2E「Space でスイング」の失敗 | 1/26 | `--repeat-each=10` で 0 件(無効試行は再試行) | E2E |
+| 31 | タッチ端末の描画負荷 | pixelRatio ≤ 2・影 2048 | pixelRatio ≤ 1.5・影 1024(`pointer: coarse`) | `look.test`・`stadium.test` |
+| 32 | `index` チャンクのサイズ | 201.04KB | +5KB 以内 | `npm run build`(H10) |
+
+**ゲート2での人間の試遊**: 実機(スマホ)で、(1)ボールが追えるか、(2)届いたときに振れて、早い/遅いの表示で自分のずれが分かるか、(3)カーソルが指に追従し片手で狙って打てるか、(4)変化球の曲がりが自然か(誇張と時間写像で違和感が無いか)、(5)守備のとき格子と投手が見えるか、を確認する。ボット・単体テストは代理であり、最終判断は人間が行う。
+
+### 16. リスク・トレードオフ・ロールバック
+
+- **バランスの出発値は机上見積もり**: 打球タイプの帯・強さのしきい値・結果表・CPU 難易度は、ボット試算で確認するまで当たらない。帯に入らない場合は、動かしてよい値(§10)の範囲内で調整し、それでも満たせなければ緩めずに上申する。ボットは人間の代理であり、実際の人間の手触りはゲート2の試遊で決まる。
+- **CPU 難易度の再調整は試合の結果を変える**: 固定シードに依存するテスト・E2E の seed が変わる。性質(単調性・不変条件)を保って期待値を再導出し、E2E の seed は再探索する(H3・H11)。`balance.test.ts` の基準は変えない。
+- **軌道の誇張と時間写像(P11)**: 変化量の誇張(`bendGain` 1.8)と、出だしが速く到達時が遅い時間写像は、実際の野球とは違う見かけの調整で、ユーザーが「不自然」と感じる可能性がある(特に球が減速して見えること)。H12 で画像と連写を確認し、強ければ `speedProfile` を 0.3 まで、`bendGain` を 1.4 まで下げる。誇張を完全にやめると、比較画像 #4 のとおり縦長でも画面上のずれは 0.4〜10px にとどまり、「軌道が不自然」の解消は期待できない。
+- **縦長カメラの構図(Q-B)**: ゾーンが画面右寄りになり、右端の外角のボールが画面外に出うる。打者は左で少し見切れる。守備ではゾーンが小さくなる(101×117px)。レイアウト別の構図は半イニングの切り替えで画面が切り替わる(UI のバーも同時に入れ替わるので許容)。収まらないときは、`framing` の値(§「決定値の一覧」の範囲)で調整する。
+- **接触点の z を変える影響**: `batted.contactZ` を −0.2 → 0.03 にすると、横長のバットとボールの位置関係(承認済みの S3)も変わる(バットが近づく側にずれる)。H12 で横長の S3 も確認する。
+- **タップでスイング(Q-A)**: ドラッグのつもりで軽く触れるとスイングする誤爆がありうる。タップは「≤180ms かつ ≤10px」に限り、長押し・ドラッグ・スキップに使った指は対象外にした。許容できなければ、1 本指のタップを外して「ボタン+2 本目の指」だけにする(§3 の pointerup の行を `none` にするだけ)。
+- **timeStamp の信頼性**: 古いブラウザや合成イベントで `timeStamp` の時計基準が異なる場合は、範囲外として `now` に戻る(補正は引く)。補正値(タッチ 70ms・他 20ms)は仮の固定値で、端末差(46〜120ms)は吸収できない。設定 UI は作らない(スコープ外)ので、端末が極端に遅い場合は D+250ms の猶予と「早い/遅い」の表示で自分で補う。
+- **ボールの停止と消失**: ボールが着弾点で止まって D+100ms に消える(捕手は打撃カメラ中は非表示)見た目が不自然ならば、`holdMs` を調整する、または捕手のミットを一瞬表示する案を後続で検討する(今回はやらない)。遅いファウルでは、消えたボールが接触の瞬間に再び現れる見た目が残る。
+- **ボールの `depthTest: false`**: ボールが人物や構造物の裏に回っても見える。内角の投球・ホームランの観客席では影響が小さい。違和感があれば、投球中だけ `depthTest: false`、打球中は通常に戻す(H12)。
+- **テンポ(Q-C)**: 滞空の延長でインプレーが長くなる。タップ/Space でスキップできる(確定済みの仕様)。許容できなければ延長を半分にする。
+- **小さい端末**: 高さ 700px 未満の守備のバーで格子の下端が掛かりうる(§4)。受け入れの対象は 390×844 と 1280×720。
+- **`CameraPose.lift`・`SceneFrame` の追加項目**: `CameraPose` を使う全ての箇所(テストの固定値・フィクスチャ)に `lift`、`SceneFrame` を作る箇所に `layout`・`zone.pulse` などが要る。H0 で型を変え、H2・H5・H6 で解消する。typecheck が赤い期間は出荷しない。
+- **旧 2D の削除**: `ballPositionAt` などの削除は未使用コードの整理で、Knip の残り(11 件のうち一部)も減る。`PITCH_PARAMS` の 2D 残置の他のフィールド(`viewHalfExtent` など)は触らない。
+- **ロールバック**: 変更は上の「変更ファイル」に閉じる(DB・外部システム・データ移行なし)。問題が出たら PR 単位で `git revert` する。ホーム画面(`/`)と `home.spec.ts` には影響しない。`CameraPose.lift` と `SceneFrame` の追加項目は加算的で、他の機能には波及しない。判定・バランスの変更(`BATTING_PARAMS`・結果表・CPU 難易度)は、元の値に戻せば第2版の挙動に戻る(`bot-balance.test.ts` は戻した値に合わせて帯を見直す)。
+
+### 既存本文への注記一覧
+
+既存の本文は書き換えず、次の箇所の末尾に「→ 修正設計で変更」の短い注記を付けた(本節の該当節を指す)。注記の無い記述は、本節で触れていない限り有効。
+
+1. 「本書の位置づけ」の経緯に 7 番(本節の存在)を追記。
+2. 「やらないこと」の「判定・CPU・ルール・バランスの変更(第1版のまま)」→ 判定(ボール半径・見逃し猶予)とバランスは本節で変更(§5・§10)。
+3. 「第1版から引き継ぐもの」の「ルール・判定・CPU・データ」の行 → `batting`・`cpu`・`pitch/kinds` の判定と数値は本節で変更。
+4. 「やること」の入力の行(スイングカーソル操作)→ タッチの振り分けを変更(§3)。
+5. 「時間軸・ゲートの規約」3(ミット 150ms)・6(人間打者の `durationMs + contactWindowMs`)→ §1。
+6. 規約 13 の「入力の振り分け」→ §3。演出時間表の「ミット」「打球」(滞空)の行 → §1・§8。
+7. 「world 設計」の表のミット・打撃カメラ・中継カメラ、`pitchBallAt` の式 → §1・§4・§6。
+8. 「型契約」の `CameraPose`・`SceneFrame` の末尾・`StageOptions.battingCamera` → §11。
+9. 「render 設計」の `fovFor`・`framingLift` → render から `model/world/camera` へ移動(§4)。
+10. 「hooks 設計」の `usePitchFlight` の行・`usePointerInput` のタッチの行 → §2・§3。
+11. ステップ G の「変えてはならない値」→ 打撃カメラ(縦長を追加)・ミット・判定へのボール半径は本節で変更。ゾーン実寸・リリース点・スイングの長さは引き続き固定。
+12. 「テスト戦略」の `rig.test.ts` の記述、構造検査 9(`useKeyboardInput.ts` が変更されていない)→ §13。
+
+(本節はレビュー前の追補である。設計レビュー(`design-reviewer`)と人間確認ゲート1を経て、「設計レビュー結果」「人間確認ゲート記録」に追記する。)
+
 ## 実装ステップ
 
 実装順のチェックリスト。**同じファイルを複数ステップで触らない**(例外は、A2 で暫定にして E で最終形にする `GameLayout`・`BaseballGamePage` と、ステップ G)。「並列」欄のステップ同士は同時に dispatch できる(ファイル所有が重ならず、依存も無い)。実装者は担当ファイル以外を編集しない。`types/` はステップ A で凍結し、型の変更が必要になったら編集せず報告する。
@@ -742,7 +1346,7 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - 完了条件: `cd sample-app && npm run test:e2e --workspace frontend` で `home.spec.ts`(無改変)と `baseball.spec.ts` が成功し、3回連続で安定。`grep -rin "パワプロ\|パワフル" sample-app --exclude-dir=node_modules` が0件。レイアウト検証(テスト5)が失敗したら、ステップ G に戻して調整する。
 
 - [ ] **ステップ G: 見た目の突き合わせと数値調整(UI 全体を含む)**(並列: F)
-  - 依存: E。**例外として次のファイルの見た目を調整してよい**: `render/{look,character,stadium,markers}.ts`・`model/world/space/params.ts`・`model/world/motion/` のキーフレーム表(いずれも数値・色・寸法のみ。構造・関数・型は変更しない)、`model/data/teams.ts` の `uniformColor`・`shortName`、**`ui/baseball-stage.css`・`ui/baseball.css`(スタイルは自由に調整してよい。ただしクラス名の契約と testid は変えない)**、**`ui/` の表示コンポーネントのマークアップ・クラス・文言(props・testid・hooks の有無は変えない)**。それ以外の変更が必要なら報告する。**ただし次の値は変えてはならない**(入力の対応・テストの固定値・判定との整合に関わるため): ゾーン実寸(`zone.halfWidth`/`bottom`/`top`/`planeZ`)、打撃カメラ(位置・注視・fov)、リリース点 `RELEASE_POINT`、スイングの長さ(全体 200ms・接触姿勢まで 132ms・`minSwingMs` 60ms)、`CPU_SWING_LEAD_MS`、`mittMs`、判定窓に関わる値(`model/batting/params.ts` 全般)。見た目が合わずこれらの変更が必要になる場合は、変更せず報告する。**調整してよい値(中継カメラの係数・blend、滞空式、捕手の表示しきい値、テロップ長・余韻、`fovFor` の `MIN_HALF_WIDTH_TAN`、`framingLift` の定数ほか)は、単体テストがリテラルで固定しておらず `WORLD_PARAMS`/定数を参照する設計なので、調整してもテストは壊れない**(テスト戦略の冒頭を参照)。
+  - 依存: E。**例外として次のファイルの見た目を調整してよい**: `render/{look,character,stadium,markers}.ts`・`model/world/space/params.ts`・`model/world/motion/` のキーフレーム表(いずれも数値・色・寸法のみ。構造・関数・型は変更しない)、`model/data/teams.ts` の `uniformColor`・`shortName`、**`ui/baseball-stage.css`・`ui/baseball.css`(スタイルは自由に調整してよい。ただしクラス名の契約と testid は変えない)**、**`ui/` の表示コンポーネントのマークアップ・クラス・文言(props・testid・hooks の有無は変えない)**。それ以外の変更が必要なら報告する。**ただし次の値は変えてはならない**(→ 修正設計で変更: 打撃カメラ(縦長・レイアウト別を追加)・ミット(廃止)・`model/batting/params.ts` の一部・接触点の z。ゾーン実寸・リリース点・スイングの長さ・`CPU_SWING_LEAD_MS`・判定窓(±150ms)は引き続き固定)(入力の対応・テストの固定値・判定との整合に関わるため): ゾーン実寸(`zone.halfWidth`/`bottom`/`top`/`planeZ`)、打撃カメラ(位置・注視・fov)、リリース点 `RELEASE_POINT`、スイングの長さ(全体 200ms・接触姿勢まで 132ms・`minSwingMs` 60ms)、`CPU_SWING_LEAD_MS`、`mittMs`、判定窓に関わる値(`model/batting/params.ts` 全般)。見た目が合わずこれらの変更が必要になる場合は、変更せず報告する。**調整してよい値(中継カメラの係数・blend、滞空式、捕手の表示しきい値、テロップ長・余韻、`fovFor` の `MIN_HALF_WIDTH_TAN`、`framingLift` の定数ほか)は、単体テストがリテラルで固定しておらず `WORLD_PARAMS`/定数を参照する設計なので、調整してもテストは壊れない**(テスト戦略の冒頭を参照)。
   - やること: 「見た目の受け入れ基準」のとおり、モックと実装の S1〜S7 と、モックに無い S8〜S11(HUD・操作バー・タイトル・結果)の「ゲーム画面として成立しているか」をスクリーンショットで比較・判定し、チェックリストを自己判定する。× の項目は上記ファイルを調整し、最大3ラウンド繰り返す。特に**スマホ縦(390×844)とデスクトップ(1280×720)で、HUD・ネームプレート・ティッカー・操作バーがゾーン枠・投手・打者を隠さないこと**(`framingLift` と各オーバーレイの寸法で調整する)、人間守備のバー全体(球種チップ・5×5グリッド・投げる)が収まることを実測する。あわせて B2 の `RELEASE_POINT` の値が B1 の `params.ts` と一致していることを確認する。最終版のスクリーンショット(JPEG/PNG、1枚 500KB 以下、計20枚程度)を `docs/tests/assets/2026-10-12-baseball-game/` に保存し、判定表(〇×と所見)を完了報告に書く。3ラウンドで未達の項目はその理由を報告して人間ゲートへ引き継ぐ。
   - 完了条件: S1〜S11 のチェックリスト全項目が〇、または未達項目の理由が報告されている。`npm run lint`・`npm run typecheck`・`npm run test` が成功(world のテストは関係式を検証しており、数値調整で壊れない)。**G 自身は E2E を実行しない**(F が更新する前の spec は `field-diagram` を待つため必ず失敗する)。**F と G の両方が完了した後に、orchestrator が `npm run test:e2e --workspace frontend` を最終実行して成功を確認する**(G の調整が E2E に影響していないことの確認を兼ねる。レイアウト検証が失敗した場合は G に戻す)。
 
@@ -775,7 +1379,7 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
 
 **`model/world/camera/`**
 
-- `rig.test.ts`: `battingCamera()` がモックの値((0,1.25,3.4)/(0,1.0,−18)/34°)に一致(G で変更しないためリテラル可)。**`chaseCamera(ball)` が `WORLD_PARAMS` の中継カメラ係数から計算した式 (ball.x×kx, baseY + ball.y×ky, baseZ + ball.z×kz) / 注視 (ball.x, max(0, ball.y×kLook), ball.z) に一致する(係数をテストに直書きしない)**。`blendCamera(a, b, 0) = a`、`(a, b, 1) = b`、`k` について単調。
+- `rig.test.ts`: `battingCamera()` がモックの値((0,1.25,3.4)/(0,1.0,−18)/34°)に一致(G で変更しないためリテラル可) → 横長のみ。`lift: 0` を加えた形で維持し、縦長・レイアウト別・補間は修正設計で追加(§13)。**`chaseCamera(ball)` が `WORLD_PARAMS` の中継カメラ係数から計算した式 (ball.x×kx, baseY + ball.y×ky, baseZ + ball.z×kz) / 注視 (ball.x, max(0, ball.y×kLook), ball.z) に一致する(係数をテストに直書きしない)**。`blendCamera(a, b, 0) = a`、`(a, b, 1) = b`、`k` について単調。
 
 **`model/world/motion/`**
 
@@ -825,7 +1429,7 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   6. `import.meta.env` が `hooks/useLaunchParams.ts` のみ。
   7. `ui/` から `../model`・`../render` を import していない。`ScoreHud`・`NamePlates`・`Ticker`・`StageTelop`・`TitleScreen`・`ResultScreen` など props のみのコンポーネントに hooks の呼び出しが無い。`TitleScreen` に `<select>` が無い。
   8. `holding` を effect 内で `setState` していない(render 中の導出のみ)。director の毎フレーム処理が `stage === null` でも plan を進めている。`useStage3d` の生成 effect の deps が `quality` のみ。
-  9. **`skip()` が `dispatch`/`throwPitch`/`swing`/`cpuPitch`/`pitchArrived` を呼んでいない**(表示状態だけを変更する)。**`usePointerInput` の pointerdown 分岐が `routeStagePointer` の戻り値で決まり、`holding` を直接参照して分岐していない**。`useKeyboardInput.ts` が変更されていない。
+  9. **`skip()` が `dispatch`/`throwPitch`/`swing`/`cpuPitch`/`pitchArrived` を呼んでいない**(表示状態だけを変更する)。**`usePointerInput` の pointerdown 分岐が `routeStagePointer` の戻り値で決まり、`holding` を直接参照して分岐していない**。`useKeyboardInput.ts` が変更されていない → 修正設計で変更(`onSwing` に `origin` を渡す変更だけ許可。§13)。
   10. 各 `data-testid` が testid 表のコンポーネントにだけ現れる(重複なし)。特に `score-away`/`score-home` は `ScoreHud` のみ、`LineScore` は `line-score-runs-<side>`。旧 `Scoreboard`・`MatchupPanel`・`CommentaryLog` が残っていない。
   11. `bb-overlay` 配下で操作しない要素が `pointer-events: none`、操作する要素(`bb-bar`・`bb-hud__more`・`bb-ticker__more`・`bb-home-link`)が `pointer-events: auto`(CSS の grep)。
   12. `grep -rin "パワプロ\|パワフル" sample-app --exclude-dir=node_modules` が0件。
