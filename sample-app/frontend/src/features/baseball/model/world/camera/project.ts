@@ -50,7 +50,7 @@ export function projectPoint(pose: CameraPose, size: ViewSize, point: Vec3): Pro
   const { forward, right, up } = basisOf(pose);
   const rel = sub(point, pose.position);
   const depth = dot(rel, forward);
-  if (!(depth > 0)) {
+  if (!Number.isFinite(depth) || depth <= 0) {
     return { x: Number.NaN, y: Number.NaN, depth };
   }
   const tanHalfV = Math.tan((pose.fovDeg * DEG_TO_RAD) / 2);

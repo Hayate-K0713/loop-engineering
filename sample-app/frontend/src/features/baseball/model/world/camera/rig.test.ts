@@ -123,18 +123,21 @@ describe("portraitBlendAt", () => {
 });
 
 describe("battingCameraFor: 横長(アスペクト ≥ 1.0)", () => {
-  it.each([1, 1.1, 1.2, 4 / 3, 16 / 9, 2.4])("アスペクト %f: レイアウト・空き領域によらず同じ姿勢で、位置・注視点は battingCamera()、FOV は従来の式、lift は legacyLift", (aspect) => {
-    const reference = battingCameraFor(aspect, "batting", null);
-    for (const layout of LAYOUTS) {
-      for (const safeArea of [null, { top: 0.3, bottom: 0.6 }, { top: 0.5, bottom: 0.4 }]) {
-        expect(battingCameraFor(aspect, layout, safeArea)).toEqual(reference);
+  it.each([1, 1.1, 1.2, 4 / 3, 16 / 9, 2.4])(
+    "アスペクト %f: レイアウト・空き領域によらず同じ姿勢で、位置・注視点は battingCamera()、FOV は従来の式、lift は legacyLift",
+    (aspect) => {
+      const reference = battingCameraFor(aspect, "batting", null);
+      for (const layout of LAYOUTS) {
+        for (const safeArea of [null, { top: 0.3, bottom: 0.6 }, { top: 0.5, bottom: 0.4 }]) {
+          expect(battingCameraFor(aspect, layout, safeArea)).toEqual(reference);
+        }
       }
-    }
-    expect(reference.position).toEqual(battingCamera().position);
-    expect(reference.target).toEqual(battingCamera().target);
-    expect(reference.fovDeg).toBeCloseTo(fovForAspect(34, aspect, FRAMING.landscapeMinHalfWidthTan), 12);
-    expect(reference.lift).toBe(legacyLift(aspect));
-  });
+      expect(reference.position).toEqual(battingCamera().position);
+      expect(reference.target).toEqual(battingCamera().target);
+      expect(reference.fovDeg).toBeCloseTo(fovForAspect(34, aspect, FRAMING.landscapeMinHalfWidthTan), 12);
+      expect(reference.lift).toBe(legacyLift(aspect));
+    },
+  );
 
   it("16:9 は battingCamera() に一致する", () => {
     expect(battingCameraFor(16 / 9, "batting", null)).toEqual(battingCamera());
@@ -181,7 +184,12 @@ describe("battingCameraFor: アスペクトの走査", () => {
       aspects.every((aspect, i) => {
         const previous = battingCameraFor(aspects.at(i - 1) ?? aspect, layout, null);
         const current = battingCameraFor(aspect, layout, null);
-        return i === 0 || (distanceBetween(previous.position, current.position) < 0.12 && Math.abs(previous.fovDeg - current.fovDeg) < 3 && Math.abs(previous.lift - current.lift) < 0.02);
+        return (
+          i === 0 ||
+          (distanceBetween(previous.position, current.position) < 0.12 &&
+            Math.abs(previous.fovDeg - current.fovDeg) < 3 &&
+            Math.abs(previous.lift - current.lift) < 0.02)
+        );
       }),
     );
     expect(ok).toBe(true);
@@ -216,22 +224,25 @@ describe("構図の式(fitPortraitFraming)", () => {
     { width: 390, height: 664 },
     { width: 375, height: 667 },
     { width: 360, height: 640 },
-  ])("$width×$height: ゾーン(打撃)・格子(守備)の下端が bottom − marginRatio 以内、投手の頭頂が HUD の下 8px 以上、tan が既定以上・上限以下", ({ width, height }) => {
-    for (const layout of LAYOUTS) {
-      const safeArea = safeAreaFor(height, layout);
-      const size = { width, height };
-      const aspect = width / height;
-      const pose = battingCameraFor(aspect, layout, safeArea);
-      const limits = layout === "pitching" ? FIT.pitching : FIT.batting;
-      const halfTan = Math.tan((pose.fovDeg * Math.PI) / 360) * aspect;
-      expect(bottomEdgeOf(pose, size, layout)).toBeLessThanOrEqual((safeArea.bottom - FIT.marginRatio) * height + 0.5);
-      expect(projectPoint(pose, size, PITCHER_HEAD_TOP).y).toBeGreaterThanOrEqual(155 + 8);
-      expect(halfTan).toBeGreaterThanOrEqual(limits.defaultHalfWidthTan - 1e-9);
-      expect(halfTan).toBeLessThanOrEqual(limits.maxHalfWidthTan + 1e-9);
-    }
-  });
+  ])(
+    "$width×$height: ゾーン(打撃)・格子(守備)の下端が bottom − marginRatio 以内、投手の頭頂が HUD の下 8px 以上、tan が既定以上・上限以下",
+    ({ width, height }) => {
+      for (const layout of LAYOUTS) {
+        const safeArea = safeAreaFor(height, layout);
+        const size = { width, height };
+        const aspect = width / height;
+        const pose = battingCameraFor(aspect, layout, safeArea);
+        const limits = layout === "pitching" ? FIT.pitching : FIT.batting;
+        const halfTan = Math.tan((pose.fovDeg * Math.PI) / 360) * aspect;
+        expect(bottomEdgeOf(pose, size, layout)).toBeLessThanOrEqual((safeArea.bottom - FIT.marginRatio) * height + 0.5);
+        expect(projectPoint(pose, size, PITCHER_HEAD_TOP).y).toBeGreaterThanOrEqual(155 + 8);
+        expect(halfTan).toBeGreaterThanOrEqual(limits.defaultHalfWidthTan - 1e-9);
+        expect(halfTan).toBeLessThanOrEqual(limits.maxHalfWidthTan + 1e-9);
+      }
+    },
+  );
 
-  it("高さ 580〜900px(幅 390、20px 刻み): ゾーン/格子が下のオーバーレイに掛からず、投手の頭頂が HUD に掛からない(640 以上は 8px 以上下)", () => {
+  it("高さ 580〜900px(幅 390、20px 刻み): ゾーン/格子が下のオーバーレイに掛からず、高さ 660 以上では投手の頭頂が HUD の下 8px 以上(390×640 の守備は水平半幅 tan の上限で頭が HUD に掛かる。360×640 は上のテストで確認)", () => {
     const heights = Array.from({ length: 17 }, (_, i) => 580 + i * 20);
     for (const height of heights) {
       for (const layout of LAYOUTS) {
@@ -239,7 +250,7 @@ describe("構図の式(fitPortraitFraming)", () => {
         const size = { width: 390, height };
         const pose = battingCameraFor(390 / height, layout, safeArea);
         expect(bottomEdgeOf(pose, size, layout)).toBeLessThanOrEqual((safeArea.bottom - FIT.marginRatio) * height + 0.5);
-        if (height >= 640) {
+        if (height >= 660) {
           expect(projectPoint(pose, size, PITCHER_HEAD_TOP).y).toBeGreaterThanOrEqual(155 + 8);
         }
       }
@@ -252,12 +263,12 @@ describe("構図の式(fitPortraitFraming)", () => {
     expect(bottomEdgeOf(pose, { width: 390, height: 560 }, "batting")).toBeLessThanOrEqual((safeArea.bottom - FIT.marginRatio) * 560 + 0.5);
   });
 
-  it("hReq が上限を超える低い画面では、頭より ゾーン/格子が隠れないことを優先する(守備 360×500)", () => {
-    const safeArea: SafeArea = { top: 155 / 500, bottom: 200 / 500 };
-    const pose = battingCameraFor(360 / 500, "pitching", safeArea);
-    const halfTan = Math.tan((pose.fovDeg * Math.PI) / 360) * (360 / 500);
+  it("hReq が上限を超える低い画面では、頭より ゾーン/格子が隠れないことを優先する(守備 330×500、バー 225px)", () => {
+    const safeArea: SafeArea = { top: 155 / 500, bottom: 275 / 500 };
+    const pose = battingCameraFor(330 / 500, "pitching", safeArea);
+    const halfTan = Math.tan((pose.fovDeg * Math.PI) / 360) * (330 / 500);
     expect(halfTan).toBeCloseTo(FIT.pitching.maxHalfWidthTan, 9);
-    expect(bottomEdgeOf(pose, { width: 360, height: 500 }, "pitching")).toBeLessThanOrEqual((safeArea.bottom - FIT.marginRatio) * 500 + 0.5);
+    expect(bottomEdgeOf(pose, { width: 330, height: 500 }, "pitching")).toBeLessThanOrEqual((safeArea.bottom - FIT.marginRatio) * 500 + 0.5);
   });
 
   it("safeArea が null、または無効(幅 < minBandRatio・逆転・非有限)なら既定値と同じ結果", () => {
@@ -489,13 +500,14 @@ describe("ホームラン追跡(縦長): 頂点が HUD の下端より下に収�
     expect(Math.min(...minYs)).toBeGreaterThanOrEqual(HUD_BOTTOM_PX + HOMERUN_MARGIN_PX);
   });
 
-  it("接触から落下までの全時刻で、ボールは画面内(上端・下端・左右)に収まる(390×844)", () => {
+  it("接触から落下までの全時刻でボールは縦方向に画面内、注視点の blend が終わった後は左右にも収まる(390×844)", () => {
     const size = { width: 390, height: 844 };
     const safeArea = safeAreaFor(844, "batting");
     const inside = homerunPlans().every((plan) =>
       Array.from({ length: 121 }, (_, i) => (i / 120) * plan.hangMs).every((ms) => {
         const point = projectPoint(cameraAt(plan, ms, size.width / size.height, safeArea), size, battedBallAt(plan, ms));
-        return point.y >= 0 && point.y <= size.height && point.x >= 0 && point.x <= size.width;
+        const sideOk = ms < WORLD_PARAMS.chaseCamera.targetBlendMs || (point.x >= 0 && point.x <= size.width);
+        return point.y >= 0 && point.y <= size.height && sideOk;
       }),
     );
     expect(inside).toBe(true);

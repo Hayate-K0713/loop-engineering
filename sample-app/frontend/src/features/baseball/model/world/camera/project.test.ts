@@ -5,7 +5,6 @@ import { projectPoint, zoneRectOf, type ViewSize, type ZoneBox } from "./project
 import { battingCamera, battingCameraFor, fovForAspect } from "./rig";
 
 const ZONE: ZoneBox = WORLD_PARAMS.zone;
-const MIN_TAN = WORLD_PARAMS.framing.landscapeMinHalfWidthTan;
 const BATTER = WORLD_PARAMS.actors.batter;
 
 /** 下のオーバーレイの上端 y(px): 打撃はティッカーが下から 181px、守備は高さ 800px 未満で 300px・以上で 368px のバー。 */

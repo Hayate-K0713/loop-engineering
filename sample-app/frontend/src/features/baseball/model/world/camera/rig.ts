@@ -195,7 +195,7 @@ export function chaseCamera(ball: Vec3, aspect: number, lift = 0): CameraPose {
  */
 export function ballScaleFor(camera: CameraPose, ball: Vec3): number {
   const dist = Math.hypot(ball.x - camera.position.x, ball.y - camera.position.y, ball.z - camera.position.z);
-  const visibleHeight = 2 * dist * Math.tan((camera.fovDeg / RAD_TO_DEG) / 2);
+  const visibleHeight = 2 * dist * Math.tan(camera.fovDeg / RAD_TO_DEG / 2);
   return Math.max(1, (WORLD_PARAMS.ball.minScreenDiameterRatio * visibleHeight) / (2 * WORLD_PARAMS.ballRadius));
 }
 
