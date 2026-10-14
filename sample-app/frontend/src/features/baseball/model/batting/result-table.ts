@@ -34,30 +34,30 @@ export const RESULT_TABLE: readonly ResultRow[] = [
   {
     type: "ground",
     strength: "medium",
-    weights: { groundout: 44, doublePlay: 32, flyout: 0, lineout: 0, single: 22, double: 0, triple: 0, homerun: 0, error: 2 },
+    weights: { groundout: 46, doublePlay: 32, flyout: 0, lineout: 0, single: 20, double: 0, triple: 0, homerun: 0, error: 2 },
   },
   {
     type: "ground",
     strength: "strong",
-    weights: { groundout: 30, doublePlay: 25, flyout: 0, lineout: 0, single: 38, double: 5, triple: 0, homerun: 0, error: 2 },
+    weights: { groundout: 32, doublePlay: 25, flyout: 0, lineout: 0, single: 36, double: 5, triple: 0, homerun: 0, error: 2 },
   },
-  { type: "liner", strength: "weak", weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 60, single: 36, double: 4, triple: 0, homerun: 0, error: 0 } },
+  { type: "liner", strength: "weak", weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 56, single: 38, double: 6, triple: 0, homerun: 0, error: 0 } },
   {
     type: "liner",
     strength: "medium",
-    weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 30, single: 50, double: 18, triple: 2, homerun: 0, error: 0 },
+    weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 46, single: 40, double: 12, triple: 2, homerun: 0, error: 0 },
   },
   {
     type: "liner",
     strength: "strong",
-    weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 15, single: 40, double: 35, triple: 5, homerun: 5, error: 0 },
+    weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 28, single: 38, double: 26, triple: 4, homerun: 4, error: 0 },
   },
-  { type: "fly", strength: "weak", weights: { groundout: 0, doublePlay: 0, flyout: 96, lineout: 0, single: 4, double: 0, triple: 0, homerun: 0, error: 0 } },
-  { type: "fly", strength: "medium", weights: { groundout: 0, doublePlay: 0, flyout: 75, lineout: 0, single: 8, double: 12, triple: 1, homerun: 4, error: 0 } },
+  { type: "fly", strength: "weak", weights: { groundout: 0, doublePlay: 0, flyout: 97, lineout: 0, single: 3, double: 0, triple: 0, homerun: 0, error: 0 } },
+  { type: "fly", strength: "medium", weights: { groundout: 0, doublePlay: 0, flyout: 80, lineout: 0, single: 6, double: 9, triple: 1, homerun: 4, error: 0 } },
   {
     type: "fly",
     strength: "strong",
-    weights: { groundout: 0, doublePlay: 0, flyout: 35, lineout: 0, single: 0, double: 20, triple: 3, homerun: 42, error: 0 },
+    weights: { groundout: 0, doublePlay: 0, flyout: 42, lineout: 0, single: 0, double: 18, triple: 3, homerun: 37, error: 0 },
   },
 ];
 
