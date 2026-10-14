@@ -160,7 +160,10 @@ function buildAim(): Group {
 function buildBall(radius: number, gradient: DataTexture): Group {
   const ball = new Group();
   const geometry = new SphereGeometry(radius, 16, 12);
-  const body = new Mesh(geometry, new MeshToonMaterial({ color: PALETTE.white, gradientMap: gradient, transparent: true, depthTest: false, depthWrite: false }));
+  const body = new Mesh(
+    geometry,
+    new MeshToonMaterial({ color: PALETTE.white, gradientMap: gradient, transparent: true, depthTest: false, depthWrite: false }),
+  );
   body.renderOrder = RENDER_ORDER.ball;
   const shell = new Mesh(geometry, new MeshBasicMaterial({ color: OUTLINE_COLOR, side: BackSide, transparent: true, depthTest: false, depthWrite: false }));
   shell.renderOrder = RENDER_ORDER.ballOutline;
