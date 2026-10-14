@@ -1,6 +1,7 @@
 import type { BattedType, InPlayResult, Strength } from "../../types/batting";
 
 // 打撃判定の定数。数値はすべて仮値で、balance.test.ts とプレイで調整する。
+// 操作性の修正(H0)で `lateCutoffMs`〜`maxTapSpanMs` を足し、`linerHalfBand`・`mediumFrom`・`strongFrom` を出発値に変えた(H3b が調整)。
 // 入力座標はすべてゾーン単位(ストライクゾーン = [-1, 1]²)。
 
 /** 打撃判定(接触・打球形成)の定数。 */
@@ -45,6 +46,18 @@ type BattingParams = {
   readonly mediumFrom: number;
   /** スコアがこの値以上で strong。 */
   readonly strongFrom: number;
+  /** 人間打者の見逃し確定(入力イベント時刻の締切)= 到達時刻 D + この値(ms)。遅延補正前の時刻で比べる。 */
+  readonly lateCutoffMs: number;
+  /** 接触判定の当たり範囲にボール半径を足す量(ゾーン単位。楕円の rx に足す)。 */
+  readonly ballReachX: number;
+  /** 接触判定の当たり範囲にボール半径を足す量(ゾーン単位。楕円の ry に足す)。 */
+  readonly ballReachY: number;
+  /** 入力種別ごとの遅延補正(ゲート ms。`timeScale` で換算しない)。 */
+  readonly inputLatencyMs: { readonly touch: number; readonly mouse: number; readonly key: number };
+  /** `event.timeStamp` を使ってよい、ハンドラを起動したイベントからの経過の上限(ms)。 */
+  readonly maxEventAgeMs: number;
+  /** タップ(押下→離し)で `event.timeStamp` を使ってよい、押下から離しまでの上限(ms)。 */
+  readonly maxTapSpanMs: number;
 };
 
 export const BATTING_PARAMS: BattingParams = {
@@ -60,14 +73,20 @@ export const BATTING_PARAMS: BattingParams = {
   centerRatio: 0.25,
   edgePenaltyStart: 0.6,
   edgePenaltyPerUnit: 0.4,
-  linerHalfBand: 0.3,
+  linerHalfBand: 0.14,
   trajectoryShiftPerLevel: 0.1,
   powerBase: 0.6,
   powerPerAbility: 0.008,
   kindFactor: { meet: 1.0, power: 1.5 },
   directionFactor: { pull: 1.15, center: 1.0, opposite: 0.9 },
-  mediumFrom: 0.18,
-  strongFrom: 0.42,
+  mediumFrom: 0.38,
+  strongFrom: 0.62,
+  lateCutoffMs: 250,
+  ballReachX: 0.23,
+  ballReachY: 0.2,
+  inputLatencyMs: { touch: 70, mouse: 20, key: 20 },
+  maxEventAgeMs: 250,
+  maxTapSpanMs: 200,
 };
 
 /** `lateral`(= x / y)の範囲。 */

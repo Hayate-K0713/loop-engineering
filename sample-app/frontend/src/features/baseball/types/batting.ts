@@ -8,7 +8,30 @@ export type CursorRadii = {
   readonly ry: number;
 };
 
-/** スイング入力。`atMs` は投球開始(リリース)からの経過ゲーム時間。 */
+/** スイングの入力元。遅延補正の量を決める(タッチ・マウス/ペン・キー)。 */
+export type SwingInputKind = "touch" | "mouse" | "key";
+
+/**
+ * スイングを起こした入力イベントの時刻情報(いずれも `event.nativeEvent.timeStamp`、ms)。
+ * `timeStamp` = 入力が起きた時刻(タップは指を置いた時刻)、`sourceTimeStamp` = ハンドラを起動したイベントの時刻
+ * (タップは指を離したイベント。それ以外は `timeStamp` と同じ)。
+ */
+export type SwingOrigin = {
+  readonly timeStamp: number;
+  readonly sourceTimeStamp: number;
+  readonly inputKind: SwingInputKind;
+};
+
+/** スイングのタイミング表示の分類(早い・ジャスト・遅い)。 */
+export type TimingLabel = "early" | "just" | "late";
+
+/** タイミング表示。`dtMs` = 判定時刻 `atMs` − 到達時刻(負 = 早い)を四捨五入した整数。 */
+export type TimingCue = {
+  readonly label: TimingLabel;
+  readonly dtMs: number;
+};
+
+/** スイング入力。`atMs` は投球開始(リリース)からの経過ゲーム時間(遅延補正後の判定時刻。過去になりうる)。 */
 export type SwingInput = {
   readonly kind: SwingKind;
   readonly cursor: ZonePoint;

@@ -20,6 +20,20 @@ export type CameraPose = {
   readonly target: Vec3;
   /** 縦方向の視野角(度)。 */
   readonly fovDeg: number;
+  /** シーンを上へずらす量(画面高に対する比、0 以上)。render が `setViewOffset` でそのまま適用する。 */
+  readonly lift: number;
+};
+
+/** 構図のレイアウト。`batting` = 人間が打つ画面、`pitching` = 人間が投げる画面(下の操作バーが大きいので構図が違う)。 */
+export type SceneLayout = "batting" | "pitching";
+
+/**
+ * 空き領域(ステージが見える縦の範囲)。画面高に対する比で、`top` = 上の HUD の下端、`bottom` = 下のオーバーレイの上端
+ * (0 ≤ top < bottom ≤ 1)。hooks が DOM の実測値から作り、model が構図を決めるのに使う。
+ */
+export type SafeArea = {
+  readonly top: number;
+  readonly bottom: number;
 };
 
 /** キャラクターのポーズ。各関節の回転はそれぞれの親ノードから見た値。 */
@@ -61,14 +75,22 @@ export type ScenePhase = "idle" | "windup" | "flight" | "play";
  */
 export type SceneFrame = {
   readonly camera: CameraPose;
+  /** 構図のレイアウト(`camera` を作った入力。render がゾーン矩形の再計算に使う)。 */
+  readonly layout: SceneLayout;
+  /** model が既定値で補った後の空き領域(`camera` を作った入力。render がゾーン矩形の再計算に使う)。 */
+  readonly safeArea: SafeArea;
   readonly uniforms: UniformColors;
-  readonly ball: { readonly visible: boolean; readonly position: Vec3 };
+  /** `scale` はボール本体と影の円盤に掛ける倍率(1 以上。中継カメラ中の最小表示径のため)。 */
+  readonly ball: { readonly visible: boolean; readonly position: Vec3; readonly scale: number };
   readonly pitcher: CharacterPose;
   readonly catcher: CharacterPose;
   readonly batter: BatterPose;
   /** 固定順 7人: 一塁・二塁・遊撃・三塁・左・中・右。 */
   readonly fielders: readonly CharacterPose[];
-  readonly zone: { readonly visible: boolean; readonly grid: boolean };
+  /** `pulse` は到達の手がかりの発光(0〜1。ゾーン枠を黄色に寄せ、内側を薄く塗る)。 */
+  readonly zone: { readonly visible: boolean; readonly grid: boolean; readonly pulse: number };
+  /** 打球の落下点のリング(`position` は地面の中心、`radius` は m)。 */
+  readonly landingMark: { readonly visible: boolean; readonly position: Vec3; readonly radius: number };
   /**
    * スイングカーソル。`scaleX`/`scaleY` は楕円の半径(m)で、単位円のメッシュに掛ける
    * (`radii.rx × zone.halfWidth`、`radii.ry × (zone.top − zone.bottom) / 2`)。

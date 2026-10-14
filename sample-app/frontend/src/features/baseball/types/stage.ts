@@ -1,7 +1,7 @@
 // ステージ(render/)の契約。types/ は実行時コードを持たない葉で、他セグメントを import しない(DOM 型は使ってよい)。
 // `createStage(options: StageOptions): StageHandle | null` は render/stage.ts が実装する。WebGL2 が取れない・
 // `WebGLRenderer` の生成に失敗したときは `null` を返す(関数そのものは実行時コードなので types/ には置かない)。
-import type { CameraPose, SceneFrame, Vec3 } from "./scene";
+import type { CameraPose, SafeArea, SceneFrame, SceneLayout, Vec3 } from "./scene";
 
 /** 地面(XZ 平面)上の点。ワールド座標の m。 */
 export type GroundPoint = {
@@ -180,10 +180,14 @@ export type StageOptions = {
   readonly geometry: StageGeometry;
   readonly crowd: readonly CrowdCell[];
   readonly rig: CharacterRig;
-  /** 初期カメラと `zoneScreenRect` の計算に使う打撃カメラ。 */
-  readonly battingCamera: CameraPose;
+  /**
+   * 打撃カメラの姿勢を、縦横比・レイアウト・空き領域から作る関数(`model/world` の `battingCameraFor`)。
+   * 初期カメラと `zoneScreenRect` の計算に使う。`safeArea` が `null` なら既定の空き領域。
+   */
+  readonly battingCameraFor: (aspect: number, layout: SceneLayout, safeArea: SafeArea | null) => CameraPose;
   readonly quality: StageQuality;
   readonly onStatusChange: (status: StageStatus) => void;
+  /** サイズ、またはゾーン矩形(レイアウト・空き領域の変更による再計算を含む)が変わったときの通知。 */
   readonly onResize: (size: { readonly width: number; readonly height: number }) => void;
 };
 

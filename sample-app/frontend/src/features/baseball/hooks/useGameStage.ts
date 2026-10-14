@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "
 import { INITIAL_CURSOR } from "../model/batting/cursor";
 import { isHolding, recordSwing, type SwingRecord } from "../model/world/sequence/session";
 import { CPU_SWING_LEAD_MS } from "../model/world/space/params";
-import type { SwingInput, SwingKind } from "../types/batting";
+import type { SwingInput, SwingKind, TimingCue } from "../types/batting";
 import type { PlaybackSpeed } from "../types/game";
 import type { PitchCommand, PitchFlight } from "../types/pitch";
 import type { ScenePhase } from "../types/scene";
@@ -45,6 +45,10 @@ export type GameStageViewProps = {
   readonly zoneRect: ScreenRect | null;
   /** 非表示の `batted-ball-marker` ミラー用(表示用 view のもの)。 */
   readonly marker: FieldMarkerView | null;
+  /** 表示中のタイミング表示(早い/ジャスト/遅い。スイング後 900ms。スキップで消える)。なければ `null`。 */
+  readonly timingCue: TimingCue | null;
+  /** 直近のスイングのタイミング(`data-timing` ミラー用)。次の投球が飛び始めるまで保持し、なければ `null`。 */
+  readonly lastTiming: TimingCue | null;
 };
 
 type UseGameStageResult = {
@@ -208,6 +212,9 @@ export function useGameStage({ game, speed, selection }: UseGameStageOptions): U
       lastFlight: director.lastFlight,
       zoneRect: stage3d.zoneRect,
       marker: heldView.fieldMarker,
+      // H9 で director の値に差し替える(H0 では型だけ。値は null 固定)。
+      timingCue: null,
+      lastTiming: null,
     },
   };
 }
