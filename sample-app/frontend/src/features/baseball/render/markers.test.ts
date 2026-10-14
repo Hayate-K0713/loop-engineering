@@ -1,8 +1,9 @@
-import { Box3, BufferGeometry, Group, LineSegments, Mesh } from "three";
+import { Box3, BufferGeometry, Group, LineSegments, Mesh, MeshBasicMaterial, MeshToonMaterial } from "three";
+import type { Material } from "three";
 import { describe, expect, it } from "vitest";
 import { disposeObject3D } from "./dispose";
-import { createToonGradient } from "./look";
-import { applyMarkers, buildMarkers } from "./markers";
+import { PALETTE, createToonGradient } from "./look";
+import { RENDER_ORDER, applyMarkers, buildMarkers } from "./markers";
 import { makeFrame, makeGeometry } from "./test-fixtures";
 
 function boundsOf(geometry: BufferGeometry): Box3 {
@@ -18,6 +19,7 @@ describe("buildMarkers", () => {
       expect.arrayContaining([markers.zoneFrame, markers.grid, markers.cursor, markers.aim, markers.ball, markers.ballShadow]),
     );
     expect(markers.zoneFrame).toBeInstanceOf(LineSegments);
+    expect(markers.group.children).toEqual(expect.arrayContaining([markers.zonePulse, markers.landingRing]));
   });
 
   it("ゾーン枠の寸法が渡した StageGeometry.zone に一致し、値を変えると追従する", () => {
@@ -57,6 +59,65 @@ describe("buildMarkers", () => {
     const markers = buildMarkers(makeGeometry(), createToonGradient());
     expect(() => disposeObject3D(markers.group)).not.toThrow();
   });
+
+  it("発光板・落下点のリングも破棄され、材質と形状が1回ずつ dispose される", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    const disposed: string[] = [];
+    markers.zonePulse.geometry.addEventListener("dispose", () => disposed.push("pulse-geometry"));
+    markers.zonePulseMaterial.addEventListener("dispose", () => disposed.push("pulse-material"));
+    markers.landingRing.geometry.addEventListener("dispose", () => disposed.push("ring-geometry"));
+    (markers.landingRing.material as Material).addEventListener("dispose", () => disposed.push("ring-material"));
+    disposeObject3D(markers.group);
+    expect(disposed.sort()).toEqual(["pulse-geometry", "pulse-material", "ring-geometry", "ring-material"]);
+  });
+});
+
+function meshesOf(root: Group): Mesh[] {
+  return root.children.filter((child): child is Mesh => child instanceof Mesh);
+}
+
+describe("描画順(ボールはカーソルより手前)", () => {
+  const markers = buildMarkers(makeGeometry(), createToonGradient());
+  const [body, outline] = (() => {
+    const meshes = meshesOf(markers.ball);
+    return [meshes.find((mesh) => mesh.material instanceof MeshToonMaterial), meshes.find((mesh) => mesh.material instanceof MeshBasicMaterial)] as const;
+  })();
+
+  it("ボール(本体と輪郭)は透明パス・深度なしで、本体がカーソルのどのメッシュよりも後に描かれる", () => {
+    expect(body?.material).toBeInstanceOf(MeshToonMaterial);
+    for (const mesh of [body, outline]) {
+      const material = mesh?.material as Material | undefined;
+      expect(material?.transparent).toBe(true);
+      expect(material?.depthTest).toBe(false);
+      expect(material?.depthWrite).toBe(false);
+    }
+    const cursorOrders = meshesOf(markers.cursor).map((mesh) => mesh.renderOrder);
+    expect(cursorOrders.length).toBeGreaterThanOrEqual(3);
+    for (const order of cursorOrders) {
+      expect(outline?.renderOrder ?? 0).toBeGreaterThan(order);
+      expect(body?.renderOrder ?? 0).toBeGreaterThan(outline?.renderOrder ?? 0);
+    }
+    expect(body?.renderOrder).toBe(RENDER_ORDER.ball);
+    expect(outline?.renderOrder).toBe(RENDER_ORDER.ballOutline);
+  });
+
+  it("カーソルの Group の renderOrder は 0(子全体の第1キーにしない)で、メッシュに個別に付く。塗りは深度を書かない", () => {
+    expect(markers.cursor.renderOrder).toBe(0);
+    expect(markers.ball.renderOrder).toBe(0);
+    for (const mesh of meshesOf(markers.cursor)) expect(mesh.renderOrder).toBe(RENDER_ORDER.cursor);
+    expect(markers.cursorFill.depthWrite).toBe(false);
+    expect(markers.cursorFill.transparent).toBe(true);
+  });
+
+  it("ボールは影を落とさず(castShadow なし)、地面の円盤(不透明度 0.5・半径 ×1.8)が影になる", () => {
+    expect(body?.castShadow).toBe(false);
+    const material = markers.ballShadow.material as MeshBasicMaterial;
+    expect(material.opacity).toBe(0.5);
+    expect(material.color.getHex()).toBe(PALETTE.shadow);
+    const radius = makeGeometry().ballRadius;
+    expect(boundsOf(markers.ballShadow.geometry).max.x).toBeCloseTo(radius * 1.8, 6);
+    expect(meshesOf(markers.ball).every((mesh) => !mesh.castShadow)).toBe(true);
+  });
 });
 
 describe("applyMarkers", () => {
@@ -77,14 +138,65 @@ describe("applyMarkers", () => {
     expect(markers.ballShadow.position.y).toBeGreaterThan(0);
   });
 
+  it("ball.scale がボール本体と影の円盤に掛かる", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    const base = makeFrame();
+    applyMarkers(markers, base);
+    expect(markers.ball.scale.toArray()).toEqual([1, 1, 1]);
+    expect(markers.ballShadow.scale.toArray()).toEqual([1, 1, 1]);
+    applyMarkers(markers, { ...base, ball: { ...base.ball, scale: 3.5 } });
+    expect(markers.ball.scale.toArray()).toEqual([3.5, 3.5, 3.5]);
+    expect(markers.ballShadow.scale.toArray()).toEqual([3.5, 3.5, 3.5]);
+  });
+
+  it("zone.pulse が 0 のとき発光板は出ず、枠は白。pulse に応じて枠が黄色に寄り、内側が薄く塗られる", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    const base = makeFrame();
+    applyMarkers(markers, base);
+    expect(markers.zonePulse.visible).toBe(false);
+    expect(markers.zonePulseMaterial.opacity).toBe(0);
+    expect(markers.zoneFrameMaterial.color.getHex()).toBe(PALETTE.white);
+    const frameOpacityAt0 = markers.zoneFrameMaterial.opacity;
+    applyMarkers(markers, { ...base, zone: { ...base.zone, pulse: 0.5 } });
+    expect(markers.zonePulse.visible).toBe(true);
+    const half = markers.zonePulseMaterial.opacity;
+    expect(half).toBeGreaterThan(0);
+    expect(markers.zoneFrameMaterial.color.getHex()).not.toBe(PALETTE.white);
+    applyMarkers(markers, { ...base, zone: { ...base.zone, pulse: 1 } });
+    expect(markers.zonePulseMaterial.opacity).toBeGreaterThan(half);
+    expect(markers.zonePulseMaterial.opacity).toBeLessThanOrEqual(0.25);
+    expect(markers.zoneFrameMaterial.color.getHex()).toBe(PALETTE.accent);
+    expect(markers.zoneFrameMaterial.opacity).toBeGreaterThanOrEqual(frameOpacityAt0);
+    applyMarkers(markers, { ...base, zone: { ...base.zone, pulse: 0 } });
+    expect(markers.zonePulse.visible).toBe(false);
+    expect(markers.zoneFrameMaterial.color.getHex()).toBe(PALETTE.white);
+  });
+
+  it("ゾーンが非表示なら pulse があっても発光板は出ない", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    applyMarkers(markers, makeFrame({ zone: { visible: false, grid: true, pulse: 1 } }));
+    expect(markers.zonePulse.visible).toBe(false);
+  });
+
+  it("落下点のリングは landingMark に従って位置・半径・可視が変わる", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    expect(markers.landingRing.visible).toBe(false);
+    applyMarkers(markers, makeFrame({ landingMark: { visible: true, position: { x: 3, y: 0.07, z: -60 }, radius: 4.5 } }));
+    expect(markers.landingRing.visible).toBe(true);
+    expect(markers.landingRing.position.toArray()).toEqual([3, 0.07, -60]);
+    expect(markers.landingRing.scale.x).toBe(4.5);
+    applyMarkers(markers, makeFrame());
+    expect(markers.landingRing.visible).toBe(false);
+  });
+
   it("非表示の指定が反映され、格子はゾーンが見えるときだけ表示される", () => {
     const markers = buildMarkers(makeGeometry(), createToonGradient());
-    applyMarkers(markers, makeFrame({ zone: { visible: false, grid: true }, ball: { visible: false, position: { x: 0, y: 0, z: 0 } } }));
+    applyMarkers(markers, makeFrame({ zone: { visible: false, grid: true, pulse: 0 }, ball: { visible: false, position: { x: 0, y: 0, z: 0 }, scale: 1 } }));
     expect(markers.zoneFrame.visible).toBe(false);
     expect(markers.grid.visible).toBe(false);
     expect(markers.ball.visible).toBe(false);
     expect(markers.ballShadow.visible).toBe(false);
-    applyMarkers(markers, makeFrame({ zone: { visible: true, grid: false } }));
+    applyMarkers(markers, makeFrame({ zone: { visible: true, grid: false, pulse: 0 } }));
     expect(markers.zoneFrame.visible).toBe(true);
     expect(markers.grid.visible).toBe(false);
   });
