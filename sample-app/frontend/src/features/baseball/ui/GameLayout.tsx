@@ -1,3 +1,4 @@
+import type { PointerEventHandler } from "react";
 import type { GameStageViewProps } from "../hooks/useGameStage";
 import type { SwingKind } from "../types/batting";
 import type { CourseCell, PitchCommand, PitchKind } from "../types/pitch";
@@ -24,7 +25,8 @@ type ActionBarProps = {
   readonly onThrow: () => void;
   readonly swingKind: SwingKind;
   readonly onSelectSwingKind: (kind: SwingKind) => void;
-  readonly onSwing: () => void;
+  /** スイングボタンの pointerdown ハンドラ(`SwingControls` の `onSwing`)。 */
+  readonly onSwing: PointerEventHandler<HTMLButtonElement>;
 };
 
 type GameLayoutProps = ActionBarProps & {
@@ -83,10 +85,10 @@ function ActionBar(props: ActionBarProps) {
 export function GameLayout({ stageProps, ...bar }: GameLayoutProps) {
   const { view } = bar;
   return (
-    <div className={`bb-game bb-game--${barVariant(view.mode)}`}>
+    <div className={`bb-game bb-game--${barVariant(view.mode)}`} data-safe-area-root>
       <StageView {...stageProps} />
       <div className="bb-overlay">
-        <div className="bb-overlay__top">
+        <div className="bb-overlay__top" data-inset="top">
           <ScoreHud
             scoreboard={view.scoreboard}
             teamColors={view.teamColors}
@@ -99,7 +101,7 @@ export function GameLayout({ stageProps, ...bar }: GameLayoutProps) {
           />
           <NamePlates batter={view.batter} pitcher={view.pitcher} pitchSpeedLabel={view.pitchSpeedLabel} />
         </div>
-        <div className="bb-overlay__bottom">
+        <div className="bb-overlay__bottom" data-inset="bottom">
           <Ticker lastEvent={view.lastEvent} log={view.log} />
           <ActionBar {...bar} />
         </div>

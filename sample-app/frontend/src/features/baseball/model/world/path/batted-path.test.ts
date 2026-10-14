@@ -6,6 +6,7 @@ import { LANDING_PARAMS } from "../../batting/params";
 import { resultEntries } from "../../batting/result-table";
 import { landingToWorld } from "../space/coords";
 import { buildStageGeometry, standsHeightAt } from "../space/geometry";
+import { WORLD_PARAMS } from "../space/params";
 import { type BattedPlan, battedBallAt, planBattedBall, planFoul } from "./batted-path";
 
 const TYPES: readonly BattedType[] = ["ground", "liner", "fly"];
@@ -168,6 +169,67 @@ describe("battedBallAt: 高さ", () => {
     const ys = Array.from({ length: 600 }, (_, i) => battedBallAt(plan, (i / 599) * plan.hangMs).y);
     const peaks = ys.filter((value, i) => i > 0 && i < ys.length - 1 && value > (ys.at(i - 1) ?? 0) && value > (ys.at(i + 1) ?? 0));
     expect(peaks.every((peak, i) => i === 0 || peak < (peaks.at(i - 1) ?? 0))).toBe(true);
+  });
+});
+
+/** 重力加速度(m/s²)。見かけの重力 = 8·頂点 ÷ 滞空²(s)を G 単位で表す。 */
+const GRAVITY = 9.8;
+
+function aerialParamsOf(shape: "fly" | "liner"): typeof WORLD_PARAMS.batted.fly {
+  return shape === "fly" ? WORLD_PARAMS.batted.fly : WORLD_PARAMS.batted.liner;
+}
+
+/** `WORLD_PARAMS.batted` の式どおりの滞空(ms)。 */
+function expectedHangMs(shape: "fly" | "liner", distance: number): number {
+  const params = aerialParamsOf(shape);
+  return params.hangBaseMs + params.hangPerMeterMs * distance;
+}
+
+/** 頂点の持ち上げ(m)と滞空(ms)から求めた見かけの重力(G)。 */
+function apparentGravityOf(peak: number, hangMs: number): number {
+  const seconds = hangMs / 1000;
+  return (8 * peak) / (seconds * seconds) / GRAVITY;
+}
+
+describe("滞空と見かけの重力(受け入れ #24・#25)", () => {
+  const AERIAL = CASES.filter((item) => item.plan.shape !== "ground");
+
+  it("滞空が WORLD_PARAMS の式(基準 + 距離 × 係数)に一致する(フライ/ライナーの全計画)", () => {
+    const mismatches = failures(AERIAL, (item) => {
+      const distance = Math.hypot(item.plan.end.x, item.plan.end.z);
+      return Math.abs(item.plan.hangMs - expectedHangMs(item.plan.shape === "fly" ? "fly" : "liner", distance)) < 1e-6;
+    });
+    expect(mismatches).toEqual([]);
+  });
+
+  it("外野フライ 81m・ライナー 61m・ホームラン 124m の滞空が下限(3000 / 1500 / 4000ms)以上", () => {
+    expect(expectedHangMs("fly", 81)).toBeGreaterThanOrEqual(3000);
+    expect(expectedHangMs("liner", 61)).toBeGreaterThanOrEqual(1500);
+    expect(expectedHangMs("fly", 124)).toBeGreaterThanOrEqual(4000);
+  });
+
+  it("打球の見かけの重力が 2G 以下(フライ/ライナーの全計画)", () => {
+    expect(failures(AERIAL, (item) => apparentGravityOf(item.plan.peak, item.plan.hangMs) <= 2)).toEqual([]);
+  });
+
+  it("代表的な距離(フライ 81m・ライナー 61m・ホームラン 124m・ファウルの飛球 43m)の見かけの重力が 2G 以下", () => {
+    const cases: readonly (readonly ["fly" | "liner", number])[] = [
+      ["fly", 81],
+      ["liner", 61],
+      ["fly", 124],
+      ["fly", 43],
+    ];
+    for (const [shape, distance] of cases) {
+      expect(apparentGravityOf(aerialParamsOf(shape).peakRatio * distance, expectedHangMs(shape, distance))).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("ファウルの飛球(planFoul)も 2G 以下で、滞空が式どおり", () => {
+    for (let seq = 1; seq <= 200; seq += 1) {
+      const plan = planFoul(seq, START);
+      expect(apparentGravityOf(plan.peak, plan.hangMs)).toBeLessThanOrEqual(2);
+      expect(plan.hangMs).toBeCloseTo(expectedHangMs("fly", Math.hypot(plan.end.x - START.x, plan.end.z - START.z)), 6);
+    }
   });
 });
 

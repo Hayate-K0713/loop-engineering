@@ -76,35 +76,21 @@ export const PALETTE = {
 /** トゥーンの3段階の階調(暗・中・明)。 */
 const TOON_STEPS: readonly number[] = [110, 190, 255];
 
-/** ゾーン平面での画面の半幅に相当する `tan` の下限。縦長の画面で縦 FOV を広げる基準。 */
-export const MIN_HALF_WIDTH_TAN = 0.37;
-/** 縦長の画面でシーンを上へずらす最大量(画面高に対する比)。 */
-export const PORTRAIT_LIFT = 0.2;
-/** この縦横比以下で `PORTRAIT_LIFT` を最大にする。 */
-export const LIFT_FULL_ASPECT = 0.6;
-/** この縦横比以上でずらし量を 0 にする。 */
-export const LIFT_ZERO_ASPECT = 1.2;
+/** 描画のピクセル比の上限。タッチ端末(`pointer: coarse`)はメインスレッドの詰まりが入力の遅れに直結するので低くする。 */
+export const MAX_PIXEL_RATIO = { fine: 2, coarse: 1.5 } as const;
+/** 太陽光の影マップの一辺(px)。タッチ端末は 1024。 */
+export const SHADOW_MAP_SIZE = { fine: LIGHT_LOOK.sun.shadow.mapSize, coarse: 1024 } as const;
 
-const RAD_TO_DEG = 180 / Math.PI;
-const MAX_PIXEL_RATIO = 2;
-
-/** 縦横比が小さいとき、ゾーン平面での半幅が約 1.25m 以上になるよう縦 FOV(度)を広げる。 */
-export function fovFor(baseFovDeg: number, aspect: number): number {
-  if (!Number.isFinite(aspect) || aspect <= 0) return baseFovDeg;
-  return Math.max(baseFovDeg, 2 * Math.atan(MIN_HALF_WIDTH_TAN / aspect) * RAD_TO_DEG);
-}
-
-/** 縦長の画面でシーンを上へずらす量(画面高に対する比)。`aspect ≥ LIFT_ZERO_ASPECT` で 0、`≤ LIFT_FULL_ASPECT` で `PORTRAIT_LIFT`、その間は線形。 */
-export function framingLift(aspect: number): number {
-  if (!Number.isFinite(aspect) || aspect >= LIFT_ZERO_ASPECT) return 0;
-  if (aspect <= LIFT_FULL_ASPECT) return PORTRAIT_LIFT;
-  return (PORTRAIT_LIFT * (LIFT_ZERO_ASPECT - aspect)) / (LIFT_ZERO_ASPECT - LIFT_FULL_ASPECT);
-}
-
-/** デバイスピクセル比から描画のピクセル比を決める。`low` は 1 固定(SwiftShader は比例して重くなる)。 */
-export function pixelRatioFor(quality: StageQuality, devicePixelRatio: number): number {
+/** デバイスピクセル比から描画のピクセル比を決める。`low` は 1 固定(SwiftShader は比例して重くなる)。`coarsePointer` なら上限 1.5。 */
+export function pixelRatioFor(quality: StageQuality, devicePixelRatio: number, coarsePointer: boolean): number {
   if (quality === "low") return 1;
-  return Math.min(MAX_PIXEL_RATIO, Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1);
+  const max = coarsePointer ? MAX_PIXEL_RATIO.coarse : MAX_PIXEL_RATIO.fine;
+  return Math.min(max, Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1);
+}
+
+/** 太陽光の影マップの一辺(px)。`coarsePointer` なら 1024、それ以外は `LIGHT_LOOK.sun.shadow.mapSize`。 */
+export function shadowMapSizeFor(coarsePointer: boolean): number {
+  return coarsePointer ? SHADOW_MAP_SIZE.coarse : SHADOW_MAP_SIZE.fine;
 }
 
 /** `WebGLRenderer` のうち見た目に関わる設定の最小の型(node で `WebGLRenderer` を作れないため構造的に受ける)。 */

@@ -1,25 +1,17 @@
 import { BasicShadowMap, ColorManagement, Color, LinearSRGBColorSpace, NearestFilter, PCFShadowMap, RedFormat } from "three";
 import { describe, expect, it } from "vitest";
 import {
-  LIFT_FULL_ASPECT,
-  LIFT_ZERO_ASPECT,
   LIGHT_LOOK,
   LEGACY_LIGHT_SCALE,
-  MIN_HALF_WIDTH_TAN,
-  PORTRAIT_LIFT,
+  MAX_PIXEL_RATIO,
   applyRendererLook,
   createToonGradient,
-  fovFor,
-  framingLift,
   gradientPixels,
   pixelRatioFor,
   rgbaPixels,
+  shadowMapSizeFor,
 } from "./look";
 import type { RendererLookTarget } from "./look";
-
-const BASE_FOV = 34;
-const RAD_TO_DEG = 180 / Math.PI;
-const ASPECTS = [0.4, 0.5, 0.6, 0.75, 0.8, 1, 1.2, 1.6, 2, 3];
 
 describe("色管理", () => {
   it("r128 の描画経路に合わせ、16進の色が変換されずにそのまま保持される", () => {
@@ -33,59 +25,35 @@ describe("色管理", () => {
   });
 });
 
-describe("fovFor", () => {
-  it("max(base, 2·atan(MIN_HALF_WIDTH_TAN / aspect)) に一致する", () => {
-    for (const aspect of ASPECTS) {
-      const expected = Math.max(BASE_FOV, 2 * Math.atan(MIN_HALF_WIDTH_TAN / aspect) * RAD_TO_DEG);
-      expect(fovFor(BASE_FOV, aspect)).toBeCloseTo(expected, 9);
-    }
-  });
-
-  it("aspect が十分大きいとき base に一致する", () => {
-    expect(fovFor(BASE_FOV, 3)).toBe(BASE_FOV);
-  });
-
-  it("base を下回らず、縦横比に対して単調非増加", () => {
-    const fovs = ASPECTS.map((aspect) => fovFor(BASE_FOV, aspect));
-    for (const fov of fovs) expect(fov).toBeGreaterThanOrEqual(BASE_FOV);
-    fovs.slice(1).forEach((fov, i) => expect(fov).toBeLessThanOrEqual(fovs.at(i) ?? Infinity));
-  });
-
-  it("不正な aspect は base を返す", () => {
-    expect(fovFor(BASE_FOV, 0)).toBe(BASE_FOV);
-    expect(fovFor(BASE_FOV, Number.NaN)).toBe(BASE_FOV);
-  });
-});
-
-describe("framingLift", () => {
-  it("LIFT_ZERO_ASPECT 以上で 0、LIFT_FULL_ASPECT 以下で PORTRAIT_LIFT", () => {
-    expect(framingLift(LIFT_ZERO_ASPECT)).toBe(0);
-    expect(framingLift(LIFT_ZERO_ASPECT + 1)).toBe(0);
-    expect(framingLift(LIFT_FULL_ASPECT)).toBe(PORTRAIT_LIFT);
-    expect(framingLift(LIFT_FULL_ASPECT / 2)).toBe(PORTRAIT_LIFT);
-  });
-
-  it("その間は単調非増加で [0, PORTRAIT_LIFT] に収まる", () => {
-    const lifts = ASPECTS.map((aspect) => framingLift(aspect));
-    for (const lift of lifts) {
-      expect(lift).toBeGreaterThanOrEqual(0);
-      expect(lift).toBeLessThanOrEqual(PORTRAIT_LIFT);
-    }
-    lifts.slice(1).forEach((lift, i) => expect(lift).toBeLessThanOrEqual(lifts.at(i) ?? Infinity));
-  });
-
-  it("中間の縦横比では線形に補間される", () => {
-    const mid = (LIFT_FULL_ASPECT + LIFT_ZERO_ASPECT) / 2;
-    expect(framingLift(mid)).toBeCloseTo(PORTRAIT_LIFT / 2, 12);
-  });
-});
-
 describe("pixelRatioFor", () => {
   it("low は常に 1、normal は 2 を上限にデバイス比を使う", () => {
-    expect(pixelRatioFor("low", 3)).toBe(1);
-    expect(pixelRatioFor("normal", 3)).toBe(Math.min(2, 3));
-    expect(pixelRatioFor("normal", 1.5)).toBe(1.5);
-    expect(pixelRatioFor("normal", 0)).toBe(1);
+    expect(pixelRatioFor("low", 3, false)).toBe(1);
+    expect(pixelRatioFor("normal", 3, false)).toBe(MAX_PIXEL_RATIO.fine);
+    expect(pixelRatioFor("normal", 1.5, false)).toBe(1.5);
+    expect(pixelRatioFor("normal", 0, false)).toBe(1);
+    expect(pixelRatioFor("normal", Number.NaN, false)).toBe(1);
+  });
+
+  it("coarse(タッチ端末)は 1.5 を上限にし、それ以下のデバイス比はそのまま使う", () => {
+    expect(MAX_PIXEL_RATIO.coarse).toBeLessThanOrEqual(1.5);
+    expect(pixelRatioFor("normal", 3, true)).toBe(MAX_PIXEL_RATIO.coarse);
+    expect(pixelRatioFor("normal", 2, true)).toBe(MAX_PIXEL_RATIO.coarse);
+    expect(pixelRatioFor("normal", 1.25, true)).toBe(1.25);
+    expect(pixelRatioFor("normal", 1, true)).toBe(1);
+    expect(pixelRatioFor("low", 3, true)).toBe(1);
+  });
+
+  it("coarse でも上限は fine を超えない", () => {
+    for (const dpr of [0.5, 1, 1.5, 2, 3]) {
+      expect(pixelRatioFor("normal", dpr, true)).toBeLessThanOrEqual(pixelRatioFor("normal", dpr, false));
+    }
+  });
+});
+
+describe("shadowMapSizeFor", () => {
+  it("coarse は 1024、それ以外は LIGHT_LOOK.sun.shadow.mapSize", () => {
+    expect(shadowMapSizeFor(true)).toBe(1024);
+    expect(shadowMapSizeFor(false)).toBe(LIGHT_LOOK.sun.shadow.mapSize);
   });
 });
 

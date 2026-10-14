@@ -4,22 +4,28 @@ import { getPitchSpec } from "../../pitch/kinds";
 import { clamp } from "../../pitch/zone";
 import { ZONE_HALF_HEIGHT, zoneToWorld } from "../space/coords";
 import { RELEASE_POINT, WORLD_PARAMS } from "../space/params";
-import { addVec3, lerpVec3 } from "../space/vec3";
+import { lerpVec3 } from "../space/vec3";
 
 // 投球のボール軌道(表示専用。判定には使わない)。ゾーン到達時刻 = `flight.durationMs`。
 
-const { bendGain, arcHeight } = WORLD_PARAMS.pitch;
-const MITT = WORLD_PARAMS.mitt;
+const { bendGain, arcHeight, breakExponent, speedProfile } = WORLD_PARAMS.pitch;
 
-/** 球種の曲がり量(ゾーン単位)をワールドの m へ換算する。 */
+/** 球種の終盤の曲がり量(ゾーン単位)をワールドの m へ換算する(`bendGain` 込み)。 */
 function bendWorldOf(flight: PitchFlight): Vec3 {
   const { bend } = getPitchSpec(flight.kind);
   return { x: bend.x * WORLD_PARAMS.zone.halfWidth * bendGain, y: bend.y * ZONE_HALF_HEIGHT * bendGain, z: 0 };
 }
 
+/** 進行の時間写像 `g(p) = p + speedProfile × p(1 − p)`。`g(0) = 0`・`g(1) = 1` で、`speedProfile ≤ 1` なら単調増加。 */
+function progressMap(progress: number): number {
+  return progress + speedProfile * progress * (1 - progress);
+}
+
 /**
  * リリース後 `elapsedMs` のボール位置。進行度 `p = clamp(elapsed / durationMs, 0, 1)`。
- * 曲がり量だけずらした点 `aim'` へ直進し、終盤に `p³` で曲がり(`− bend × p³`)、放物線の持ち上げ(`arcHeight × 4p(1−p)`)を足す。
+ * `pos(p) = lerp(release, landing, g(p)) + break × (pⁿ − p) + (0, 4 × arcHeight × p(1 − p), 0)`。
+ * `break` = 球種の終盤の曲がり量 × `bendGain`(ワールドの m)。着弾点に向かう直線から `−break` の側へ出て、終盤に `+break` の向きへ曲がり込む。
+ * `g` は出だしを速く・到達時を遅くする時間写像(遠近法で画面上の速さを均す見かけの調整)。
  * `p = 0` はリリース点、`p = 1` は `zoneToWorld(landing)` に厳密一致する。z は単調に増える。
  */
 export function pitchBallAt(flight: PitchFlight, elapsedMs: number): Vec3 {
@@ -29,25 +35,19 @@ export function pitchBallAt(flight: PitchFlight, elapsedMs: number): Vec3 {
     return landing;
   }
   const bend = bendWorldOf(flight);
-  const straight = lerpVec3(RELEASE_POINT, addVec3(landing, bend), progress);
-  const late = progress * progress * progress;
+  const straight = lerpVec3(RELEASE_POINT, landing, progressMap(progress));
+  const swing = Math.pow(progress, breakExponent) - progress;
   return {
-    x: straight.x - bend.x * late,
-    y: straight.y - bend.y * late + arcHeight * 4 * progress * (1 - progress),
+    x: straight.x + bend.x * swing,
+    y: straight.y + bend.y * swing + arcHeight * 4 * progress * (1 - progress),
     z: straight.z,
   };
 }
 
 /**
- * ゾーン到達(`durationMs`)後 `sinceArrivalMs` のボール位置(見逃し・空振り・人間の判定待ち)。
- * 着弾点からミット(z = `mitt.z`、y = 着弾点の y + `yOffset`)へ `travelMs` で線形に進み、以降はミットで止まる。
- * `sinceArrivalMs = 0` は `pitchBallAt(flight, durationMs)` に厳密一致する。
+ * 到達後(`durationMs` 以降)のボール位置 = 着弾点(ゾーン平面)。ミットへは動かさない。
+ * `pitchBallAt(flight, durationMs)` に厳密一致する。
  */
-export function mittBallAt(flight: PitchFlight, sinceArrivalMs: number): Vec3 {
-  const landing = zoneToWorld(flight.landing);
-  const mitt: Vec3 = { x: landing.x, y: landing.y + MITT.yOffset, z: MITT.z };
-  if (sinceArrivalMs <= 0) {
-    return landing;
-  }
-  return sinceArrivalMs >= MITT.travelMs ? mitt : lerpVec3(landing, mitt, sinceArrivalMs / MITT.travelMs);
+export function heldBallAt(flight: PitchFlight): Vec3 {
+  return zoneToWorld(flight.landing);
 }

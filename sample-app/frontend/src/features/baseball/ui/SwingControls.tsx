@@ -1,3 +1,4 @@
+import type { PointerEventHandler } from "react";
 import type { SwingKind } from "../types/batting";
 
 const SWING_KINDS: readonly { readonly kind: SwingKind; readonly label: string }[] = [
@@ -9,7 +10,8 @@ type SwingControlsProps = {
   readonly ready: boolean;
   readonly swingKind: SwingKind;
   readonly onSelectSwingKind: (kind: SwingKind) => void;
-  readonly onSwing: () => void;
+  /** pointerdown のハンドラ。イベントの `timeStamp`・`pointerType` から判定時刻と遅延補正の種別を求めるため、イベントごと受け取る。 */
+  readonly onSwing: PointerEventHandler<HTMLButtonElement>;
 };
 
 /**

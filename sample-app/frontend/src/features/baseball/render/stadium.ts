@@ -182,14 +182,14 @@ function buildWalls(geometry: StageGeometry, crowd: readonly CrowdCell[]): Mesh[
   ];
 }
 
-function buildLights(): { hemisphere: HemisphereLight; sun: DirectionalLight } {
+function buildLights(shadowMapSize: number): { hemisphere: HemisphereLight; sun: DirectionalLight } {
   const { hemisphere, sun } = LIGHT_LOOK;
   const hemi = new HemisphereLight(hemisphere.sky, hemisphere.ground, hemisphere.intensity);
   const light = new DirectionalLight(sun.color, sun.intensity);
   light.position.set(sun.position.x, sun.position.y, sun.position.z);
   light.target.position.set(sun.target.x, sun.target.y, sun.target.z);
   light.castShadow = true;
-  light.shadow.mapSize.set(sun.shadow.mapSize, sun.shadow.mapSize);
+  light.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   light.shadow.normalBias = sun.shadow.normalBias;
   const { left, right, top, bottom, near, far } = sun.shadow;
   Object.assign(light.shadow.camera, { left, right, top, bottom, near, far });
@@ -197,10 +197,15 @@ function buildLights(): { hemisphere: HemisphereLight; sun: DirectionalLight } {
   return { hemisphere: hemi, sun: light };
 }
 
+export type StadiumOptions = {
+  /** 太陽光の影マップの一辺(px)。省略時は `LIGHT_LOOK.sun.shadow.mapSize`。タッチ端末では小さくする(`shadowMapSizeFor`)。 */
+  readonly shadowMapSize?: number;
+};
+
 /** 球場全体(地面・内野・塁・ライン・フェンス・スタンド・屋根・ライト)。空と霧は `createSkyTexture`/`createFog` で別に作る。 */
-export function buildStadium(geometry: StageGeometry, crowd: readonly CrowdCell[]): Group {
+export function buildStadium(geometry: StageGeometry, crowd: readonly CrowdCell[], options: StadiumOptions = {}): Group {
   const group = new Group();
-  const { hemisphere, sun } = buildLights();
+  const { hemisphere, sun } = buildLights(options.shadowMapSize ?? LIGHT_LOOK.sun.shadow.mapSize);
   group.add(buildGround(geometry), ...buildInfield(geometry), ...buildBases(geometry), ...buildLines(geometry), ...buildWalls(geometry, crowd));
   group.add(hemisphere, sun, sun.target);
   return group;

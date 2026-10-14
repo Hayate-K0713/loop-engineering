@@ -1,15 +1,17 @@
-// ステージの生成・描画・破棄。`document`・`window`・`ResizeObserver`・`WebGLRenderer`・`getContext` を使うのは render/ ではこのファイルだけ。
+// ステージの生成・描画・破棄。`document`・`window`・`matchMedia`・`ResizeObserver`・`WebGLRenderer`・`getContext` を使うのは render/ ではこのファイルだけ。
 // canvas と WebGL2 コンテキストを自前で作る(three r163 以降は WebGL2 専用なので、WebGL1 にはフォールバックしない)。
 // コンテキストが取れなければ three を呼ばずに `null` を返し、`WebGLRenderer` の生成やその後の初期化に失敗したときは、作った資源を手放し canvas を外して `null` を返す。
 // 寸法(ゾーン・ボール・球場)は StageOptions の StageGeometry から読み、直書きしない。
+// カメラの構図(位置・注視点・FOV・lift)は model が決めた CameraPose をそのまま適用する(縦横比による分岐は持たない)。
+// ゾーン枠の画面矩形は `options.battingCameraFor(aspect, layout, safeArea)` から求め、レイアウトまたは空き領域が変わったら再計算して `onResize` で通知する。
 import { PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from "three";
 import type { DataTexture } from "three";
-import type { CameraPose, SceneFrame, UniformColors, Vec3 } from "../types/scene";
+import type { CameraPose, SafeArea, SceneFrame, SceneLayout, UniformColors, Vec3 } from "../types/scene";
 import type { ScreenRect, StageGeometry, StageHandle, StageOptions } from "../types/stage";
 import { applyUniforms, buildCharacter, createTeamMaterials } from "./character";
 import type { CharacterParts, TeamMaterials } from "./character";
 import { disposeObject3D } from "./dispose";
-import { CAMERA_FAR, CAMERA_NEAR, applyRendererLook, createToonGradient, fovFor, framingLift, pixelRatioFor } from "./look";
+import { CAMERA_FAR, CAMERA_NEAR, applyRendererLook, createToonGradient, pixelRatioFor, shadowMapSizeFor } from "./look";
 import { applyMarkers, buildMarkers } from "./markers";
 import type { Markers } from "./markers";
 import { applyBatterPose, applyPose } from "./pose-apply";
@@ -42,7 +44,7 @@ type Runtime = {
   readonly world: World;
   /** 描画と `pickPlane` に使うカメラ(最後に `apply` された姿勢)。 */
   readonly camera: PerspectiveCamera;
-  /** `zoneScreenRect` 専用。常に `options.battingCamera`。 */
+  /** `zoneScreenRect` 専用。常に `options.battingCameraFor(アスペクト, layout, safeArea)` の姿勢(中継カメラ中でも不変)。 */
   readonly zoneCamera: PerspectiveCamera;
   readonly raycaster: Raycaster;
   readonly zonePlane: Plane;
@@ -51,6 +53,9 @@ type Runtime = {
   hasFrame: boolean;
   size: Size;
   pose: CameraPose;
+  /** ゾーン矩形の計算に使う、最後に `apply` されたフレームのレイアウトと空き領域(最初の `apply` まで `batting`・`null` = 既定の空き領域)。 */
+  layout: SceneLayout;
+  safeArea: SafeArea | null;
   /** 最後に反映したユニフォーム色(変わったときだけ材質を更新する)。 */
   uniforms: UniformColors | null;
   zoneRect: ScreenRect | null;
@@ -85,14 +90,20 @@ function createRenderer(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, c
   }
 }
 
+/** `pointer: coarse`(タッチ端末)か。`matchMedia` が無い環境は偽。 */
+function isCoarsePointer(): boolean {
+  const matchMedia = (window as { matchMedia?: Window["matchMedia"] }).matchMedia;
+  return typeof matchMedia === "function" && matchMedia.call(window, "(pointer: coarse)").matches;
+}
+
 /** ステージ内のオブジェクトを作ってシーンに並べる。ポーズ・可視・ユニフォーム色は最初の `apply` で確定する。 */
-function buildWorld(options: StageOptions): World {
+function buildWorld(options: StageOptions, coarsePointer: boolean): World {
   const { geometry, crowd, rig } = options;
   const sky = createSkyTexture();
   const scene = new Scene();
   scene.background = sky;
   scene.fog = createFog();
-  scene.add(buildStadium(geometry, crowd));
+  scene.add(buildStadium(geometry, crowd, { shadowMapSize: shadowMapSizeFor(coarsePointer) }));
   const gradient = createToonGradient();
   const teams = createTeamMaterials(gradient);
   const defense = { accent: teams.defense, gradient, glove: true, bat: false };
@@ -105,16 +116,14 @@ function buildWorld(options: StageOptions): World {
   return { scene, sky, gradient, teams, pitcher, catcher, batter, fielders, markers };
 }
 
-/** カメラを姿勢に合わせる。縦 FOV は縦横比で広げ(`fovFor`)、縦長の画面ではシーンを上へずらす(`framingLift`)。 */
+/** カメラを姿勢にそのまま合わせる(縦 FOV は `pose.fovDeg`、シーンを上へずらす量は `pose.lift`。どちらも model が決める)。 */
 function placeCamera(camera: PerspectiveCamera, pose: CameraPose, size: Size): void {
-  const aspect = aspectOf(size);
-  const lift = framingLift(aspect);
-  camera.aspect = aspect;
-  camera.fov = fovFor(pose.fovDeg, aspect);
+  camera.aspect = aspectOf(size);
+  camera.fov = pose.fovDeg;
   camera.position.set(pose.position.x, pose.position.y, pose.position.z);
   camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
-  if (lift > 0) {
-    camera.setViewOffset(size.width, size.height, 0, lift * size.height, size.width, size.height);
+  if (pose.lift > 0) {
+    camera.setViewOffset(size.width, size.height, 0, pose.lift * size.height, size.width, size.height);
   } else {
     camera.clearViewOffset();
   }
@@ -139,19 +148,44 @@ function projectZone(camera: PerspectiveCamera, zone: StageGeometry["zone"], siz
   return { left, top: upper, width: Math.max(...xs) - left, height: Math.max(...ys) - upper };
 }
 
+/** ゾーン矩形を、現在のサイズ・レイアウト・空き領域の打撃カメラで計算し直す。 */
+function updateZoneRect(rt: Runtime): void {
+  placeCamera(rt.zoneCamera, rt.options.battingCameraFor(aspectOf(rt.size), rt.layout, rt.safeArea), rt.size);
+  rt.zoneRect = projectZone(rt.zoneCamera, rt.options.geometry.zone, rt.size);
+}
+
 /** サイズ変更を反映する(レンダラ・描画用カメラ・ゾーン矩形)。描画はしない。 */
-function layout(rt: Runtime, size: Size): void {
+function applySize(rt: Runtime, size: Size): void {
   rt.size = size;
   rt.renderer.setSize(size.width, size.height, false);
   placeCamera(rt.camera, rt.pose, size);
-  placeCamera(rt.zoneCamera, rt.options.battingCamera, size);
-  rt.zoneRect = projectZone(rt.zoneCamera, rt.options.geometry.zone, size);
+  updateZoneRect(rt);
+}
+
+function sameSafeArea(a: SafeArea | null, b: SafeArea): boolean {
+  return a !== null && a.top === b.top && a.bottom === b.bottom;
+}
+
+function sameRect(a: ScreenRect | null, b: ScreenRect | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height;
+}
+
+/** フレームのレイアウト・空き領域が変わったらゾーン矩形を再計算し、矩形が変わったときだけ `onResize` で通知する。 */
+function syncZoneLayout(rt: Runtime, frame: SceneFrame): void {
+  if (rt.layout === frame.layout && sameSafeArea(rt.safeArea, frame.safeArea)) return;
+  const before = rt.zoneRect;
+  rt.layout = frame.layout;
+  rt.safeArea = { top: frame.safeArea.top, bottom: frame.safeArea.bottom };
+  updateZoneRect(rt);
+  if (!sameRect(before, rt.zoneRect)) rt.options.onResize(rt.size);
 }
 
 function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, renderer: WebGLRenderer, world: World): Runtime {
-  const { container, battingCamera, geometry } = options;
+  const { container, geometry } = options;
   const size = { width: Math.max(1, container.clientWidth), height: Math.max(1, container.clientHeight) };
-  const makeCamera = (): PerspectiveCamera => new PerspectiveCamera(battingCamera.fovDeg, aspectOf(size), CAMERA_NEAR, CAMERA_FAR);
+  const initialPose = options.battingCameraFor(aspectOf(size), "batting", null);
+  const makeCamera = (): PerspectiveCamera => new PerspectiveCamera(initialPose.fovDeg, aspectOf(size), CAMERA_NEAR, CAMERA_FAR);
   const rt: Runtime = {
     options,
     canvas,
@@ -164,11 +198,13 @@ function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, rendere
     disposed: false,
     hasFrame: false,
     size,
-    pose: battingCamera,
+    pose: initialPose,
+    layout: "batting",
+    safeArea: null,
     uniforms: null,
     zoneRect: null,
   };
-  layout(rt, size);
+  applySize(rt, size);
   return rt;
 }
 
@@ -202,6 +238,7 @@ function applyStage(rt: Runtime, frame: SceneFrame): void {
   if (rt.disposed) return;
   rt.pose = frame.camera;
   placeCamera(rt.camera, frame.camera, rt.size);
+  syncZoneLayout(rt, frame);
   updateUniforms(rt, frame.uniforms);
   applyWorld(rt.world, frame);
   rt.hasFrame = true;
@@ -211,7 +248,7 @@ function applyStage(rt: Runtime, frame: SceneFrame): void {
 /** サイズが正の有限値のときだけ反映し、直前の `apply` の状態を再描画して `onResize` を通知する(非正・NaN は無視)。 */
 function resizeStage(rt: Runtime, width: number, height: number): void {
   if (rt.disposed || !isPositive(width) || !isPositive(height)) return;
-  layout(rt, { width, height });
+  applySize(rt, { width, height });
   renderFrame(rt);
   rt.options.onResize({ width, height });
 }
@@ -307,10 +344,11 @@ function wireStage(rt: Runtime): StageHandle {
  * シーン構築の途中で失敗した分は、最初の `apply` まで描画しないので GPU 資源を持たず、ガベージコレクションに任せる。
  */
 function assembleStage(options: StageOptions, canvas: HTMLCanvasElement, renderer: WebGLRenderer): StageHandle {
+  const coarsePointer = isCoarsePointer();
   applyRendererLook(renderer, options.quality);
-  renderer.setPixelRatio(pixelRatioFor(options.quality, window.devicePixelRatio));
+  renderer.setPixelRatio(pixelRatioFor(options.quality, window.devicePixelRatio, coarsePointer));
   styleCanvas(canvas);
-  const world = buildWorld(options);
+  const world = buildWorld(options, coarsePointer);
   try {
     return wireStage(createRuntime(options, canvas, renderer, world));
   } catch (error) {

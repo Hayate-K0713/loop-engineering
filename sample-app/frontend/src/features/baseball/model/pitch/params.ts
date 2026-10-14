@@ -1,5 +1,3 @@
-import type { ZonePoint } from "../../types/common";
-
 /** 投球・飛行まわりの定数。数値はすべて仮値で、balance.test.ts とプレイで調整する。 */
 type PitchParams = {
   /** 狙いからの着弾のばらつきの基準(ゾーン単位の標準偏差)。 */
@@ -26,10 +24,6 @@ type PitchParams = {
   readonly gridHalf: number;
   /** ボールの表示半径。 */
   readonly ballRadius: number;
-  /** ボールの表示上の開始位置(リリース地点)。 */
-  readonly startPoint: ZonePoint;
-  /** ボールの表示上の開始スケール(着弾で 1)。 */
-  readonly startScale: number;
 };
 
 export const PITCH_PARAMS: PitchParams = {
@@ -45,6 +39,4 @@ export const PITCH_PARAMS: PitchParams = {
   zoneHalf: 1.0,
   gridHalf: 5 / 3,
   ballRadius: 0.12,
-  startPoint: { x: 0, y: 0.4 },
-  startScale: 0.25,
 };

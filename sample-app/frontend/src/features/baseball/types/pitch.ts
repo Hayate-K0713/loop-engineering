@@ -13,7 +13,10 @@ export type PitchCommand = {
   readonly cell: CourseCell;
 };
 
-/** 球種の仕様。`bend` は表示用の軌道の曲がり量で、判定には使わない。 */
+/**
+ * 球種の仕様。`bend` は表示用の軌道の「終盤の曲がり量」(ゾーン単位、`WORLD_PARAMS.pitch.bendGain` を掛ける前)で、判定には使わない。
+ * x は + がライト側(画面右)、y は + が上(右投手の実際の向き: スライダー・カーブ = +x、シュート = −x、カーブ・フォーク = 落ちる = −y)。
+ */
 export type PitchSpec = {
   readonly kind: PitchKind;
   readonly label: string;
@@ -30,11 +33,4 @@ export type PitchFlight = {
   readonly landing: ZonePoint;
   readonly speedKmh: number;
   readonly durationMs: number;
-};
-
-/** ボールの表示位置(表示専用)。 */
-export type BallPosition = {
-  readonly x: number;
-  readonly y: number;
-  readonly scale: number;
 };

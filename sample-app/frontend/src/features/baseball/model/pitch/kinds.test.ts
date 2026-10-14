@@ -46,6 +46,24 @@ describe("getPitchSpec", () => {
     expect(getPitchSpec("fork").cursorScale.y).toBeLessThan(getPitchSpec("fork").cursorScale.x);
   });
 
+  it("曲がりの向きが右投手の実際の向き(slider/curve = グラブ側 +x、shoot = 腕側 −x、curve/fork = 落ちる −y)", () => {
+    expect(getPitchSpec("slider").bend.x).toBeGreaterThan(0);
+    expect(getPitchSpec("curve").bend.x).toBeGreaterThan(0);
+    expect(getPitchSpec("shoot").bend.x).toBeLessThan(0);
+    expect(getPitchSpec("curve").bend.y).toBeLessThan(0);
+    expect(getPitchSpec("fork").bend.y).toBeLessThan(0);
+    expect(getPitchSpec("fork").bend.x).toBe(0);
+  });
+
+  it("曲がりの大きさは各成分 2.0(ゾーン単位)以下で、曲がる球種は必ずどちらかが 0 でない", () => {
+    for (const kind of ALL_KINDS) {
+      const { bend } = getPitchSpec(kind);
+      expect(Math.abs(bend.x)).toBeLessThanOrEqual(2);
+      expect(Math.abs(bend.y)).toBeLessThanOrEqual(2);
+      expect(kind === "straight" || bend.x !== 0 || bend.y !== 0).toBe(true);
+    }
+  });
+
   it("未知の球種は Error", () => {
     expect(() => getPitchSpec("knuckle" as unknown as PitchKind)).toThrow(Error);
   });

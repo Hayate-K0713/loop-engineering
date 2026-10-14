@@ -2,7 +2,7 @@ import { CylinderGeometry, DataTexture, DirectionalLight, Fog, Group, Material, 
 import type { Object3D } from "three";
 import { describe, expect, it } from "vitest";
 import { disposeObject3D } from "./dispose";
-import { FOG_LOOK, SKY_HEIGHT, SKY_STOPS } from "./look";
+import { FOG_LOOK, LIGHT_LOOK, SKY_HEIGHT, SKY_STOPS, shadowMapSizeFor } from "./look";
 import { buildStadium, createFog, createSkyTexture } from "./stadium";
 import { makeCrowd, makeGeometry } from "./test-fixtures";
 
@@ -48,6 +48,17 @@ describe("buildStadium", () => {
     expect(sun?.castShadow).toBe(true);
     expect(sun?.shadow.camera.right).toBe(70);
     expect(sun?.shadow.camera.projectionMatrix.elements.at(0)).toBeCloseTo(2 / 140, 9);
+  });
+
+  it("影マップの一辺は options.shadowMapSize に従い、省略時は LIGHT_LOOK の値", () => {
+    const sunOf = (root: Group): DirectionalLight | undefined => root.children.find((child): child is DirectionalLight => child instanceof DirectionalLight);
+    expect(sunOf(stadium)?.shadow.mapSize.x).toBe(LIGHT_LOOK.sun.shadow.mapSize);
+    expect(sunOf(stadium)?.shadow.mapSize.y).toBe(LIGHT_LOOK.sun.shadow.mapSize);
+    const coarse = buildStadium(makeGeometry(), makeCrowd(), { shadowMapSize: shadowMapSizeFor(true) });
+    expect(sunOf(coarse)?.shadow.mapSize.x).toBe(1024);
+    expect(sunOf(coarse)?.shadow.mapSize.y).toBe(1024);
+    const fine = buildStadium(makeGeometry(), makeCrowd(), { shadowMapSize: shadowMapSizeFor(false) });
+    expect(sunOf(fine)?.shadow.mapSize.x).toBe(2048);
   });
 
   it("フェンスとスタンドの円弧は StageGeometry の半径に追従する", () => {
