@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { moveCursor, type CursorDirection } from "../model/batting/cursor";
-import type { SwingKind } from "../types/batting";
+import type { SwingKind, SwingOrigin } from "../types/batting";
 import type { ZonePoint } from "../types/common";
 import { useAnimationFrame, type FrameResult } from "./useAnimationFrame";
 import { useLatest } from "./useLatest";
@@ -12,8 +12,8 @@ type UseKeyboardInputOptions = {
   readonly swingReady: boolean;
   readonly getCursor: () => ZonePoint;
   readonly moveCursorTo: (point: ZonePoint) => void;
-  /** 現在のカーソル位置でスイングする。 */
-  readonly onSwing: () => void;
+  /** 現在のカーソル位置でスイングする。`origin` = キー入力(`key`)の時刻情報(`event.timeStamp`)。 */
+  readonly onSwing: (origin: SwingOrigin) => void;
   readonly onSelectSwingKind: (kind: SwingKind) => void;
 };
 
@@ -63,7 +63,7 @@ function handleSwingKey(event: KeyboardEvent, options: UseKeyboardInputOptions):
   }
   event.preventDefault();
   if (!event.repeat) {
-    options.onSwing();
+    options.onSwing({ timeStamp: event.timeStamp, sourceTimeStamp: event.timeStamp, inputKind: "key" });
   }
 }
 
