@@ -5,7 +5,7 @@ import type { SafeArea } from "../types/scene";
 /** 空き領域の上下の端が、これ(画面高比、約 3px)未満しか動いていなければ更新しない(カメラの揺れ防止)。 */
 const MIN_CHANGE_RATIO = 0.004;
 
-export type UseSafeAreaResult = {
+type UseSafeAreaResult = {
   /**
    * 最新の空き領域(ステージの矩形に対する画面高比。HUD の下端と下のオーバーレイの上端)。
    * 目印の要素が見つからない・上下が逆転している・ステージの高さが 0 のときは `null`(model が既定の空き領域を使う)。毎フレーム呼んでよい(ref を読むだけ)。

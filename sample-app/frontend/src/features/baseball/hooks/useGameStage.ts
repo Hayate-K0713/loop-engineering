@@ -5,7 +5,7 @@ import { CPU_SWING_LEAD_MS } from "../model/world/space/params";
 import type { SwingInput, SwingKind, TimingCue } from "../types/batting";
 import type { PlaybackSpeed } from "../types/game";
 import type { PitchCommand, PitchFlight } from "../types/pitch";
-import type { SceneLayout, ScenePhase } from "../types/scene";
+import type { ScenePhase } from "../types/scene";
 import type { ScreenRect, StageStatus } from "../types/stage";
 import type { FieldMarkerView, GameView, PitchOutcomeView } from "../types/view";
 import { useBattingControls, type BattingControls, type CursorView } from "./useBattingControls";
@@ -18,7 +18,7 @@ import type { PointerHandlers } from "./usePointerInput";
 import { useSafeArea } from "./useSafeArea";
 import { useSkipInput } from "./useSkipInput";
 import { useStage3d, type UseStage3dResult } from "./useStage3d";
-import { useStageDirector, type StageDirector } from "./useStageDirector";
+import { layoutOf, useStageDirector, type StageDirector } from "./useStageDirector";
 
 type UseGameStageOptions = {
   readonly game: UseGameResult;
@@ -50,6 +50,8 @@ export type GameStageViewProps = {
   readonly timingCue: TimingCue | null;
   /** 直近のスイングのタイミング(`data-timing` ミラー用)。次の投球が飛び始めるまで保持し、なければ `null`。 */
   readonly lastTiming: TimingCue | null;
+  /** 捨てたスイングの回数(`data-swing-dropped` ミラー用。開発・E2E の観測用)。入力されたのに、見逃しが先に確定していたスイングの累計。 */
+  readonly droppedSwings: number;
 };
 
 type UseGameStageResult = {
@@ -112,11 +114,6 @@ function useBindCursorSource(sourceRef: RefObject<() => CursorView>, source: () 
   }, [sourceRef, source]);
 }
 
-/** 構図のレイアウト(人間守備は守備レイアウト、それ以外は打撃レイアウト)。表示用の view で決める(director の `aimCell` と同じ基準)。 */
-function layoutOf(heldView: GameView): SceneLayout {
-  return heldView.mode === "human-pitching" ? "pitching" : "batting";
-}
-
 type PlaybackOptions = {
   readonly game: UseGameResult;
   readonly speed: PlaybackSpeed;
@@ -151,7 +148,9 @@ function usePlayback({ game, speed, selection, holding, swingReady, heldView, on
   });
   const { swingRecordRef, onSwing } = useSwingRecording(game);
   // 空き領域の実測。打撃/守備の切り替えでオーバーレイの高さが変わるので、レイアウトを再測定のキーに渡す。
-  const { getSafeArea } = useSafeArea(stage3d.containerRef, layoutOf(heldView));
+  // 構図のレイアウトは director と同じ `layoutOf(aimCell)` で決める(人間守備は狙いのセルがあり、守備レイアウト)。
+  const aimCell = heldView.mode === "human-pitching" ? selection.cell : null;
+  const { getSafeArea } = useSafeArea(stage3d.containerRef, layoutOf(aimCell));
   const cursorSourceRef = useCursorSourceRef(view);
   const getCursorView = useCallback((): CursorView => cursorSourceRef.current(), [cursorSourceRef]);
 
@@ -165,7 +164,7 @@ function usePlayback({ game, speed, selection, holding, swingReady, heldView, on
     getSafeArea,
     getCursorView,
     swingRecordRef,
-    aimCell: heldView.mode === "human-pitching" ? selection.cell : null,
+    aimCell,
     uniforms: heldView.uniforms,
     cursorVisible: heldView.mode === "human-batting",
     speed,
@@ -229,6 +228,7 @@ export function useGameStage({ game, speed, selection }: UseGameStageOptions): U
       marker: heldView.fieldMarker,
       timingCue: director.timingCue,
       lastTiming: director.lastTiming,
+      droppedSwings: director.droppedSwings,
     },
   };
 }

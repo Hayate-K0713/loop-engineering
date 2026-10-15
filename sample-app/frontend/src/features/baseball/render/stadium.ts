@@ -197,7 +197,7 @@ function buildLights(shadowMapSize: number): { hemisphere: HemisphereLight; sun:
   return { hemisphere: hemi, sun: light };
 }
 
-export type StadiumOptions = {
+type StadiumOptions = {
   /** 太陽光の影マップの一辺(px)。省略時は `LIGHT_LOOK.sun.shadow.mapSize`。タッチ端末では小さくする(`shadowMapSizeFor`)。 */
   readonly shadowMapSize?: number;
 };

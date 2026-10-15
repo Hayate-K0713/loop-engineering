@@ -49,3 +49,22 @@ export function recordSwing(current: SwingRecord | null, seq: number, input: Swi
 export function swingForOutcome(record: SwingRecord | null, outcomeSeq: number): SwingInput | null {
   return record !== null && record.seq === outcomeSeq ? record.input : null;
 }
+
+/** `planPlay` に渡すスイングと、捨てたかどうか。 */
+type PlanSwing = {
+  /** `planPlay` に渡すスイング。なければ `null`。 */
+  readonly swing: SwingInput | null;
+  /** 記録はあったが渡さなかった(reducer が受理していない)。 */
+  readonly dropped: boolean;
+};
+
+/**
+ * `planPlay` に渡す人間のスイング。結果が「ボール」「見逃しストライク」のときは、reducer がスイングを受理していない
+ * (到達通知が先に届き、同じ tick に来たスイング入力は無視された)ので、記録があっても渡さない(`dropped`)
+ * (渡すと、見逃しの結果なのにバットを振る演出とタイミング表示が出る)。`dropped` は E2E が「入力が間に合わなかった」を観測するための印でもある。
+ */
+export function planSwingOf(record: SwingRecord | null, outcome: Pick<PitchOutcomeView, "kind" | "seq">): PlanSwing {
+  const recorded = swingForOutcome(record, outcome.seq);
+  const taken = outcome.kind === "ball" || outcome.kind === "called-strike";
+  return { swing: taken ? null : recorded, dropped: taken && recorded !== null };
+}

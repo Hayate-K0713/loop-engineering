@@ -3,7 +3,7 @@ import type { ZonePoint } from "../../../types/common";
 import type { CourseCell, PitchFlight } from "../../../types/pitch";
 import type { BatterPose, CameraPose, CharacterPose, SafeArea, SceneFrame, SceneLayout, ScenePhase, UniformColors, Vec3 } from "../../../types/scene";
 import { cellToPoint, clamp } from "../../pitch/zone";
-import { ballScaleFor, battingCameraFor, blendCamera, chaseBlendAt, chaseCamera, portraitBlendAt } from "../camera/rig";
+import { ballScaleFor, battingCameraFor, blendCamera, chaseBlendAt, chaseCamera, portraitBlendAt, usableSafeArea } from "../camera/rig";
 import { batterStancePose, batterSwingPose } from "../motion/batter";
 import { catcherPose, fielderIdlePose, fielderRunPose } from "../motion/fielder";
 import { pitcherFollowPose, pitcherWindupPose } from "../motion/pitcher";
@@ -47,7 +47,6 @@ export type SceneFrameInput = {
 const ACTORS = WORLD_PARAMS.actors;
 const HALF_WIDTH = WORLD_PARAMS.zone.halfWidth;
 const CHASE = WORLD_PARAMS.chaseCamera;
-const FIT = WORLD_PARAMS.framing.fit;
 const ZONE_PULSE = WORLD_PARAMS.cue.zonePulse;
 const LANDING_MARK = WORLD_PARAMS.landingMark;
 
@@ -122,13 +121,6 @@ function chaseOf(plan: PlayPlan | null, tMs: number): FrameContext["chase"] {
   return chaseBlendAt(tMs - plan.chaseFromMs);
 }
 
-/** 使える空き領域(有限で、幅が `minBandRatio` 以上)ならそのまま、そうでなければレイアウトの既定値。 */
-function resolveSafeArea(layout: SceneLayout, safeArea: SafeArea | null): SafeArea {
-  const fallback = layout === "pitching" ? FIT.defaultSafeArea.pitching : FIT.defaultSafeArea.batting;
-  const usable = safeArea !== null && Number.isFinite(safeArea.top) && Number.isFinite(safeArea.bottom) && safeArea.bottom - safeArea.top >= FIT.minBandRatio;
-  return usable ? { top: safeArea.top, bottom: safeArea.bottom } : { top: fallback.top, bottom: fallback.bottom };
-}
-
 function contextOf(input: SceneFrameInput): FrameContext {
   const plan = input.phase === "play" ? input.plan : null;
   const tMs = Math.max(0, input.tMs);
@@ -137,7 +129,7 @@ function contextOf(input: SceneFrameInput): FrameContext {
     input,
     plan,
     aspect: Number.isFinite(input.aspect) && input.aspect > 0 ? input.aspect : DEFAULT_ASPECT,
-    safeArea: resolveSafeArea(input.layout, input.safeArea),
+    safeArea: usableSafeArea(input.layout, input.safeArea),
     tMs,
     batted,
     ball: ballPositionOf(input, plan, batted, tMs),

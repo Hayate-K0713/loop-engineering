@@ -113,8 +113,11 @@ function byLayout<T>(layout: SceneLayout, pair: { readonly batting: T; readonly 
   return layout === "pitching" ? pair.pitching : pair.batting;
 }
 
-/** 使える空き領域(有限で、幅が `minBandRatio` 以上)ならそのまま、そうでなければレイアウトの既定値。 */
-function usableSafeArea(layout: SceneLayout, safeArea: SafeArea | null): SafeArea {
+/**
+ * 使える空き領域(有限で、幅が `minBandRatio` 以上)ならそのまま、そうでなければレイアウトの既定値。
+ * 空き領域の既定値への切り替えはここ1か所(構図・フレーム・カーソルの制限が同じ判定を使う)。
+ */
+export function usableSafeArea(layout: SceneLayout, safeArea: SafeArea | null): SafeArea {
   const fallback = byLayout(layout, FIT.defaultSafeArea);
   if (safeArea === null || !Number.isFinite(safeArea.top) || !Number.isFinite(safeArea.bottom)) return fallback;
   return safeArea.bottom - safeArea.top >= FIT.minBandRatio ? safeArea : fallback;

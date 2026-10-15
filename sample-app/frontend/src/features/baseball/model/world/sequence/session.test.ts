@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SwingInput } from "../../../types/batting";
 import type { PitchOutcomeView } from "../../../types/view";
-import { isHolding, isPlayFinished, phaseOf, recordSwing, swingForOutcome, windupProgress } from "./session";
+import { isHolding, isPlayFinished, phaseOf, planSwingOf, recordSwing, swingForOutcome, windupProgress } from "./session";
 
 const BOOLS: readonly boolean[] = [true, false];
 
@@ -115,5 +115,33 @@ describe("swingForOutcome", () => {
 
   it("記録が null なら null", () => {
     expect(swingForOutcome(null, 5)).toBeNull();
+  });
+});
+
+describe("planSwingOf", () => {
+  const KINDS: readonly PitchOutcomeView["kind"][] = ["ball", "called-strike", "swinging-strike", "foul", "in-play"];
+
+  it("スイング結果(空振り・ファウル・インプレー)では、記録を planPlay に渡し、捨てない", () => {
+    const record = recordSwing(null, 5, swingAt(400));
+    for (const kind of ["swinging-strike", "foul", "in-play"] as const) {
+      expect(planSwingOf(record, { seq: 5, kind })).toEqual({ swing: swingAt(400), dropped: false });
+    }
+  });
+
+  it("見逃し(ボール・見逃しストライク)では、記録があっても渡さず、捨てたと印を付ける", () => {
+    const record = recordSwing(null, 5, swingAt(400));
+    for (const kind of ["ball", "called-strike"] as const) {
+      expect(planSwingOf(record, { seq: 5, kind })).toEqual({ swing: null, dropped: true });
+    }
+  });
+
+  it("記録が無ければ、結果によらず捨てていない(振っていない見逃しは dropped ではない)", () => {
+    expect(KINDS.map((kind) => planSwingOf(null, { seq: 5, kind }))).toEqual(KINDS.map(() => ({ swing: null, dropped: false })));
+  });
+
+  it("seq が違う記録(前の投球のスイング)は、見逃しでも捨てたことにならない", () => {
+    const record = recordSwing(null, 4, swingAt(400));
+    expect(planSwingOf(record, { seq: 5, kind: "called-strike" })).toEqual({ swing: null, dropped: false });
+    expect(planSwingOf(record, { seq: 5, kind: "foul" })).toEqual({ swing: null, dropped: false });
   });
 });

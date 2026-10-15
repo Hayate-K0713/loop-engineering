@@ -97,7 +97,7 @@ export function routeStageMove(input: StageMoveInput): StageMoveAction {
   return input.held && !input.holding ? "drag-start" : "ignore";
 }
 
-export type TapGestureInput = {
+type TapGestureInput = {
   /** pointerdown の `event.timeStamp`(ms)。 */
   readonly downTimeStamp: number;
   /** pointerup の `event.timeStamp`(ms)。 */
@@ -113,7 +113,7 @@ export function isTapGesture(input: TapGestureInput): boolean {
 }
 
 /** pointerup の振り分け結果。`swing-here` = 押下時点のカーソル位置でスイングを試みる(判定時刻は押下の時刻)。 */
-export type StageReleaseAction = "swing-here" | "none";
+type StageReleaseAction = "swing-here" | "none";
 
 export type StageReleaseInput = {
   /** `PointerEvent.pointerType`。 */

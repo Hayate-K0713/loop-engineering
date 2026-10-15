@@ -2,10 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { scaleRadiiForPitch } from "../model/batting/contact";
 import { sceneFrameAt, type SceneFrameInput } from "../model/world/sequence/frame";
 import { planPlay, type PlayPlan } from "../model/world/sequence/play-plan";
-import { isPlayFinished, phaseOf, swingForOutcome, windupProgress, type SwingRecord } from "../model/world/sequence/session";
+import { isPlayFinished, phaseOf, planSwingOf, windupProgress, type SwingRecord } from "../model/world/sequence/session";
 import { telopAt } from "../model/world/sequence/telop";
 import { timingAt } from "../model/world/sequence/timing-cue";
-import type { SwingInput, TimingCue } from "../types/batting";
+import type { TimingCue } from "../types/batting";
 import type { PlaybackSpeed } from "../types/game";
 import type { CourseCell, PitchFlight } from "../types/pitch";
 import type { SafeArea, SceneLayout, ScenePhase, UniformColors } from "../types/scene";
@@ -59,6 +59,8 @@ export type StageDirector = {
   readonly timingCue: TimingCue | null;
   /** 直近のスイングのタイミング(`data-timing` ミラー用)。plan ができたとき設定し、次の `flight` が出るまで保持する(スキップでは消さない)。 */
   readonly lastTiming: TimingCue | null;
+  /** 捨てたスイングの回数(`data-swing-dropped` ミラー用。開発・E2E の観測用)。人間のスイングが入力されたのに、到達通知が先に処理されて見逃しが確定していた回数。 */
+  readonly droppedSwings: number;
   /** 人間守備: windup を始め、`cpuWaitMs` 後に `onRelease()`(投球の dispatch)を呼ぶ。投げられない状況では何もしない。 */
   readonly startThrow: (onRelease: () => void) => void;
   /** 演出のスキップ。`holding` 中だけ有効で、表示だけを飛ばす(reducer・`GameState` に触れない。冪等)。 */
@@ -73,6 +75,8 @@ type Session = {
   plan: PlayPlan | null;
   /** windup の開始時刻(`performance.now()`)。windup 中でなければ `null`。 */
   windupStartedAtMs: number | null;
+  /** 捨てたスイングの回数(`planSwingOf` の `dropped`。この director が生きている間の累計)。 */
+  droppedSwings: number;
 };
 
 /** 再描画を伴う表示用の state(DOM の `data-*` ミラー、テロップ、「投げる」の可否に使う)。 */
@@ -84,11 +88,21 @@ type Shown = {
   readonly lastFlight: PitchFlight | null;
   readonly timingCue: TimingCue | null;
   readonly lastTiming: TimingCue | null;
+  readonly droppedSwings: number;
 };
 
 type PatchShown = (change: Partial<Shown>) => void;
 
-const INITIAL_SHOWN: Shown = { telop: null, throwing: false, phase: "idle", playKind: null, lastFlight: null, timingCue: null, lastTiming: null };
+const INITIAL_SHOWN: Shown = {
+  telop: null,
+  throwing: false,
+  phase: "idle",
+  playKind: null,
+  lastFlight: null,
+  timingCue: null,
+  lastTiming: null,
+  droppedSwings: 0,
+};
 
 /** タイミング表示の同値判定。`timingAt` は毎フレーム新しいオブジェクトを返すので、参照ではなく値で比べる(再描画を増やさない)。 */
 function sameCue(a: TimingCue | null, b: TimingCue | null): boolean {
@@ -103,7 +117,8 @@ function sameShown(a: Shown, b: Shown): boolean {
     a.playKind === b.playKind &&
     a.lastFlight === b.lastFlight &&
     sameCue(a.timingCue, b.timingCue) &&
-    sameCue(a.lastTiming, b.lastTiming)
+    sameCue(a.lastTiming, b.lastTiming) &&
+    a.droppedSwings === b.droppedSwings
   );
 }
 
@@ -143,15 +158,6 @@ function useFlightSession(sessionRef: RefObject<Session>, flight: PitchFlight | 
 }
 
 /**
- * `planPlay` に渡す人間のスイング。結果が「ボール」「見逃しストライク」のときは、reducer がスイングを受理していない
- * (到達通知が先に届き、同じ tick に来たスイング入力は無視された)ので、記録があっても渡さない
- * (渡すと、見逃しの結果なのにバットを振る演出とタイミング表示が出る)。
- */
-function acceptedSwing(record: SwingRecord | null, outcome: PitchOutcomeView): SwingInput | null {
-  return outcome.kind === "ball" || outcome.kind === "called-strike" ? null : swingForOutcome(record, outcome.seq);
-}
-
-/**
  * 解決した球(`outcome.seq` が変わる)ごとに演出の時刻表を作る。人間のスイング記録は `seq` が一致するときだけ渡し、作成後に `null` へ戻す。
  * 時刻表の `resolvedAtMs`(受付時刻 = いまの経過ゲーム時間)は、スイングの判定時刻 `atMs`(遅延補正で過去になりうる)と区別して `planPlay` に渡す。
  * 人間のスイングがあれば、`plan.timing` から `lastTiming`(`data-timing` ミラー)を設定する(スイングなしは `null`)。
@@ -177,10 +183,16 @@ function usePlanSession(
       finishPlay(outcome.seq);
       return undefined;
     }
-    const plan = planPlay({ flight, outcome, swing: acceptedSwing(swingRecordRef.current, outcome), resolvedAtMs: getElapsedMs() });
+    const { swing, dropped } = planSwingOf(swingRecordRef.current, outcome);
+    const plan = planPlay({ flight, outcome, swing, resolvedAtMs: getElapsedMs() });
     session.plan = plan;
     swingRecordRef.current = null;
-    patch({ playKind: outcome.kind, lastTiming: plan.timing === null ? null : { label: plan.timing.label, dtMs: plan.timing.dtMs } });
+    session.droppedSwings += dropped ? 1 : 0;
+    patch({
+      playKind: outcome.kind,
+      lastTiming: plan.timing === null ? null : { label: plan.timing.label, dtMs: plan.timing.dtMs },
+      droppedSwings: session.droppedSwings,
+    });
     return () => {
       session.plan = null;
     };
@@ -238,8 +250,8 @@ function useThrowStarter(latest: RefObject<UseStageDirectorOptions>, sessionRef:
   );
 }
 
-/** 構図のレイアウト。人間守備(`aimCell` あり = 守備レイアウト)は `"pitching"`、それ以外は `"batting"`。 */
-function layoutOf(aimCell: CourseCell | null): SceneLayout {
+/** 構図のレイアウト。人間守備(`aimCell` あり = 守備レイアウト)は `"pitching"`、それ以外は `"batting"`。空き領域の再測定のキー(`useGameStage`)も同じ関数で決める。 */
+export function layoutOf(aimCell: CourseCell | null): SceneLayout {
   return aimCell !== null ? "pitching" : "batting";
 }
 
@@ -307,7 +319,7 @@ function useDirectorLoop(
 export function useStageDirector(options: UseStageDirectorOptions): StageDirector {
   const [shown, patch] = useShown();
   const latest = useLatest(options);
-  const sessionRef = useRef<Session>({ flight: null, plan: null, windupStartedAtMs: null });
+  const sessionRef = useRef<Session>({ flight: null, plan: null, windupStartedAtMs: null, droppedSwings: 0 });
   const { view, holding } = options;
 
   // 演出を終える(終了判定・スキップ・想定外の共通処理)。plan・flight・テロップを破棄して idle に戻し、`finishedSeq` の更新を依頼する。

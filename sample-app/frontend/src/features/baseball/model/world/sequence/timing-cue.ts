@@ -10,7 +10,7 @@ export type PlayTiming = TimingCue & {
 };
 
 /** `timing` を持つ演出計画(`PlayPlan` の構造的な部分型)。 */
-export type TimingPlan = {
+type TimingPlan = {
   readonly timing: PlayTiming | null;
 };
 

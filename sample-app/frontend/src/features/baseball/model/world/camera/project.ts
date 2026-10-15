@@ -12,7 +12,7 @@ const UP: Vec3 = { x: 0, y: 1, z: 0 };
 export type ViewSize = { readonly width: number; readonly height: number };
 
 /** 画面座標(キャンバス左上基準の CSS px)。`depth` はカメラの前方向への距離(m)で、0 以下ならカメラの背後(x・y は NaN)。 */
-export type ProjectedPoint = { readonly x: number; readonly y: number; readonly depth: number };
+type ProjectedPoint = { readonly x: number; readonly y: number; readonly depth: number };
 
 /** ゾーン枠の寸法(ワールド m)。`WORLD_PARAMS.zone` と同じ形。 */
 export type ZoneBox = { readonly halfWidth: number; readonly bottom: number; readonly top: number; readonly planeZ: number };

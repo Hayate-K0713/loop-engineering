@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type PointerEventHandler } from "react";
 import { INITIAL_CURSOR } from "../model/batting/cursor";
-import { WORLD_PARAMS } from "../model/world/space/params";
+import type { ViewSize } from "../model/world/camera/project";
+import { usableSafeArea } from "../model/world/camera/rig";
 import { clampCursorToView } from "../model/world/space/cursor-bounds";
 import type { CursorRadii, SwingInput, SwingKind, SwingOrigin } from "../types/batting";
 import type { ZonePoint } from "../types/common";
@@ -33,7 +34,7 @@ type UseBattingControlsOptions = {
   /** 打撃カメラでのゾーン枠の画面矩形(`useStage3d`)。 */
   readonly getZoneRect: () => ScreenRect | null;
   /** ステージの現在のサイズ(CSS px。`useStage3d` の `getViewSize`)。カーソルを画面内に収める制限に使う。ステージが無ければ `null`。 */
-  readonly getViewSize: () => { readonly width: number; readonly height: number } | null;
+  readonly getViewSize: () => ViewSize | null;
   /** 空き領域(`useSafeArea` の `getSafeArea`)。カーソルを下のオーバーレイの上に収める制限に使う。測れなければ `null`(既定の空き領域)。 */
   readonly getSafeArea: () => SafeArea | null;
 };
@@ -64,11 +65,9 @@ export type BattingControls = {
   readonly pointerHandlers: PointerHandlers;
 };
 
-/** 空き領域の下端(ステージ上端からの CSS px)。測れない・帯が狭すぎる(`minBandRatio` 未満)ときは、カメラの構図と同じ既定の空き領域(打撃)を使う。 */
+/** 空き領域の下端(ステージ上端からの CSS px)。測れない・無効(非有限・帯が狭すぎる)ときは、カメラの構図と同じ既定の空き領域(打撃)を使う(`usableSafeArea`)。 */
 function freeBottomPxOf(safeArea: SafeArea | null, stageHeightPx: number): number {
-  const fit = WORLD_PARAMS.framing.fit;
-  const usable = safeArea !== null && safeArea.bottom - safeArea.top >= fit.minBandRatio ? safeArea : fit.defaultSafeArea.batting;
-  return usable.bottom * stageHeightPx;
+  return usableSafeArea("batting", safeArea).bottom * stageHeightPx;
 }
 
 /** カーソルを画面内(左右の端から `edgeMarginPx`、下は空き領域の下端)に収める。ゾーン矩形かステージのサイズが無ければ変えない。 */

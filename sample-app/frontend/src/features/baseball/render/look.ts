@@ -79,7 +79,7 @@ const TOON_STEPS: readonly number[] = [110, 190, 255];
 /** 描画のピクセル比の上限。タッチ端末(`pointer: coarse`)はメインスレッドの詰まりが入力の遅れに直結するので低くする。 */
 export const MAX_PIXEL_RATIO = { fine: 2, coarse: 1.5 } as const;
 /** 太陽光の影マップの一辺(px)。タッチ端末は 1024。 */
-export const SHADOW_MAP_SIZE = { fine: LIGHT_LOOK.sun.shadow.mapSize, coarse: 1024 } as const;
+const SHADOW_MAP_SIZE = { fine: LIGHT_LOOK.sun.shadow.mapSize, coarse: 1024 } as const;
 
 /** デバイスピクセル比から描画のピクセル比を決める。`low` は 1 固定(SwiftShader は比例して重くなる)。`coarsePointer` なら上限 1.5。 */
 export function pixelRatioFor(quality: StageQuality, devicePixelRatio: number, coarsePointer: boolean): number {

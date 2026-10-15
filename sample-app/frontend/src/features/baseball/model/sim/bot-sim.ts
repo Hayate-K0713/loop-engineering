@@ -138,7 +138,11 @@ const UNIT_CACHE = new Map<string, { readonly x: number; readonly y: number }>()
 
 // ---------- 入力イベントと判定時刻 ----------
 
-/** 入力イベントの時刻 `eventMs`(リリースから)が見逃し扱いか。締切は**補正前の入力時刻**で比べる(`atMs` ではない)。 */
+/**
+ * 入力イベントの時刻 `eventMs`(リリースから)が見逃し扱いか。締切は**補正前の入力時刻**で比べる(`atMs` ではない)。
+ * 実装の締切は、タップは押下の時刻、それ以外(クリック・キー・ボタン・2 本目の指)は到達通知の処理時刻で決まる。
+ * ここでは全入力を「入力イベントの時刻」で近似している(処理の遅れ、特に描画で詰まった環境での遅れは見ない)。
+ */
 export function isIgnoredEvent(eventMs: number, durationMs: number): boolean {
   return eventMs > durationMs + BATTING_PARAMS.lateCutoffMs;
 }

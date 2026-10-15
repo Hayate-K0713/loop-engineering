@@ -325,8 +325,20 @@ const EARLY_SAFETY_MARGIN_MS = 50;
  */
 const SURE_TAP_MS = 150;
 
+/** `TAP_MAX_DURATION_MS`(`input-route.ts`): タップとみなす押下→離しの上限(ms)。2 つのイベントの `timeStamp` の差で測る。 */
+const TAP_MAX_DURATION_MS = 180;
+
+/** `TAP_ARRIVAL_HOLD_MS`(`input-route.ts`): タップ候補の指がある間、到達通知を保留する最長の時間(ms)。押下の処理から数える。 */
+const TAP_ARRIVAL_HOLD_MS = 200;
+
+/** `BATTING_PARAMS.lateCutoffMs`: 到達時刻 D から見逃し確定(到達通知の処理)までの時間(ms)。 */
+const LATE_CUTOFF_MS = 250;
+
 /** タップ系の試行で、押下の処理が D からこの時間(ms)以内なら到達通知(`BATTING_PARAMS.lateCutoffMs` 250ms)より十分前とみなす。 */
 const TAP_ACCEPT_LIMIT_MS = 100;
+
+/** 保留の経路を通したと言い切るための余裕(ms)。押下が確定から、フレームが確定の後と離しの前から、それぞれこれだけ離れていること。 */
+const HOLD_PATH_MARGIN_MS = 20;
 
 /**
  * 遅いタップで、指を置いてから離すまでの長さ(ms)。Node 側で待って 2 つの CDP イベントを送るので、ブラウザが受け取る時刻(`event.timeStamp`)の差は
@@ -334,10 +346,25 @@ const TAP_ACCEPT_LIMIT_MS = 100;
  */
 const LATE_TAP_HOLD_MS = 100;
 
-/** 遅いタップで、押下の処理を D の何 ms 前に狙うか(ms)。Playwright の遅れは試行ごとに補正する(`lateTapScenario`)。 */
+/** 遅いタップで、押下の処理を D の何 ms 前に狙うか(ms)。Playwright の遅れは試行ごとに補正する。 */
 const LATE_TAP_AIM_BEFORE_D_MS = 40;
 
-/** 有効な試行を得るための最大の試行回数。 */
+/** 遅いタップの最初の試行で、Playwright の入力が届くまでの遅れの見積もり(ms)。この分だけ前倒しして狙い、以降は直前の試行で測った遅れで補正する。 */
+const INITIAL_LATENCY_GUESS_MS = 400;
+
+/**
+ * 保留の経路を通すタップ(`playHeldTap`)の時刻(ms)。押下を D + 215ms(見逃し確定 D + 250ms の 35ms 前)に送り、そこから 60ms 後(= D + 275ms。確定の後)に
+ * 描画のフレームを 1 回だけ流し(アプリの到達通知の判定がこのフレームで走る)、そのフレームの直後に離す。実際の押下→離しは、この 60ms に
+ * フレームの描画時間(SwiftShader で約 80〜100ms)を足した長さになり、`TAP_MAX_DURATION_MS`(180ms)に収まる。
+ */
+const HELD_TAP_AIM_AFTER_D_MS = 215;
+const HELD_TAP_FRAME_AFTER_DOWN_MS = 60;
+
+/**
+ * 有効な試行を得るための最大の試行回数。設計書の「Space でスイング」は 5 回だったが、SwiftShader の入力の遅れが大きく(0.2〜1 秒以上。
+ * `docs/memory/entries/swiftshader-playwright-input-latency.md`)、時間窓を狙う試行が無効になりやすいため、8 回にした。
+ * 回数を増やしただけで、有効試行の条件(確実に早い・確実にタップ・保留をまたぐ)は緩めていない。
+ */
 const MAX_ATTEMPTS = 8;
 
 /** スイングが受理されたときの `data-play-kind`。見逃し(`ball`/`called-strike`)にはならない。 */
@@ -376,6 +403,10 @@ type FlightTrace = {
   playKinds: string[];
   /** 新しい投球が出てから最後に見た `data-timing`・`data-timing-ms`(スイングが plan に渡ったときだけ付く)。 */
   timing: { label: string; ms: number } | null;
+  /** 新しい投球が出てから、捨てられたスイング(`data-swing-dropped` の増分)。到達通知が先に処理され、入力が間に合わなかった印。 */
+  swingDropped: number;
+  /** 新しい投球が出てから、描画のフレーム(`requestAnimationFrame`)が走った時刻(`performance.now()`)。到達通知の判定はフレームごとに走る。 */
+  frames: number[];
 };
 
 type TraceHandle = { readonly trace: FlightTrace; readonly reset: () => void };
@@ -390,7 +421,19 @@ async function installFlightTrace(page: Page): Promise<void> {
     if (stage === null) {
       throw new Error("stage-3d not found");
     }
-    const trace: FlightTrace = { seq: null, flightStartedAt: null, durationMs: null, inputs: [], snapshots: [], playKinds: [], timing: null };
+    const trace: FlightTrace = {
+      seq: null,
+      flightStartedAt: null,
+      durationMs: null,
+      inputs: [],
+      snapshots: [],
+      playKinds: [],
+      timing: null,
+      swingDropped: 0,
+      frames: [],
+    };
+    const droppedNow = (): number => Number(stage.getAttribute("data-swing-dropped") ?? "0");
+    let droppedBase = 0;
     const reset = (): void => {
       trace.seq = stage.getAttribute("data-flight-seq");
       trace.flightStartedAt = null;
@@ -399,9 +442,21 @@ async function installFlightTrace(page: Page): Promise<void> {
       trace.snapshots = [];
       trace.playKinds = [];
       trace.timing = null;
+      trace.frames = [];
+      droppedBase = droppedNow();
+      trace.swingDropped = 0;
     };
     reset();
     Reflect.set(window, key, { trace, reset } satisfies TraceHandle);
+
+    // 描画のフレームの時刻。アプリの到達通知の判定(`arrivalDue`)もフレームごとに走るので、保留の間にフレームがあったかを後から確かめられる。
+    const sampleFrame = (): void => {
+      if (trace.flightStartedAt !== null) {
+        trace.frames.push(performance.now());
+      }
+      requestAnimationFrame(sampleFrame);
+    };
+    requestAnimationFrame(sampleFrame);
 
     const swingReady = (): boolean => {
       const button = document.querySelector<HTMLButtonElement>('[data-testid="swing-button"]');
@@ -430,6 +485,7 @@ async function installFlightTrace(page: Page): Promise<void> {
           trace.durationMs = Number(stage.getAttribute("data-duration-ms"));
         }
       }
+      trace.swingDropped = droppedNow() - droppedBase;
       const playKind = stage.getAttribute("data-play-kind");
       if (trace.inputs.length > 0) {
         trace.snapshots.push({ phase: stage.getAttribute("data-phase") ?? "", playKind, at: now });
@@ -444,7 +500,10 @@ async function installFlightTrace(page: Page): Promise<void> {
       if (label !== null) {
         trace.timing = { label, ms: Number(stage.getAttribute("data-timing-ms")) };
       }
-    }).observe(stage, { attributes: true, attributeFilter: ["data-phase", "data-play-kind", "data-flight-seq", "data-timing", "data-timing-ms"] });
+    }).observe(stage, {
+      attributes: true,
+      attributeFilter: ["data-phase", "data-play-kind", "data-flight-seq", "data-timing", "data-timing-ms", "data-swing-dropped"],
+    });
   }, FLIGHT_TRACE_KEY);
 }
 
@@ -515,7 +574,14 @@ function describeAttempt(trace: FlightTrace): string {
     (input) => `${input.kind}${input.isPrimary === false ? "(2nd)" : ""}@${elapsedAt(trace, input).toFixed(0)}ms${input.swingReady ? "" : "(not ready)"}`,
   );
   const gaps = trace.inputs.map((input) => `${input.kind}:age=${(input.handledAt - input.timeStamp).toFixed(0)}`);
-  return `D=${trace.durationMs} inputs=[${inputs.join(", ")}] ages=[${gaps.join(", ")}] kinds=[${trace.playKinds.join(",")}]`;
+  const stamps = trace.inputs.map((input) => `${input.kind}:ts=${(input.timeStamp - (trace.flightStartedAt ?? Number.NaN)).toFixed(0)}`);
+  const frames = trace.frames.map((frame) => (frame - (trace.flightStartedAt ?? Number.NaN)).toFixed(0));
+  const cutoff = (trace.durationMs ?? Number.NaN) + LATE_CUTOFF_MS;
+  const framesAfterCutoff = trace.frames.filter((frame) => frame - (trace.flightStartedAt ?? Number.NaN) >= cutoff).length;
+  return (
+    `D=${trace.durationMs} inputs=[${inputs.join(", ")}] stamps=[${stamps.join(", ")}] ages=[${gaps.join(", ")}] kinds=[${trace.playKinds.join(",")}] ` +
+    `dropped=${trace.swingDropped} framesAfterCutoff=${framesAfterCutoff} frames=[${frames.slice(-12).join(",")}]`
+  );
 }
 
 /** 1 つのスイングの検証。`act` が入力を送り、`isValid` が「前提を満たした試行か」を記録から判定する。 */
@@ -537,6 +603,9 @@ async function runUntilValid(page: Page, scenario: SwingScenario): Promise<Fligh
     const trace = await readTraceAfterPlay(page, SWING_PLAY_HOLD_MS);
     scenario.observe?.(trace);
     if (scenario.isValid(trace)) {
+      // 有効な試行が何回目に得られたか(環境の遅さの目安。レポートに残す)。
+      test.info().annotations.push({ type: "valid-attempt", description: `${scenario.name}: attempt ${attempt} of ${MAX_ATTEMPTS}` });
+      console.log(`[valid-attempt] ${scenario.name}: attempt ${attempt} of ${MAX_ATTEMPTS} (${rejected.length} rejected)`);
       return trace;
     }
     rejected.push(describeAttempt(trace));
@@ -638,14 +707,133 @@ function isSureTap(trace: FlightTrace): boolean {
   );
 }
 
-/** スイングが受理された: `data-timing` が付き、結果は空振り・ファウル・インプレーのどれか(見逃しの `ball`/`called-strike` ではない)。 */
+/**
+ * 到達通知の保留(`holdArrivalFor`)の経路を通したと言える試行(`isSureTap` とは別の条件。`isSureTap` の押下→離しは D + 250ms に届かないので保留が働かない):
+ * (1) 押下がスイング可能な間に、見逃し確定(D + 250ms)より `HOLD_PATH_MARGIN_MS` 以上前に処理された。
+ * (2) 押下→離しが `TAP_MAX_DURATION_MS`(180ms)以内(アプリの `isTapGesture` と同じ、2 つのイベントの時刻の差)で、離しは確定より後。
+ * (3) 確定の後(`HOLD_PATH_MARGIN_MS` の余裕つき)から離しの前までに、描画のフレームが 1 回以上あった。到達通知の判定はフレームごとに走るので、
+ *     保留が無ければこのフレームで見逃しが確定し、離しのスイングは捨てられる。しかも保留が切れる前(押下の処理から `TAP_ARRIVAL_HOLD_MS` 未満)のフレーム。
+ *     フレームの時刻は記録用のコールバックが走った時刻で、フレームは 1 つのタスクとして走り切るので、これが離しの処理より前なら、
+ *     同じフレームのアプリの判定も離しより前に走っている。
+ */
+function isHoldPathTap(trace: FlightTrace): boolean {
+  const tap = tapOf(trace);
+  if (tap === null || trace.durationMs === null || trace.flightStartedAt === null) {
+    return false;
+  }
+  const { down, up } = tap;
+  const startedAt = trace.flightStartedAt;
+  const cutoff = trace.durationMs + LATE_CUTOFF_MS;
+  const pressedBeforeCutoff = down.swingReady && elapsedAt(trace, down) < cutoff - HOLD_PATH_MARGIN_MS;
+  const span = up.timeStamp - down.timeStamp;
+  const isTap = span >= 0 && span <= TAP_MAX_DURATION_MS;
+  const frameWhileHeld = trace.frames.some(
+    (frame) =>
+      frame - startedAt >= cutoff + HOLD_PATH_MARGIN_MS && frame <= up.handledAt && frame - down.handledAt <= TAP_ARRIVAL_HOLD_MS - HOLD_PATH_MARGIN_MS,
+  );
+  return pressedBeforeCutoff && isTap && frameWhileHeld;
+}
+
+/**
+ * スイングが受理された: `data-timing` が付き、結果は空振り・ファウル・インプレーのどれか(見逃しの `ball`/`called-strike` ではない)。
+ * 入力が捨てられていない(`data-swing-dropped` が増えていない = 到達通知が先に処理されて見逃しが確定した、ではない)ことも確かめる。
+ */
 function expectSwingAccepted(trace: FlightTrace): void {
   const detail = describeAttempt(trace);
+  expect(trace.swingDropped, `the swing was dropped because the pitch was already taken: ${detail}`).toBe(0);
   expect(trace.timing, `the swing was not accepted: ${detail}`).not.toBeNull();
   expect(trace.playKinds.length, detail).toBeGreaterThan(0);
   for (const kind of trace.playKinds) {
     expect(SWING_RESULT_KINDS, detail).toContain(kind);
   }
+}
+
+/**
+ * 到達通知の保留の確認用に、描画のフレームを手動にする(`window.requestAnimationFrame`/`cancelAnimationFrame` を差し替える)。
+ * 普通は 16ms ごとにフレームを流す(ゲームは普通に進む)。`paused` の間は流さない。`flush()` は溜まったフレームのコールバックを 1 回流す。
+ * アプリの到達通知の判定・描画はどちらも `window.requestAnimationFrame` のループなので、`paused` の間は「フレームが 1 回も走らない」ことになり、
+ * 押下 → フレーム 1 回 → 離し、の順序と時刻をこちらで決められる(SwiftShader の実フレームは約 100ms 間隔で、押下→離しの上限 180ms と近く、
+ * 実際の入力の遅れも重なって、実フレームのままでは保留の経路をほとんど通せない)。
+ */
+const MANUAL_FRAMES_KEY = "__manualFrames";
+
+type ManualFrames = { paused: boolean; flush: () => void };
+
+async function installManualFrames(page: Page): Promise<void> {
+  await page.evaluate((key) => {
+    const pending = new Map<number, FrameRequestCallback>();
+    let nextId = 1;
+    const state: ManualFrames = { paused: false, flush: () => undefined };
+    window.requestAnimationFrame = (callback) => {
+      const id = nextId;
+      nextId += 1;
+      pending.set(id, callback);
+      return id;
+    };
+    window.cancelAnimationFrame = (id) => {
+      pending.delete(id);
+    };
+    state.flush = () => {
+      const batch = [...pending.values()];
+      pending.clear();
+      const now = performance.now();
+      for (const callback of batch) {
+        callback(now);
+      }
+    };
+    const pump = (): void => {
+      if (!state.paused) {
+        state.flush();
+      }
+      window.setTimeout(pump, 16);
+    };
+    window.setTimeout(pump, 16);
+    Reflect.set(window, key, state);
+  }, MANUAL_FRAMES_KEY);
+}
+
+/**
+ * 新しい投球の D + `HELD_TAP_AIM_AFTER_D_MS` に 1 本指の押下(合成のタッチのポインタ)を送り、`HELD_TAP_FRAME_AFTER_DOWN_MS` 後にフレームを 1 回だけ流し、
+ * 流し終えた直後に離しを送る。その間は他のフレームを流さない。ページ内で完結するので、Playwright の入力の遅れが入らない。
+ * 合成のポインタは有効なポインタではなく `setPointerCapture` が例外になるので、この入力面だけ何もしない関数にする。
+ */
+async function playHeldTap(page: Page, point: PagePoint): Promise<void> {
+  await page.evaluate(
+    async ({ traceKey, framesKey, aimAfterD, frameAfterDown, x, y }) => {
+      const trace = (Reflect.get(window, traceKey) as TraceHandle).trace;
+      const frames = Reflect.get(window, framesKey) as ManualFrames;
+      const input = document.querySelector<HTMLElement>(".bb-stage__input");
+      if (input === null || trace.flightStartedAt === null || trace.durationMs === null) {
+        throw new Error("no stage input or no flight to tap");
+      }
+      input.setPointerCapture = (): void => undefined;
+      const arrivesAt = trace.flightStartedAt + trace.durationMs;
+      const wait = (until: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, Math.max(0, until - performance.now())));
+      const fire = (type: "pointerdown" | "pointerup"): void => {
+        input.dispatchEvent(
+          new PointerEvent(type, { pointerType: "touch", pointerId: 91, isPrimary: true, button: 0, bubbles: true, cancelable: true, clientX: x, clientY: y }),
+        );
+      };
+      frames.paused = true;
+      try {
+        await wait(arrivesAt + aimAfterD);
+        fire("pointerdown");
+        await wait(performance.now() + frameAfterDown);
+        frames.flush();
+        fire("pointerup");
+      } finally {
+        frames.paused = false;
+      }
+    },
+    {
+      traceKey: FLIGHT_TRACE_KEY,
+      framesKey: MANUAL_FRAMES_KEY,
+      aimAfterD: HELD_TAP_AIM_AFTER_D_MS,
+      frameAfterDown: HELD_TAP_FRAME_AFTER_DOWN_MS,
+      x: point.x,
+      y: point.y,
+    },
+  );
 }
 
 test.describe("touch swing on phone portrait 390x844", () => {
@@ -697,17 +885,17 @@ test.describe("touch swing on phone portrait 390x844", () => {
     expectSwingAccepted(trace);
   });
 
-  // (3) 遅いタップ: ボールが着くころに指を置き、100ms 保ってから離す → 見逃しにならずスイングの結果になる(旧仕様は D+150ms で見逃しが確定し、
-  // 離したときには確定済みだった)。指を置いてから離すまでの間に D+250ms(新しい見逃しの締切)を過ぎる試行は到達通知の保留(`holdArrivalFor`)の
-  // 確認にもなるが、それはページ側の処理の遅れ次第なので、保留そのものは単体テストと手動確認が担保する。
+  // (3) 遅いタップ: ボールが着くころに指を置き、100ms 保ってから離す → 見逃しにならずスイングの結果になる(旧仕様は D+150ms で見逃しが確定した)。
+  // 押下は D の少し前、離しは D + 60ms 前後なので、新しい見逃しの締切(D + 250ms)には届かない。つまりこのテストは「到達の前後に置いた指のタップが
+  // スイングになる」ことを確かめるもので、到達通知の保留(`holdArrivalFor`)の経路は通らない。保留は次のテスト(4)が通す。
   // 押下の処理が D の少し前になるよう、Playwright の遅れ(押下の処理時刻 − 狙った時刻)を試行ごとに測って次の狙いを前倒しする。
-  test("a tap held past the ball's arrival still swings instead of taking the pitch", async ({ page }) => {
+  test("a tap pressed around the ball's arrival still swings instead of taking the pitch", async ({ page }) => {
     test.setTimeout(120_000);
     await startBattingWithTrace(page);
     const point = await zoneCenterOf(page);
     const client = await page.context().newCDPSession(page);
     const finger = { x: point.x, y: point.y, id: 1 };
-    let aimOffsetMs = -LATE_TAP_AIM_BEFORE_D_MS - 400;
+    let aimOffsetMs = -LATE_TAP_AIM_BEFORE_D_MS - INITIAL_LATENCY_GUESS_MS;
 
     const trace = await runUntilValid(page, {
       name: "late tap",
@@ -727,9 +915,28 @@ test.describe("touch swing on phone portrait 390x844", () => {
           aimOffsetMs = Math.max(-attempt.durationMs, Math.min(0, aimOffsetMs - miss));
         }
       },
-      // 押下がスイング可能な間に処理され、押下→離しがブラウザの時刻でも処理の時刻でも 150ms 以内(確実なタップ。処理が遅れて
-      // 到達通知の保留 200ms を超えた試行は、見逃しが確定しうるので無効にする)。
+      // 押下がスイング可能な間に処理され、押下→離しがブラウザの時刻でも処理の時刻でも 150ms 以内(確実なタップ)。
       isValid: isSureTap,
+    });
+
+    expectSwingAccepted(trace);
+  });
+
+  // (4) 到達通知の保留: 指を D + 250ms(見逃し確定)の前に置き、確定の後に描画のフレームを 1 回通してから離す(押下→離しは 180ms 以内)
+  // → 見逃しにならずスイングの結果になる。保留が無ければ、そのフレームで到達通知が処理されて見逃しが確定し、離しのスイングは捨てられる
+  // (`data-swing-dropped` が増え、結果は `called-strike`/`ball`)。ページ内で押下・フレーム・離しの順序と時刻を決めるので(`playHeldTap`)、
+  // Playwright の入力の遅れに左右されない。有効な試行の条件は `isHoldPathTap`(押下が確定の前・タップ・確定の後から離しの前にフレームがある)。
+  // 環境が遅くて条件を満たせない試行(フレームの描画が長すぎて 180ms を超える等)は無効にして次の投球で再試行し、有効な試行で期待が崩れたら必ず失敗する。
+  test("a tap held across the cutoff (D+250ms) still swings because the arrival notice is held until release", async ({ page }) => {
+    test.setTimeout(150_000);
+    await startBattingWithTrace(page);
+    const point = await zoneCenterOf(page);
+    await installManualFrames(page);
+
+    const trace = await runUntilValid(page, {
+      name: "held tap across the cutoff",
+      act: (target) => playHeldTap(target, point),
+      isValid: isHoldPathTap,
     });
 
     expectSwingAccepted(trace);

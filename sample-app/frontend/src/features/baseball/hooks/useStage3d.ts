@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import type { ViewSize } from "../model/world/camera/project";
 import { battingCameraFor } from "../model/world/camera/rig";
 import { CHARACTER_RIG } from "../model/world/motion/rig";
 import { worldToZone } from "../model/world/space/coords";
@@ -13,9 +14,6 @@ const CROWD_SEED = 20261012;
 
 /** ステージが無い・サイズが不明なときに director へ渡す縦横比。model は非有限・0 以下を 16/9 とみなすので、同じ値を明示しておく。 */
 const FALLBACK_ASPECT = 16 / 9;
-
-/** ステージ(canvas)の現在のサイズ(CSS px)。 */
-type ViewSize = { readonly width: number; readonly height: number };
 
 type UseStage3dOptions = {
   /** 描画品質。`speed.timeScale > 1`(`fast=1`)のときは `"low"`。この値が変わったときだけステージを作り直す。 */

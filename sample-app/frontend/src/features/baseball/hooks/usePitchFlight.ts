@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
-import { TAP_ARRIVAL_HOLD_MS } from "../model/world/sequence/input-route";
+import { useCallback, useLayoutEffect, useRef } from "react";
+import { arrivalDue, holdArrival, type ArrivalHold } from "../model/world/sequence/arrival";
 import { swingAtMs } from "../model/world/sequence/swing-time";
 import type { SwingOrigin } from "../types/batting";
 import type { PitchFlight } from "../types/pitch";
@@ -41,31 +41,18 @@ export type UsePitchFlightResult = {
   readonly releaseArrival: () => void;
 };
 
-/** 保留が有効か。期限を過ぎていたら状態も解く。 */
-function isArrivalHeld(holdUntilRef: RefObject<number | null>): boolean {
-  const holdUntil = holdUntilRef.current;
-  if (holdUntil === null) {
-    return false;
-  }
-  if (performance.now() < holdUntil) {
-    return true;
-  }
-  holdUntilRef.current = null;
-  return false;
-}
-
 /**
  * 飛行中の球の経過時間の時計と、到達時刻(`arriveAfterMs − leadMs`)の通知。描画はしない(ボールの位置は director が `SceneFrame` で渡す)。
  * 開始時刻は `useLayoutEffect` で記録するので、`flight` が出た直後の最初の描画前に新しい時計になる(古い値が1フレーム見えない)。
  * 到達通知は `flight`(`seq`)が変わるたびにループを作り直し、cleanup で `cancelAnimationFrame` する(StrictMode の二重 mount でも通知は1回)。
  * `flight` が `null` になる(人間がスイングした)とループは作られず、通知されない。
  * タップ候補の指がある間は `holdArrivalFor`/`releaseArrival` で通知を保留できる(1 本指のタップは離すまでスイングが確定しないため)。
- * 保留は `flight` が変わるとき・unmount で解く。
+ * 保留は投球の `seq` と期限を持ち、現在の投球と一致する期限内のものだけが有効(`arrivalDue`。前の投球の保留は effect の cleanup に頼らず無視される)。
  */
 export function usePitchFlight(options: UsePitchFlightOptions): UsePitchFlightResult {
   const latest = useLatest(options);
   const startedAtRef = useRef<number | null>(null);
-  const holdUntilRef = useRef<number | null>(null);
+  const holdRef = useRef<ArrivalHold | null>(null);
   const seq = options.flight === null ? null : options.flight.seq;
 
   // 開始時刻は `flight` が `null` になっても保持する(人間のスイング後も演出が同じ時計で続く)ため、cleanup では何も戻さない。
@@ -75,14 +62,6 @@ export function usePitchFlight(options: UsePitchFlightOptions): UsePitchFlightRe
       startedAtRef.current = performance.now();
     }
   }, [seq]);
-
-  // 前の投球の保留を持ち越さない。unmount でも解く。
-  useEffect(
-    () => () => {
-      holdUntilRef.current = null;
-    },
-    [seq],
-  );
 
   const getElapsedMs = useCallback((): number => {
     const startedAt = startedAtRef.current;
@@ -95,14 +74,19 @@ export function usePitchFlight(options: UsePitchFlightOptions): UsePitchFlightRe
     [latest],
   );
 
-  const holdArrivalFor = useCallback((ms: number): void => {
-    if (ms > 0) {
-      holdUntilRef.current = performance.now() + Math.min(ms, TAP_ARRIVAL_HOLD_MS);
-    }
-  }, []);
+  const holdArrivalFor = useCallback(
+    (ms: number): void => {
+      const { flight } = latest.current;
+      const hold = flight === null ? null : holdArrival({ seq: flight.seq, nowMs: performance.now(), ms });
+      if (hold !== null) {
+        holdRef.current = hold;
+      }
+    },
+    [latest],
+  );
 
   const releaseArrival = useCallback((): void => {
-    holdUntilRef.current = null;
+    holdRef.current = null;
   }, []);
 
   useAnimationFrame((): FrameResult => {
@@ -110,7 +94,8 @@ export function usePitchFlight(options: UsePitchFlightOptions): UsePitchFlightRe
     if (flight === null) {
       return "stop";
     }
-    if (getElapsedMs() < arriveAfterMs - leadMs || isArrivalHeld(holdUntilRef)) {
+    const due = arrivalDue({ elapsedMs: getElapsedMs(), arriveAtMs: arriveAfterMs - leadMs, hold: holdRef.current, seq: flight.seq, nowMs: performance.now() });
+    if (!due) {
       return "continue";
     }
     onArrive();

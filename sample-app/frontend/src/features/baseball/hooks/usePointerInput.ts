@@ -168,8 +168,10 @@ function handleDown(event: PointerEvent<HTMLElement>, refs: GestureRefs, options
       options.onSwing(swingOriginOf(event));
       break;
     case "drag-start":
-      startDrag(event, refs, options);
+      // タップ候補(と到達通知の保留)を先に記録する。`startDrag` 内の `setPointerCapture` が例外を投げても、ドラッグ状態とタップ候補が食い違わない
+      // (ドラッグだけ記録されてタップ候補が無い、という状態にならない)。
       startTapCandidate(event, refs, options);
+      startDrag(event, refs, options);
       break;
     case "ignore":
       break;

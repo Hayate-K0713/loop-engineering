@@ -107,6 +107,7 @@ export function StageView({
   marker,
   timingCue,
   lastTiming,
+  droppedSwings,
 }: GameStageViewProps) {
   const fallback = fallbackText(status);
   return (
@@ -119,6 +120,7 @@ export function StageView({
       data-zone-rect={zoneRectText(zoneRect)}
       data-timing={lastTiming?.label}
       data-timing-ms={lastTiming === null ? undefined : String(lastTiming.dtMs)}
+      data-swing-dropped={String(droppedSwings)}
       {...flightData(lastFlight)}
     >
       <div className="bb-stage__canvas" ref={containerRef} />
