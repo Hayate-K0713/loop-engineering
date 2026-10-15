@@ -763,6 +763,40 @@ describe("sceneFrameAt: 打者", () => {
     expect(portrait.position.x).toBe(ACTORS.batter.portraitX);
     expect(worldBatHeight(portrait)).toBeCloseTo(swing.height, 9);
   });
+
+  describe("縦長の構え(縦横比の補間 k で混ざる)", () => {
+    const ASPECTS = [16 / 9, 1.2, 1, 0.9, 0.8, 0.75, 0.7, PORTRAIT_ASPECT, 0.3];
+
+    /** 関節とバットの角度(位置・高さを除く)。 */
+    function anglesOf(pose: BatterJoints): readonly number[] {
+      return numbersIn([pose.torso, pose.head, pose.armL, pose.armR, pose.legL, pose.legR, pose.bat.sweepYaw, pose.bat.tilt]);
+    }
+
+    it("構え(plan なし・見逃し)の関節は batterStancePose(k)(k = portraitBlendAt(aspect))。横長は従来の構えと完全に一致する", () => {
+      for (const aspect of ASPECTS) {
+        const k = portraitBlendAt(aspect);
+        expect(anglesOf(frameAt(null, 100, { phase: "flight", aspect }).batter)).toEqual(anglesOf(batterStancePose(k)));
+        expect(anglesOf(frameAt(TAKE, 700, { aspect }).batter)).toEqual(anglesOf(batterStancePose(k)));
+      }
+      expect(anglesOf(frameAt(null, 100, { phase: "flight", aspect: 16 / 9 }).batter)).toEqual(anglesOf(batterStancePose()));
+      expect(anglesOf(frameAt(null, 100, { phase: "flight", aspect: PORTRAIT_ASPECT }).batter)).toEqual(anglesOf(batterStancePose(1)));
+      expect(anglesOf(frameAt(null, 100, { phase: "flight", aspect: PORTRAIT_ASPECT }).batter)).not.toEqual(anglesOf(batterStancePose()));
+    });
+
+    it("スイング中の関節は batterSwingPose(progress, height, k)。接触の瞬間(と接触以降)は縦長でも横長と同じ姿勢", () => {
+      const swing = swingOf(SINGLE);
+      for (const aspect of ASPECTS) {
+        const k = portraitBlendAt(aspect);
+        for (const tMs of [swing.startMs, swing.startMs + 40, swing.contactAtMs - 20, swing.contactAtMs, swing.contactAtMs + 3000]) {
+          const joints = batterSwingPose(swingProgressAt(swing, tMs), swing.height, k);
+          expect(anglesOf(frameAt(SINGLE, tMs, { aspect }).batter)).toEqual(anglesOf(joints));
+        }
+        const contact = anglesOf(frameAt(SINGLE, swing.contactAtMs, { aspect }).batter);
+        const landscape = anglesOf(batterSwingPose(SWING.contactRatio, swing.height));
+        contact.forEach((angle, index) => expect(angle).toBeCloseTo(landscape.at(index) ?? Number.NaN, 12));
+      }
+    });
+  });
 });
 
 describe("sceneFrameAt: 落下点のリング(landingMark)", () => {

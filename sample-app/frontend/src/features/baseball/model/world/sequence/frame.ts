@@ -204,7 +204,8 @@ function batterRoot(aspect: number): PoseRoot {
 
 function batterFrame(ctx: FrameContext): BatterPose {
   const swing = ctx.plan?.swing ?? null;
-  const joints = swing === null ? batterStancePose() : batterSwingPose(swingProgressAt(swing, ctx.tMs), swing.height);
+  const portrait = portraitBlendAt(ctx.aspect);
+  const joints = swing === null ? batterStancePose(portrait) : batterSwingPose(swingProgressAt(swing, ctx.tMs), swing.height, portrait);
   return placeBatter({ ...joints, bat: { ...joints.bat, height: batHeightInRoot(joints.bat.height) } }, batterRoot(ctx.aspect));
 }
 
