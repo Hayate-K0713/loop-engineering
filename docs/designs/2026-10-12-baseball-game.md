@@ -1782,6 +1782,123 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - S11(b)「結果画面の略称+色チップ」は未達(`ResultView` に team 情報が無く props 不変のため)。必要なら E 以降で props 追加を判断し、ゲート2に引き継ぐ。
   - **未解決の重複(G で一本化する)**: 守備バー `.bb-bar--pitch` の配置(サブグリッド)を `baseball.css`(`.bb-bar.bb-bar--pitch`、詳細度が高い)と `baseball-stage.css`(`.bb-bar--pitch`)の両方が定義している。B4a・B4b が並行で互いに相手が持つと想定した結果。契約上は配置=`baseball-stage.css` なので、G は `baseball-stage.css` 側に寄せ、`baseball.css` からは部品内のスタイルだけを残す。
 
+
+### 修正設計の実装時の申し送り(orchestrator 記録、2026-10-15)
+
+修正設計 H0〜H13 の各ステップの公開 API・設計からの差分・後続への申し送り。**§15 の読み替え(実装後の確定)**:
+- S300(最後の 300ms の画面上の移動の割合)は **6 着弾点の平均**で判定する(上限 62%、フォーク 68%。最悪点は上限 +3pt まで)。M1・M2 は参考値(ゲート1の決定)。軌跡の長さ ≥250px は**着弾 = ゾーン中央**で判定する。
+- 構造検査 5(`Math.hypot` の禁止)は、テスト専用の合成層 `model/sim/` を対象外とする(構造検査 19 で `*.test.ts` 以外からの import を禁止済み)。
+- 実装で変わった値: 低い画面(縦長・高さ 800px 未満)の `.bb-overlay__bottom` の透明 `padding-top` は 10px → **16px**、打撃のスキップのヒントは 33% → **31%**。`chaseCamera.portraitKLook` は 0.4 → **0.5**(上げるほど HR が HUD 帯にいる時間が短い。設計の「0.3 へ下げる」は逆)。縦長の中継カメラの縦 FOV の下限 `PORTRAIT_CHASE_MIN_VERTICAL_TAN` 1.05 は `rig.ts` 内定数。
+- R1・R2(縦長で打者の手がゾーン・格子を隠す)は H13 で縦長の構え(構えのキーフレームだけ差し替え、接触以降は横長と同じ)を追加して解消。スイング中〜接触の瞬間は従来どおり前の手がゾーン左端に掛かる。
+- R4 の接触後 25〜250ms(注視の blend 中)にホームランが HUD の背後を約 165〜180ms 通るのは、blend 時間が固定のため許容。
+- E2E の seed: `GAME_SEED` 31(1イニング・14球)、`SKIP_SEED` 7、`SWING_SEED` 1、`LAYOUT_SWITCH_SEED` 4。判定・CPU を変えたら再探索。
+
+#### 追加・変更した型と定数
+- types/scene.ts: `CameraPose.lift: number`。新規 `SceneLayout = "batting" | "pitching"`、`SafeArea = { top; bottom }`。`SceneFrame` に `layout`・`safeArea`・`ball.scale`・`zone.pulse`・`landingMark: { visible; position: Vec3; radius }`。
+- types/stage.ts: `StageOptions.battingCamera` → `battingCameraFor: (aspect, layout, safeArea | null) => CameraPose`。`onResize` は「サイズまたはゾーン矩形の変更通知」。
+- types/batting.ts: `SwingInputKind`・`SwingOrigin`・`TimingLabel`・`TimingCue`。
+- hooks/useGameStage.ts: `GameStageViewProps.timingCue`・`lastTiming`(`TimingCue | null`、今は null 固定。H9 が実装)。
+- WORLD_PARAMS: `pitch { breakExponent 2.2, bendGain 1.0, speedProfile 0.5, arcHeight 0.12 }`、`mitt` 削除 → `catch { holdMs 100 }`、`ball { minScreenDiameterRatio 0.0095 }`(`ballRadius` はトップレベルに残置)、`battingCameraPortrait { position (-0.25,1.75,2.6), target (-0.25,0.55,-18) }`(fov・lift は framing.fit から)、`framing`(§11 どおり)、`actors.batter.portraitX -0.65`、`chaseCamera.portraitKLook 0.4`、`batted.fly 1000+28d`・`liner 600+16d`、`batted.contactZ 0.03`、`landingMark { startAfterContactMs 200, endAfterLandMs 400, y 0.07, minRadius 2, screenRatio 0.03 }`、`cue { zonePulse { leadMs 20, holdMs 60, fadeMs 200 }, timingMs 900 }`、`input { edgeMarginPx 8 }`。構図の式の導出係数(cHead 等)は WORLD_PARAMS に無い → H2 が rig.ts 内定数か projectPoint から導く。
+- BATTING_PARAMS: `lateCutoffMs 250`、`ballReachX 0.23`、`ballReachY 0.2`、`inputLatencyMs { touch 70, mouse 20, key 20 }`、`maxEventAgeMs 250`、`maxTapSpanMs 200`。出発値 `linerHalfBand 0.14`、`mediumFrom 0.38`、`strongFrom 0.62`。
+
+#### 壊れる箇所(typecheck 19件)と解消ステップ
+| ファイル | 理由 | 解消 |
+|---|---|---|
+| hooks/useStage3d.ts:56 | `battingCamera` → `battingCameraFor` | H7 |
+| render/stage.ts:147,152 | 同上、`placeCamera` が `pose.lift` を使う | H5 |
+| render/test-fixtures.ts:67,69,74 | `makeFrame` に lift・ball.scale・zone.pulse(+layout・safeArea・landingMark) | H5 |
+| render/markers.test.ts:82,87 | zone.pulse・ball.scale | H5 |
+| model/world/camera/rig.ts:13,22,40 | 戻り値に lift | H2 |
+| model/world/path/pitch-path.ts:12 | `WORLD_PARAMS.mitt` 無し(`mittBallAt` → `heldBallAt`) | H1 |
+| model/world/path/pitch-path.test.ts:123,134 | mittBallAt のテスト(削除対象) | H1 |
+| model/world/sequence/frame.ts:112,182,219 | ball.scale・zone.pulse・layout・safeArea・landingMark | H6 |
+
+#### 実行時テストの失敗(typecheck に出ない)
+- frame.test.ts(約25件)→ H1・H6(H2 も関係)
+- pitch-path.test.ts の mittBallAt 4件 → H1
+- batted-ball.test.ts 4件(linerHalfBand・mediumFrom の出発値変更。性質を保って期待値を再導出、しきい値は緩めない)→ H3b
+- balance.test.ts 2件(打率 .148 < .18 ほか。CPU 側の調整)→ H3b
+
+#### H3a(contact・view)
+- `scaleRadiiForPitch(radii, pitchKind): CursorRadii`(model/batting/contact.ts)。H9 が飛行中の表示カーソル半径に使う(ボール半径は足さない)。
+- `measureContact`: 接触 = ボール中心が `effectiveRadii + ballReachX/Y` の楕円内かつ |Δt| ≤ 窓。q は元の楕円の中心距離 d で `max(0,1−d)·(1−|Δt|/窓)·edgeFactor`、height は元の ry 基準。reach 内・元の楕円外は q=0 の接触。Δt は `swing.atMs`。シグネチャ・`ContactHit` 不変。
+- `GameView.arriveAfterMs`: 人間打者は `durationMs + lateCutoffMs(250)`、CPU は `durationMs`。
+- H6 へ: play-plan.test.ts の人間の見逃しの `resolvedAtMs`(contactWindowMs 基準、72〜77行・186〜188行)を lateCutoffMs 基準に直す。
+- H3b へ: balance.test.ts の失敗には当たり範囲拡大の影響もありうる。reach 内・元の楕円外は q=0 接触。
+
+#### H1(軌道)
+- `pitchBallAt(flight, elapsedMs): Vec3` は不変シグネチャ、D 以降は着弾点。`heldBallAt(flight): Vec3`(着弾点、`pitchBallAt(flight, D)` と厳密同値)。`mittBallAt` は削除 → H6 は frame.ts・frame.test.ts の `mittBallAt(FLIGHT, n)` を `heldBallAt(FLIGHT)` に置換。
+- `getPitchSpec(kind).bend` は新しい向き・値(slider (1.2,−0.27)・curve (0.8,−1.83)・fork (0,−1.67)・shoot (−1.15,−0.33)、ゾーン単位)。H10 の pitch-screen.test は bendGain 1.0 で。
+- `g` は非 export。進行度は z の進みから求める。`model/pitch/flight.ts`・`BallPosition`・`startPoint`/`startScale` は削除。
+- R5(M1/S300 の配分見直し)は未実施 → H10/H12 で実測してから。
+- lint 補足: テストでも `obj[variableKey]` は detect-object-injection で error。
+
+#### H5(render)
+- `createStage` シグネチャ不変。H7 の useStage3d は `StageOptions.battingCameraFor` を渡すだけ。`placeCamera` は `pose.fovDeg`・`pose.lift` をそのまま適用(lift>0 で setViewOffset)。
+- `zoneScreenRect()`・`onResize` はサイズに加えて `SceneFrame.layout`・`safeArea` の変化でも更新(矩形が変わったときだけ onResize)。初期姿勢は `battingCameraFor(aspect, "batting", null)`。resize 直後の1フレームは直前 apply の姿勢で描く。
+- `pixelRatioFor(quality, dpr, coarse)`(coarse 上限 1.5)、`shadowMapSizeFor(coarse)`、`MAX_PIXEL_RATIO`・`SHADOW_MAP_SIZE`。`matchMedia("(pointer: coarse)")` は stage.ts で1回。`fovFor`・`framingLift` は render から削除(model/world/camera へ)。
+- markers: ボールは透明パス・depthTest/Write false・renderOrder 12(輪郭 11.5)、カーソルは各メッシュ 11、発光 10。`RENDER_ORDER` を export。影は円盤1つ(0.5・×1.8)、`ball.scale` を本体と影に適用、ゾーン枠の発光(`zone.pulse`)、落下点リング(`landingMark`、radius≤0 は非表示)。
+
+#### H4(入力・時刻・タイミング・カーソル範囲)
+- `swingAtMs({ origin: SwingOrigin | null, nowMs, startedAtMs: number | null, timeScale }): number`(sequence/swing-time.ts)。startedAtMs null → 0。origin null → (now−start)×timeScale。origin あり: 押下→離し 0〜maxTapSpanMs かつ 離し→処理 0〜maxEventAgeMs なら origin.timeStamp、さもなくば nowMs。補正(inputLatencyOf(kind))は常に引き、timeScale で換算しない。締切判定はしない(H7・reducer の仕事)。
+- `timingCueOf(dtMs, windowMs): TimingCue`、`timingAt(plan: { timing: PlayTiming | null }, tMs)`(startMs ≤ t < endMs)。型 `PlayTiming = TimingCue & { startMs; endMs }`・`TimingPlan`。**H6 は `PlayPlan.timing: PlayTiming | null`**。
+- `routeStagePointer` → `"skip" | "swing" | "swing-here" | "drag-start" | "ignore"`(タッチの2本目以降は holding/!enabled で ignore、他は swing-here)。`routeStageMove({ holding, enabled, pointerType, dragging, held })` → `"drag" | "drag-start" | "follow" | "ignore"`。`isTapGesture({ downTimeStamp, upTimeStamp, movedPx })`(≤180ms・≤10px)。`routeStageRelease({ pointerType, tapCandidate, tapOk, holding, enabled })` → `"swing-here" | "none"`。定数 `TAP_MAX_DURATION_MS` 180・`TAP_MAX_MOVE_PX` 10・`TAP_ARRIVAL_HOLD_MS` 200(holdArrivalFor に渡す)。**H7 は usePointerInput に swing-here の分岐を追加**。
+- `clampCursorToView(point, zoneRect, viewWidthPx, freeBottomPx = null)`(space/cursor-bounds.ts)。左右は ±cursorLimit と画面端 8px の狭い方。**H7 は moveCursorTo で `freeBottomPx = safeArea.bottom × ステージ高さ(px)` を渡す**(getSafeArea() が null のときの扱いは H7 で決める)。ゾーン下端 y=−1 には必ず届く。
+
+#### H8(UI)
+- `StageView` は `timingCue`・`lastTiming` を受け取る。タイミング表示は `data-testid="timing-cue"`(ゾーン枠の上端中央の真上)。`stage-3d` に `data-timing`(label)・`data-timing-ms`(符号付き整数、正に + なし。E2E は Number() で読む)。lastTiming null なら属性なし。
+- `SwingControls`/`GameLayout` の `onSwing` は `PointerEventHandler<HTMLButtonElement>`。**H9 は GameScreen から `swingFromButton` を渡す**。
+- 空き領域の印: `bb-game` に `data-safe-area-root`、`bb-overlay__top` に `data-inset="top"`(下端 = 上端の空き。390×844/664 とも約 155.1px=0.1837)、`bb-overlay__bottom` に `data-inset="bottom"`(上端 = 下端の空き)。**H7 の useSafeArea は getBoundingClientRect をそのまま使う**。縦長 800px 未満は bottom に透明 padding-top 10px。
+- 守備バー: 800px 未満は bb-overlay__bottom 267px(下端から 275px)、ティッカー非表示(E2E の ticker boundingBox は null → H11 の幾何検証は 800px 未満の守備でティッカーをスキップ)、セル 36px。
+- 低い打撃画面: ティッカー1行、スイングボタン 80px。664 でゾーン下とティッカーの隙間 約15px。さらに広げるなら marginRatio(0.008→0.024 前後)を H12 で。
+- スキップのヒントはタッチ端末で「タップでスキップ」。縦長の位置 30%/27%(800px 未満 33%/30%)。タイミングのピル(約 351〜378px)とテロップ(約 321〜365px)が近い → H12 で確認、被るならゾーン枠の下へ。
+
+#### H2(カメラ・構図・投影)
+- `project.ts`: `projectPoint(pose, size, point) → { x, y, depth }`(y は lift 込み、three の setViewOffset と同値。depth ≤ 0 は NaN)、`zoneRectOf(pose, size, zone) → ScreenRect`(格子は中心から 5/3 倍の ZoneBox)。型 `ViewSize`・`ProjectedPoint`・`ZoneBox`。
+- `rig.ts`: `portraitBlendAt(aspect)`、`fitPortraitFraming(aspect, layout, safeArea) → { halfWidthTan, lift }`、`battingCameraFor(aspect, layout, safeArea)`(無効な縦横比は横長)、`battingCamera()`(横長、lift 0)、`legacyLift`、`fovForAspect(baseFovDeg, aspect, minHalfWidthTan)`、`chaseCamera(ball, aspect, lift = 0)`、`blendCamera(a, b, k, targetK?)`(lift も補間)、`ballScaleFor(camera, ball)`、`chaseBlendAt`、`easeInOut`、`PITCHER_HEAD_TOP`、`PORTRAIT_FRAMING_COEFFICIENTS`。rig.ts は `../motion/rig` の CHARACTER_RIG を import。
+- **H6: `chaseCamera(ball, input.aspect, 0)`(lift は 0。打撃の lift を渡すと R4 が崩れる)。blend の起点は `battingCameraFor(aspect, layout, safeArea)`、`blendCamera` が lift を 0 へ補間。** frame.ts:108・frame.test.ts:242 の chaseCamera 1引数呼び出しが TS2554。
+- R3: 投手の頭頂基準に変更(係数 −0.0846)。390×844 で頭頂 y=171(HUD 下 16px)。例外: 390×640 の守備は tan 上限で頭頂 y=153.8(HUD に約1px)。
+- R4: 中継カメラは lift 0、縦長は縦 FOV 下限(`PORTRAIT_CHASE_MIN_VERTICAL_TAN` 1.05、rig.ts 内定数。WORLD_PARAMS 外)。blend 後の HR 頂点は全縦長ビューポートで HUD 下端+8px 以上。**未解消: 接触後 25〜250ms の注視 blend 中に一時的に HUD 帯へ(125m 級で最小 y≈84 を約175ms)→ H12 確認項目**。
+- 構図の数値が設計表から変化(390×844 打撃 lift 0.219、守備 tan 0.395・lift 0.248 ほか)。受け入れのゾーン幅基準はすべて満たす。高さ走査の下限は 580(守備 560〜568 は minBandRatio で既定値フォールバック)。
+
+#### H7(hooks の部品)
+- `usePitchFlight` → `{ getElapsedMs, getSwingAtMs(origin | null), holdArrivalFor(ms), releaseArrival() }`(保留は上限 200ms・自動失効・seq 切替と unmount で解除)。
+- `useStage3d` → 既存 + `getAspect()`(無効なら 16/9)・`getViewSize()`。createStage に `battingCameraFor` を渡す。
+- `useSafeArea(containerRef, remeasureKey?)` → `{ getSafeArea(): SafeArea | null }`(containerRef は stage3d.containerRef。remeasureKey に layout 等を渡すと要素の出現/消滅でも再測定)。
+- `useBattingControls` options: `getElapsedMs` 削除、`getSwingAtMs`・`holdArrivalFor`・`releaseArrival`・`getViewSize`・`getSafeArea` を追加。戻り値の `swingNow(origin?, cursorAtDown?)`、新規 `swingFromButton: PointerEventHandler<HTMLButtonElement>`。**H9 は useGameStage の swingNow として `controls.swingFromButton` を返す**(swingNow を渡すとイベントが origin として渡り動作が壊れる)。
+- `usePointerInput` は `swingOriginOf(event)` を export。`useKeyboardInput` の `onSwing(origin)`(inputKind "key")。
+- H9 が直す typecheck: useGameStage.ts(167) TS2353(getElapsedMs)、useStageDirector.ts(206) TS2739(SceneFrameInput に aspect・layout・safeArea)。
+
+#### H3b(バランス)
+- `model/sim/bot-sim.ts`(テスト専用)・`bot-balance.test.ts`(20000球×9ボット)。`pxPerZoneUnit(viewport)`(zoneRectOf ベース。390×844 x77.8/y87.2、390×664 x58.3/y65.4、1280×720 x90.8/y104.5)→ **H10 の ±8% 整合テストに使う**。`isIgnoredEvent`・`judgeTimeOf` を export。
+- 調整: foulRatio 0.61、mediumFrom 0.32、strongFrom 0.68、結果表、CPU 難易度(normal cursorSigma 0.14・timingSigmaMs 53・zoneSwingRate 0.40・chaseSwingRate 0.22 ほか)。**CPU 打者は以前より見逃しが多い**(三振・四球率の下限を守るため)→ ゲート2で確認。
+- 実測: B 安打 33.2%(帯 30〜35)、B@664 29.8%、F 28.8%、C 21.2%、D 22.1%、E 36.2%、A 45.4%、CPU 28.5%。balance: 打率 .249・三振 9.3%・四球 6.0%。
+- **H12: カメラ/ゾーンの px を変えたら bot-balance.test を再実行**(B 上限・C 下限の余裕 1〜2pt)。
+
+#### H6(frame・play-plan)
+- `SceneFrameInput` に必須 `aspect`(無効は 16/9)・`layout`(aimCell 非 null なら pitching)・`safeArea: SafeArea | null`(無効・帯不足は既定値)。**H9 は useStageDirector で getAspect()・layout・getSafeArea() を渡す**。
+- `SceneFrame`: camera = battingCameraFor、layout、safeArea、ball.scale(中継中のみ)、zone.pulse、landingMark、打者 x の補間。`zonePulseAt(durationMs, tMs)` を export。
+- `PlayPlan` に `ballHoldUntilMs`・`timing: PlayTiming | null`(人間のスイングのみ。dtMs = atMs − D、startMs = base、endMs = start + cue.timingMs)。人間スイングの演出基準 `base = max(atMs, resolvedAtMs)`。**H9 は timingAt(plan, t) で timingCue、lastTiming は次の投球まで保持**。
+- ボール: t ≤ D は pitchBallAt、plan が無い間は着弾点に保持、接触ありは contactMs まで、接触なしは ballHoldUntilMs まで保持し以後非表示。
+
+#### H9(統合)
+- typecheck 全体緑、vitest 1349 件成功。`npm run lint`・`build`・`knip` の全体確認は未実施 → H10。
+- 追加のガード: 結果が ball/called-strike のときはスイング記録を planPlay に渡さない(`acceptedSwing`。到達通知が先に届いて見逃し確定後、同 tick のスイングが記録だけされる競合のため)。
+- `data-timing` は「人間のスイングが plan に渡った」ときだけ付く → E2E のスイング受理の目印に使える。
+- SwiftShader ではタップが 0.2〜1 秒以上遅れる(D−900ms で「早い」、D−250ms で「遅い」/見逃し)。fast=1 でタップを狙う E2E は有効試行のガード必須。
+- H12: 664 でスキップのヒントがテロップのすぐ上 → 被り確認。タイミングのピルはテロップの下に出る(844 で被らず、664 は約 60px 間隔)。
+- 動作確認スクリプト: scratchpad/h9/run3.mjs。
+
+#### H10(結合・整合)
+- typecheck・lint・test(frontend 1381)・build 全緑。index チャンク 201.04KB(不変)、GameScreen 652.76KB。
+- `pitch-screen.test.ts`(390×844、5球種×6着弾点): 曲がりの向き・S300 平均 ≤62%(フォーク 68%)・最悪点 +3pt・軌跡 ≥250px(着弾中央)を固定。M1/M2 は出力のみ。実測 S300 平均 57〜60%。
+- `bot-balance.test.ts` に px/ゾーン単位の整合(±8%、B@664 は −6〜−6.6% で上限に近い)と遅延補正の固定を追加。
+- **speedProfile を 0.3 に下げると S300 が 63〜66% で不合格 → H12 は speedProfile 0.45 以上を保つ**(下げると pitch-screen.test が赤くなる)。
+- 構造検査 5: `model/sim/bot-sim.ts:230` の Math.hypot → orchestrator 判断: sim/ はテスト専用層として検査5の対象外(設計書に記録)。
+- **H11: e2e/baseball.spec.ts:625 のコメントの framingLift 言及を直す。**
+- **H12: カメラ・ゾーン px を変えたら bot-balance.test と整合テストを再実行。**
+- knip 18件(今回増えた未使用型: UseSafeAreaResult・ProjectedPoint・TapGestureInput・StageReleaseAction・TimingPlan・StadiumOptions、未使用 export: SHADOW_MAP_SIZE)。
+
 ## 壁打ち(grilling)記録
 
 承認ゲートの代替ではない(設計レビュー・人間確認ゲートは別途実施する)。
