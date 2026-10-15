@@ -514,7 +514,8 @@ function describeAttempt(trace: FlightTrace): string {
   const inputs = trace.inputs.map(
     (input) => `${input.kind}${input.isPrimary === false ? "(2nd)" : ""}@${elapsedAt(trace, input).toFixed(0)}ms${input.swingReady ? "" : "(not ready)"}`,
   );
-  return `D=${trace.durationMs} inputs=[${inputs.join(", ")}] kinds=[${trace.playKinds.join(",")}]`;
+  const gaps = trace.inputs.map((input) => `${input.kind}:age=${(input.handledAt - input.timeStamp).toFixed(0)}`);
+  return `D=${trace.durationMs} inputs=[${inputs.join(", ")}] ages=[${gaps.join(", ")}] kinds=[${trace.playKinds.join(",")}]`;
 }
 
 /** 1 つのスイングの検証。`act` が入力を送り、`isValid` が「前提を満たした試行か」を記録から判定する。 */
@@ -639,10 +640,11 @@ function isSureTap(trace: FlightTrace): boolean {
 
 /** スイングが受理された: `data-timing` が付き、結果は空振り・ファウル・インプレーのどれか(見逃しの `ball`/`called-strike` ではない)。 */
 function expectSwingAccepted(trace: FlightTrace): void {
-  expect(trace.timing).not.toBeNull();
-  expect(trace.playKinds.length).toBeGreaterThan(0);
+  const detail = describeAttempt(trace);
+  expect(trace.timing, `the swing was not accepted: ${detail}`).not.toBeNull();
+  expect(trace.playKinds.length, detail).toBeGreaterThan(0);
   for (const kind of trace.playKinds) {
-    expect(SWING_RESULT_KINDS).toContain(kind);
+    expect(SWING_RESULT_KINDS, detail).toContain(kind);
   }
 }
 
