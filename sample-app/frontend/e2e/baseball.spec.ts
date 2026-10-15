@@ -328,14 +328,17 @@ const SURE_TAP_MS = 150;
 /** タップ系の試行で、押下の処理が D からこの時間(ms)以内なら到達通知(`BATTING_PARAMS.lateCutoffMs` 250ms)より十分前とみなす。 */
 const TAP_ACCEPT_LIMIT_MS = 150;
 
-/** 遅いタップで、離した処理が D からこの時間(ms)以上あとなら「ボールが着いてから離した」とみなす。 */
-const LATE_RELEASE_MS = 50;
+/**
+ * 遅いタップで、指を置いてから離すまでの長さ(ms)。Node 側で待って 2 つの CDP イベントを送るので、ブラウザが受け取る時刻(`event.timeStamp`)の差は
+ * ほぼこの値になる(描画で詰まったページ側の処理時刻には左右されない)。`SURE_TAP_MS` 以内で、できるだけ長くする。
+ */
+const LATE_TAP_HOLD_MS = 100;
 
-/** 遅いタップで、飛行開始から `D + この値` の時点で指を置く(Playwright の遅れを見込んで、D の少し手前に置く)。 */
-const LATE_TAP_TRIGGER_MS = -30;
+/** 遅いタップで、押下の処理を D の何 ms 前に狙うか(ms)。Playwright の遅れは試行ごとに補正する(`lateTapScenario`)。 */
+const LATE_TAP_AIM_BEFORE_D_MS = 40;
 
 /** 有効な試行を得るための最大の試行回数。 */
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 8;
 
 /** スイングが受理されたときの `data-play-kind`。見逃し(`ball`/`called-strike`)にはならない。 */
 const SWING_RESULT_KINDS = ["swinging-strike", "foul", "in-play"];
@@ -519,6 +522,8 @@ type SwingScenario = {
   readonly name: string;
   readonly act: (page: Page) => Promise<void>;
   readonly isValid: (trace: FlightTrace) => boolean;
+  /** 試行のあとに毎回呼ばれる(有効・無効を問わず)。次の試行の狙いの補正に使う。 */
+  readonly observe?: (trace: FlightTrace) => void;
 };
 
 /** 有効な試行が得られるまで、新しい投球ごとに `scenario.act` を繰り返し、有効だった試行の記録を返す。 */
@@ -529,6 +534,7 @@ async function runUntilValid(page: Page, scenario: SwingScenario): Promise<Fligh
     await waitForNewFlight(page);
     await scenario.act(page);
     const trace = await readTraceAfterPlay(page, SWING_PLAY_HOLD_MS);
+    scenario.observe?.(trace);
     if (scenario.isValid(trace)) {
       return trace;
     }
@@ -659,6 +665,7 @@ test.describe("touch swing on phone portrait 390x844", () => {
   });
 
   // (2) 1 本目の指でドラッグ中に、2 本目の指でステージをタップ → カーソルを動かさずその場でスイングになる。
+  // CDP のタッチイベントは 1 つずつ待つと 1 つあたり 0.5〜1.5 秒かかる(SwiftShader)ので、3 つを待たずに続けて送る(ブラウザ内では順に処理される)。
   test("a second finger tap swings while the first finger is dragging", async ({ page }) => {
     test.setTimeout(90_000);
     await startBattingWithTrace(page);
@@ -667,16 +674,16 @@ test.describe("touch swing on phone portrait 390x844", () => {
     const first = { x: point.x - 40, y: point.y, id: 1 };
     const dragged = { ...first, x: first.x + 24 };
     const second = { x: point.x + 40, y: point.y, id: 2 };
+    const send = (type: "touchStart" | "touchMove" | "touchEnd", touchPoints: { x: number; y: number; id: number }[]) =>
+      client.send("Input.dispatchTouchEvent", { type, touchPoints });
 
     const trace = await runUntilValid(page, {
       name: "second finger tap",
       act: async () => {
         try {
-          await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [first] });
-          await client.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [dragged] });
-          await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [dragged, second] });
+          await Promise.all([send("touchStart", [first]), send("touchMove", [dragged]), send("touchStart", [dragged, second])]);
         } finally {
-          await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+          await send("touchEnd", []);
         }
       },
       isValid: (attempt) => {
@@ -688,23 +695,39 @@ test.describe("touch swing on phone portrait 390x844", () => {
     expectSwingAccepted(trace);
   });
 
-  // (3) 遅いタップ: ボールが着く直前に指を置き、着いたあとに離す → 見逃しにならずスイングの結果になる(旧仕様は D+150ms で見逃しが確定し、
-  // 離したときには確定済みだった。到達通知の保留 `holdArrivalFor` の単体テストと手動確認が、保留そのものを担保する)。
-  test("a tap released after the ball arrives still swings instead of taking the pitch", async ({ page }) => {
-    test.setTimeout(90_000);
+  // (3) 遅いタップ: ボールが着くころに指を置き、100ms 保ってから離す → 見逃しにならずスイングの結果になる(旧仕様は D+150ms で見逃しが確定し、
+  // 離したときには確定済みだった)。指を置いてから離すまでの間に D+250ms(新しい見逃しの締切)を過ぎる試行は到達通知の保留(`holdArrivalFor`)の
+  // 確認にもなるが、それはページ側の処理の遅れ次第なので、保留そのものは単体テストと手動確認が担保する。
+  // 押下の処理が D の少し前になるよう、Playwright の遅れ(押下の処理時刻 − 狙った時刻)を試行ごとに測って次の狙いを前倒しする。
+  test("a tap held past the ball's arrival still swings instead of taking the pitch", async ({ page }) => {
+    test.setTimeout(120_000);
     await startBattingWithTrace(page);
     const point = await zoneCenterOf(page);
+    const client = await page.context().newCDPSession(page);
+    const finger = { x: point.x, y: point.y, id: 1 };
+    let aimOffsetMs = -LATE_TAP_AIM_BEFORE_D_MS - 400;
 
     const trace = await runUntilValid(page, {
       name: "late tap",
       act: async (target) => {
-        await waitForFlightElapsed(target, LATE_TAP_TRIGGER_MS);
-        await target.touchscreen.tap(point.x, point.y);
+        await waitForFlightElapsed(target, aimOffsetMs);
+        const down = client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [finger] });
+        // 固定の待ちだが、状態の待ち合わせではなく「押している長さ」を作るためのもの。
+        await target.waitForTimeout(LATE_TAP_HOLD_MS);
+        const up = client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await Promise.all([down, up]);
       },
-      isValid: (attempt) => {
-        const tap = tapOf(attempt);
-        return isSureTap(attempt) && tap !== null && elapsedAt(attempt, tap.up) >= (attempt.durationMs ?? 0) + LATE_RELEASE_MS;
+      observe: (attempt) => {
+        const down = attempt.inputs.find((input) => input.kind === "pointerdown");
+        if (down !== undefined && attempt.durationMs !== null) {
+          // 押下の処理が D の LATE_TAP_AIM_BEFORE_D_MS 前になるよう、狙いをずらす(D より前に戻しすぎない)。
+          const miss = elapsedAt(attempt, down) - (attempt.durationMs - LATE_TAP_AIM_BEFORE_D_MS);
+          aimOffsetMs = Math.max(-attempt.durationMs, Math.min(0, aimOffsetMs - miss));
+        }
       },
+      // 押下がスイング可能な間に処理され、押下→離しがブラウザの時刻でも処理の時刻でも 150ms 以内(確実なタップ。処理が遅れて
+      // 到達通知の保留 200ms を超えた試行は、見逃しが確定しうるので無効にする)。
+      isValid: isSureTap,
     });
 
     expectSwingAccepted(trace);

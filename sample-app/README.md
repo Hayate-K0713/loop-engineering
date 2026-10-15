@@ -39,6 +39,7 @@ sample-app/
         cpu/                   難易度・CPU投手の配球・CPU打者の擬似入力
         game/                  GameState・reducer・カウント/走者/イニング/得点・実況ログ・起動パラメータ解釈・表示用 view
         data/                  架空の固定プリセット2チーム(チーム色・略称を含む)
+        sim/                   人間代理ボットによる打撃バランスの試算(テスト専用。`bot-balance.test.ts` だけが import する)
         world/                 3D 空間の計算(three 非依存の純粋関数。三角関数は可、乱数・時刻・DOM は不可)
           space/                 ワールド座標・ゾーン座標の変換、球場の寸法(StageGeometry)、数値パラメータ(WORLD_PARAMS)
           path/                  投球・打球の軌道、野手の動き
@@ -49,7 +50,7 @@ sample-app/
       hooks/                 React との橋渡し(useReducer による状態保持、演出の時計と進行(useStageDirector・useGameStage)、WebGL ステージの生成、ポインタ/キー入力、CPU の手番、起動パラメータ)。model と render をつなぐのは hooks だけ
       ui/                    描画のみ(タイトル/試合/結果画面、ステージ全面(StageView)、その上に重ねる HUD・ネームプレート・ティッカー・操作バー、CSS)
     e2e/home.spec.ts        Playwright CLIでの確認例(backend/frontend 両方を実際に起動して検証)
-    e2e/baseball.spec.ts    ブラウザ野球のE2E(`?seed=&innings=&fast=1` で決定論的に1試合を最後まで通す、WebGL 非対応でも進行する、演出スキップ、オーバーレイがゾーンを隠さない幾何検証)
+    e2e/baseball.spec.ts    ブラウザ野球のE2E(`?seed=&innings=&fast=1` で決定論的に1試合を最後まで通す、WebGL 非対応でも進行する、演出スキップ、Space・タップ・2本目の指でのスイング、スマホ縦(高さ 844/745/664)・デスクトップ・タブレットでオーバーレイがゾーン(守備は格子)を隠さない幾何検証)
 ```
 
 ## 実行方法
@@ -87,7 +88,8 @@ curl "http://localhost:3001/api/quote?amount=-1&taxRate=0.1"
 6. **フロントエンドのゲーム(ブラウザ野球)もロジックは純粋関数、乱数はシード付きPRNG。** `frontend/src/features/baseball/model/` のロジック(判定・CPU・進行・走者・得点)はすべて React 非依存の純粋関数で、`GameState` を受け取って次の `GameState` を返す reducer が中心になる。`hooks/` は React との橋渡し、`ui/` は描画だけに徹する。乱数は `Math.random` を使わず、`GameState` 内に持つシード付きPRNG(mulberry32)の状態を reducer 内で明示的に受け渡す(lintで `Math.random` が error のため。`docs/memory/entries/sample-app-lint-random-and-index-access.md`)。同じシード・同じ入力なら必ず同じ試合になるので、単体テスト(`model/` 配下に同居する `*.test.ts`、vitest・jsdom不使用)もE2Eも決定論的に書ける。frontend の vitest は Playwright の `e2e/*.spec.ts` を拾わないよう `include` を限定している(`docs/memory/entries/vitest-include-picks-playwright-specs.md`)。
 7. **ブラウザ野球の起動方法と、テスト用の起動パラメータは開発サーバー限定。** `npm run dev:frontend` で起動して `http://localhost:5173/#/baseball` を開く(`/` は従来画面のまま、ハッシュで切り替える)。URLに `?seed=<uint32>&innings=<1|3|5|9>&fast=1`(例: `http://localhost:5173/?seed=42&innings=1&fast=1#/baseball`)を付けると、シード固定・イニング数固定・投球アニメとCPU待機の短縮ができる(不正値は無視して既定値)。この3つは**開発サーバー(`npm run dev:frontend`、`import.meta.env.DEV`)でのみ有効で、本番ビルドでは無視される**(判定は `hooks/useLaunchParams.ts` だけが行い、`model/game/launch-params.ts` の `parseLaunchParams` は渡された文字列を解釈するだけの純粋関数)。E2E(`e2e/baseball.spec.ts`)はPlaywrightの `webServer` が `npm run dev` を使うため、このパラメータで決定論的に試合を通せる。
 8. **ブラウザ野球の画面は Three.js の 3D ステージ全面+その上に重ねたオーバーレイ(WebGL2 が必要)。** 3D の描画は `three`(npm)を使い、`three` を import するのは `frontend/src/features/baseball/render/` だけ。3D 空間の計算(座標変換・投球/打球の軌道・キャラクターのポーズ・カメラ・1球の演出の時刻表)は `model/world/` に three 非依存の純粋関数として置き、単体テストできる。`model/world/` と `render/` をつなぐのは `hooks/` だけ(`docs/memory/entries/frontend-3d-three-in-render-segment.md`)。`three` を含む試合画面は `React.lazy` で遅延ロードされるので、ホーム(`/`)とタイトル画面のバンドルには入らない。WebGL2 を取得できない環境(WebGL1 のみ・無効化・生成失敗)では `render/` が `null` を返し、ステージ中央に「3D表示を使えません」と出すだけで、**操作と試合の進行は続けられる**(時計とゲートは renderer に依存しない)。描画が中断されたとき(context lost)は「描画が中断されました。ページを再読み込みしてください。」を出す。
-9. **画面構成はオーバーレイ型。** ステージ(`StageView`)が画面全面(`position: absolute; inset: 0`)で、その上の `bb-overlay` 層に、左上の HUD(`ScoreHud`: 回表裏・走者ダイヤモンド・得点・B/S/O・回別の `<details>`)、右上のネームプレート(`NamePlates`: 投手・打者)、下部のティッカー(`Ticker`: 実況1〜2行と全ログの `<details>`)と操作バー(`bb-bar`: 打撃時はスイングボタンとミート/強振の切替、守備時は球種チップ・5×5のコース格子・「投げる」)を重ねる。オーバーレイ層は `pointer-events: none` で、操作する部品(操作バー・「回別」・「ログ」・ホームへ戻るピル)だけ `auto`。デスクトップとスマホ縦(幅 640px 以下)で同じ構造にし、ゾーン枠を覆わないようシーンの位置を `framingLift` で調整する(`e2e/baseball.spec.ts` の幾何検証が機械的に確認する)。
+9. **画面構成はオーバーレイ型。** ステージ(`StageView`)が画面全面(`position: absolute; inset: 0`)で、その上の `bb-overlay` 層に、左上の HUD(`ScoreHud`: 回表裏・走者ダイヤモンド・得点・B/S/O・回別の `<details>`)、右上のネームプレート(`NamePlates`: 投手・打者)、下部のティッカー(`Ticker`: 実況1〜2行と全ログの `<details>`)と操作バー(`bb-bar`: 打撃時はスイングボタンとミート/強振の切替、守備時は球種チップ・5×5のコース格子・「投げる」)を重ねる。オーバーレイ層は `pointer-events: none` で、操作する部品(操作バー・「回別」・「ログ」・ホームへ戻るピル)だけ `auto`。デスクトップとスマホ縦(幅 640px 以下)で同じ構造にし、ゾーン枠(守備は 5×5 格子)を覆わないよう、上の HUD の下端と下のオーバーレイの上端に挟まれた実際の空き領域を測り(`useSafeArea`)、打撃/守備のレイアウトごとにカメラの画角とシーンの位置をその領域へ合わせる(`model/world/camera/rig.ts` の `battingCameraFor`。`e2e/baseball.spec.ts` の幾何検証が、高さ 844・745・664 のスマホ縦とデスクトップ・タブレットで機械的に確認する)。
 10. **演出のスキップ。** 1球ごとの演出(打球の追跡・テロップ)の最中は、ステージ上のクリック/タップ、または Space / Enter キーでスキップできる(最初の1回のみ。キーの長押し・リンクや入力欄でのキーは対象外)。スキップは表示だけを進め(ゲームの状態・結果は変えない)、演出中は HUD・実況も更新を待つ。人間打撃の待機中は、ステージ上のクリックがスイングになる(演出中のクリックはスキップで、スイングにはならない)。
+11. **打撃の操作。** マウス/ペンは動かすとカーソルが追従し、クリックでその位置にスイング。タッチは **1 本指のドラッグでカーソルを狙い**(相対移動。指の位置ではなく移動量で動く)、**指を離さず軽くタップ(10px 以内・180ms 以内)すると、押した時点のカーソル位置でスイング**する。ドラッグしている最中に **2 本目の指でステージをタップ**しても、その場でスイングになる。画面下の**スイングボタン**でも振れる(ミート/強振の切り替えつき)。キーボードは矢印/WASD でカーソル、Space/Enter でスイング、Z/X でミート/強振。スイングの直後には、ゾーン枠の上に「早い/ジャスト/遅い」と ± ミリ秒が出て、自分のずれが分かる。判定時刻は入力イベントの時刻から入力種別ごとの遅延(タッチ 70ms・マウス/キー 20ms)を引いたもので、ボールの到達から 250ms までのスイングは空振りなどの結果が返る(それより遅いと見逃し)。
 
 (元ネタ: https://zenn.dev/singularity/articles/stopped-reviewing-my-code )
