@@ -326,7 +326,7 @@ const EARLY_SAFETY_MARGIN_MS = 50;
 const SURE_TAP_MS = 150;
 
 /** タップ系の試行で、押下の処理が D からこの時間(ms)以内なら到達通知(`BATTING_PARAMS.lateCutoffMs` 250ms)より十分前とみなす。 */
-const TAP_ACCEPT_LIMIT_MS = 150;
+const TAP_ACCEPT_LIMIT_MS = 100;
 
 /**
  * 遅いタップで、指を置いてから離すまでの長さ(ms)。Node 側で待って 2 つの CDP イベントを送るので、ブラウザが受け取る時刻(`event.timeStamp`)の差は
