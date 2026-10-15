@@ -94,7 +94,7 @@ const PARAMS = {
     baseZ: 22,
     kz: 0.45,
     kLook: 0.6,
-    portraitKLook: 0.4,
+    portraitKLook: 0.5,
     fovDeg: 34,
     positionBlendMs: 500,
     targetBlendMs: 250,

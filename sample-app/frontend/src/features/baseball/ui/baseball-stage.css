@@ -1040,18 +1040,18 @@ body:has(.bb-page) {
 
 @media (max-aspect-ratio: 1/1) and (max-height: 799px) {
   .bb-stage__skip-hint {
-    top: 33%;
+    top: 31%;
   }
 
   .bb-game--pitching .bb-stage__skip-hint {
     top: 30%;
   }
 
-  /* data-inset="bottom" の箱の上端が空き領域の下端。上に透明な 10px の余白を足して、ゾーン枠・格子の下端とティッカー/バーの見た目の上端の間を
+  /* data-inset="bottom" の箱の上端が空き領域の下端。上に透明な 16px の余白を足して、ゾーン枠・格子の下端とティッカー/バーの見た目の上端の間を
      (構図の式の marginRatio ぶんに足して)広げる。低い画面では枠が空き領域の下端ぎりぎりまで下がるので、影や格子の最下段がティッカーに隠れるのを防ぐ */
   .bb-overlay__bottom {
     gap: 4px;
-    padding-top: 10px;
+    padding-top: 16px;
   }
 
   .bb-ticker {
