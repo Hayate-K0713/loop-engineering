@@ -33,6 +33,7 @@
 - [swiftshader-playwright-input-latency](entries/swiftshader-playwright-input-latency.md) — SwiftShader の WebGL 画面では Playwright の実入力が 0.2〜1 秒以上遅れる。時間窓を狙う E2E はページ内で計測し、連写は仮想時計+手動 rAF で撮る
 - [dom-key-input-exclusivity](entries/dom-key-input-exclusivity.md) — 同じキーを複数機能が使うときは state ではなく preventDefault/defaultPrevented で排他する。autoFocus の確定ボタンは押しっぱなしの repeat で押される
 - [worktree-session-shell-restrictions](entries/worktree-session-shell-restrictions.md) — worktree 隔離セッションでは変数・ループ・ヒアドキュメントを含む複合コマンドが拒否される。スクリプトは Write で作り、プロセスは PID で止める(`pkill -f` は自分を殺す)
+- [scratchpad-vite-config-needs-node-modules](entries/scratchpad-vite-config-needs-node-modules.md) — scratchpad に置いた撮影用 vite 設定は react-refresh を解決できず画面が空白になる。撮影ディレクトリに worktree の node_modules へのシンボリックリンクを張る
 
 ## glossary(プロジェクト固有の用語集)
 
