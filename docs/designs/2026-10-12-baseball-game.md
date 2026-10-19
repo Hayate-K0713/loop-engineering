@@ -1783,6 +1783,15 @@ BaseballGamePage (E)     .bb-page(全面)。視覚的に隠した h1「ブラウ
   - **未解決の重複(G で一本化する)**: 守備バー `.bb-bar--pitch` の配置(サブグリッド)を `baseball.css`(`.bb-bar.bb-bar--pitch`、詳細度が高い)と `baseball-stage.css`(`.bb-bar--pitch`)の両方が定義している。B4a・B4b が並行で互いに相手が持つと想定した結果。契約上は配置=`baseball-stage.css` なので、G は `baseball-stage.css` 側に寄せ、`baseball.css` からは部品内のスタイルだけを残す。
 
 
+### 修正設計の実装のコードレビュー結果(code-reviewer、2026-10-19)
+
+対象: `git diff 84e2793..HEAD -- sample-app/ docs/process/`(HEAD = cf7e450)。**判定: PASS(MAJOR なし)。ゲート2へ持ち越す MAJOR はない。**
+
+- ラウンド1(MAJOR 1・minor 6・NIT 数件): M1「タップの到達保留が自動テストで確かめられていない」が主指摘。
+- 修正: 保留判定を純関数 `sequence/arrival.ts`(`holdArrival`・`arrivalDue`、単体テスト 11 件)に切り出し、手動 rAF の E2E(`playHeldTap`)で保留経路を固定。`planSwingOf` が捨てたスイングを `data-swing-dropped` に出す。空き領域の判定は `usableSafeArea` に一本化。README・`sample-app-dev.md` を更新。
+- ラウンド2: M1・m1〜m6・NIT1,2,6 すべて解消。静的チェック(lint 0・typecheck・vitest 61ファイル 1436件)成功。E2E は呼び出し元報告で 24件×2回成功。
+- 残る NIT(対応は任意): (a) `SceneFrame.safeArea` が入力と同じ参照を返す(実害なし)、(b) 保留 E2E は合成 PointerEvent・手動 rAF で、実機のタッチ入力・ブラウザのポインタキャプチャは通っていない、(c) `data-swing-dropped` が本番ビルドにも出る。(b) はテストレポートに確認範囲として残す。
+
 ### 修正設計の実装時の申し送り(orchestrator 記録、2026-10-15)
 
 修正設計 H0〜H13 の各ステップの公開 API・設計からの差分・後続への申し送り。**§15 の読み替え(実装後の確定)**:
