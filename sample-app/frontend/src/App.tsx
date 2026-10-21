@@ -46,6 +46,12 @@ export function App() {
         </p>
       )}
       {quote.status === "error" && <p data-testid="quote-error">{quote.message}</p>}
+
+      <p>
+        <a href="#/baseball" data-testid="open-baseball">
+          ブラウザ野球をプレイ
+        </a>
+      </p>
     </main>
   );
 }

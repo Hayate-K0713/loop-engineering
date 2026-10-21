@@ -29,7 +29,7 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit tests (backend pure functions)
+      - name: Unit tests (pure functions)
         run: npm run test
 
       - name: Build
