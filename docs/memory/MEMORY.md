@@ -12,6 +12,7 @@
 - [eslint-strictness-ratchet](entries/eslint-strictness-ratchet.md) — (superseded, [[eslint-strictness-ratchet-v2]]参照) sample-appのサイズ/複雑さ/型ルールはwarnで導入し、drainしてからerrorに昇格させる
 - [eslint-strictness-ratchet-v2](entries/eslint-strictness-ratchet-v2.md) — sample-appのサイズ/複雑さ/型/sonarjs/security/prettierルールはdrain確認済みで全てerrorに昇格済み(既存コード修正不要)
 - [knip-dead-code-detection](entries/knip-dead-code-detection.md) — sample-appへのKnip導入はレポートのみ・非ブロッキングから始め、CI組み込みは既存の`checks`/`e2e`ジョブと分離した独立ジョブにする
+- [frontend-3d-three-in-render-segment](entries/frontend-3d-three-in-render-segment.md) — sample-app frontend の3D描画は Three.js(npm)を `render/` セグメントに閉じ、`model/world/` は three 非依存の純粋関数にする(つなぐのは hooks のみ)
 
 ## convention(命名・実装・テストの規約)
 
@@ -23,6 +24,16 @@
 
 <!-- 例: - [ci-no-network](entries/ci-no-network.md) — CI環境は外部ネットワークにアクセスできない、モック必須 -->
 - [unpushed-local-commits-stale-origin](entries/unpushed-local-commits-stale-origin.md) — ローカルcommitだけではoriginは更新されない、GitHub Pages等が古いまま取り残される。ゲート2・メタ編集後は必ずpushまで行う(CLAUDE.md厳守ルール8)
+- [sample-app-lint-random-and-index-access](entries/sample-app-lint-random-and-index-access.md) — sample-appのlintでは`Math.random()`・変数添字`arr[i]`・`// TODO`がerror。シード付きPRNG注入と`.at()`/`Map`/`for...of`で書く
+- [vitest-include-picks-playwright-specs](entries/vitest-include-picks-playwright-specs.md) — Vitestの既定`include`はPlaywrightの`e2e/*.spec.ts`も拾う。frontendに追加する際は`include`を限定する
+- [playwright-browser-revision-mismatch](entries/playwright-browser-revision-mismatch.md) — クラウド環境の /opt/pw-browsers と @playwright/test 1.62 のブラウザrevisionが不一致。symlink+PLAYWRIGHT_BROWSERS_PATH で回避(install はしない)
+- [visual-scope-must-be-shown-at-gate1](entries/visual-scope-must-be-shown-at-gate1.md) — 「〇〇みたいな」要望や見た目が価値の中心の機能では、描画・演出をスコープ外にする判断をゲート1でモック等により見える形で確認する
+- [three-r186-pitfalls](entries/three-r186-pitfalls.md) — three r186 は PCFSoftShadowMap 廃止・WebGL1 不可。headless Chromium で WebGL2 は使えるが重いので E2E は pixelRatio 1・低品質
+- [game-feel-needs-playability-check](entries/game-feel-needs-playability-check.md) — タイミング判定のゲームは自動テスト合格でも操作できないことがある。見た目の到達と判定のずれ・入力遅延の補正(event.timeStamp)・人間を模したボット試算を設計とテストで数値確認する
+- [swiftshader-playwright-input-latency](entries/swiftshader-playwright-input-latency.md) — SwiftShader の WebGL 画面では Playwright の実入力が 0.2〜1 秒以上遅れる。時間窓を狙う E2E はページ内で計測し、連写は仮想時計+手動 rAF で撮る
+- [dom-key-input-exclusivity](entries/dom-key-input-exclusivity.md) — 同じキーを複数機能が使うときは state ではなく preventDefault/defaultPrevented で排他する。autoFocus の確定ボタンは押しっぱなしの repeat で押される
+- [worktree-session-shell-restrictions](entries/worktree-session-shell-restrictions.md) — worktree 隔離セッションでは変数・ループ・ヒアドキュメントを含む複合コマンドが拒否される。スクリプトは Write で作り、プロセスは PID で止める(`pkill -f` は自分を殺す)
+- [scratchpad-vite-config-needs-node-modules](entries/scratchpad-vite-config-needs-node-modules.md) — scratchpad に置いた撮影用 vite 設定は react-refresh を解決できず画面が空白になる。撮影ディレクトリに worktree の node_modules へのシンボリックリンクを張る
 
 ## glossary(プロジェクト固有の用語集)
 
@@ -31,3 +42,5 @@
 ## open-question(横断的な未解決事項)
 
 <!-- 例: - [auth-strategy](entries/auth-strategy.md) — 認証方式が未決定。複数topicに影響するため要人間判断 -->
+- [react-hooks-lint-not-installed](entries/react-hooks-lint-not-installed.md) — sample-appに`eslint-plugin-react-hooks`が未導入で、hooksの依存配列・cleanup漏れがlintで検出されない。導入するかは要人間判断
+- [feature-segment-import-boundaries-not-enforced](entries/feature-segment-import-boundaries-not-enforced.md) — feature内セグメント(types/model/render/hooks/ui)のimport方向がESLintで機械強制されず、grepの構造検査頼み。強制するかは要人間判断

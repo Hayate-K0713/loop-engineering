@@ -1,0 +1,330 @@
+<title>ブラウザ野球 3Dモック</title>
+<style>
+  /* 単一の世界観(デーゲームの球場)で固定。ページ地は濃紺、ゲーム画面は3D描画 */
+  :root {
+    color-scheme: dark;
+    --bg: #0d1722;
+    --panel: #15283a;
+    --line: #2d4a63;
+    --fg: #f1f5f9;
+    --muted: #a3b8ca;
+    --accent: #ffd23f;
+    --red: #e8473c;
+    --font: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
+  }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font); padding-inline: 16px; padding-block: 16px; }
+  .wrap { max-width: 960px; margin: 0 auto; display: grid; gap: 12px; }
+  h1 { margin: 0; font-size: 1.35rem; font-weight: 800; letter-spacing: 0.04em; }
+  .note { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
+  .stage { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 10; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #8fc3ef; }
+  .stage canvas { display: block; width: 100%; height: 100%; }
+  .hud { position: absolute; left: 12px; top: 12px; display: grid; gap: 4px; padding: 8px 12px; border-radius: 8px; background: rgba(8, 20, 34, 0.78); font-weight: 800; font-size: clamp(11px, 1.6vw, 15px); font-variant-numeric: tabular-nums; }
+  .hud .row { display: flex; gap: 10px; justify-content: space-between; }
+  .lamps { display: flex; gap: 4px; align-items: center; }
+  .lamp { width: 0.8em; height: 0.8em; border-radius: 50%; background: rgba(255, 255, 255, 0.18); }
+  .lamp.b { background: #3fcf6b; } .lamp.s { background: var(--accent); } .lamp.o { background: var(--red); }
+  .telop { position: absolute; left: 0; right: 0; top: 38%; text-align: center; font-weight: 800; font-size: clamp(28px, 7vw, 72px); color: var(--accent); letter-spacing: 0.06em;
+    -webkit-text-stroke: 2px #20140a; text-shadow: 0 4px 0 #20140a, 0 0 18px rgba(0, 0, 0, 0.5); transform: scale(0.6); opacity: 0; transition: transform 0.18s ease-out, opacity 0.18s ease-out; pointer-events: none; }
+  .telop.show { transform: scale(1); opacity: 1; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { font: inherit; font-weight: 800; min-height: 44px; padding: 0 18px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .err { color: var(--accent); }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
+<div class="wrap">
+  <h1>ブラウザ野球 3Dモック</h1>
+  <p class="note">見た目確認用のモックです(判定ロジックは未接続)。捕手後方カメラの打撃画面 → 打つと中継カメラで打球を追う流れを自動で繰り返します。キャラクターは独自デザインです。</p>
+  <div class="stage" id="stage">
+    <div class="hud" aria-hidden="true">
+      <div class="row"><span>1回裏</span><span>ノーブルズ 0 - 1 ルミナス</span></div>
+      <div class="row"><span>B</span><span class="lamps"><i class="lamp b"></i><i class="lamp b"></i><i class="lamp"></i></span></div>
+      <div class="row"><span>S</span><span class="lamps"><i class="lamp s"></i><i class="lamp"></i></span></div>
+      <div class="row"><span>O</span><span class="lamps"><i class="lamp o"></i><i class="lamp"></i></span></div>
+    </div>
+    <div class="telop" id="telop"></div>
+  </div>
+  <div class="controls">
+    <button id="btn-hit" aria-pressed="true">ヒット</button>
+    <button id="btn-hr" aria-pressed="false">ホームラン</button>
+    <button id="btn-miss" aria-pressed="false">空振り</button>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  const THREE = window.THREE;
+  const stage = document.getElementById("stage");
+  const telop = document.getElementById("telop");
+  if (!THREE) { telop.textContent = "3D表示を読み込めませんでした"; telop.classList.add("show", "err"); return; }
+
+  // ---------- レンダラ・シーン ----------
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  stage.prepend(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = gradientTexture(["#3a7bd5", "#8cc5f2", "#f3e7c9"], 256);
+  scene.fog = new THREE.Fog(0xb9d9f2, 150, 320);
+  const camera = new THREE.PerspectiveCamera(34, 16 / 10, 0.1, 800);
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage);
+  resize();
+
+  function gradientTexture(stops, h) {
+    const c = document.createElement("canvas"); c.width = 2; c.height = h;
+    const g = c.getContext("2d"), lg = g.createLinearGradient(0, 0, 0, h);
+    stops.forEach((s, i) => lg.addColorStop(i / (stops.length - 1), s));
+    g.fillStyle = lg; g.fillRect(0, 0, 2, h);
+    return new THREE.CanvasTexture(c);
+  }
+  function canvasTexture(w, h, draw, rx, ry) {
+    const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 4; return t;
+  }
+
+  // ---------- 光 ----------
+  scene.add(new THREE.HemisphereLight(0xe8f4ff, 0x5d7f45, 0.55));
+  const sun = new THREE.DirectionalLight(0xfff4e0, 0.7);
+  sun.position.set(-40, 80, 30); sun.target.position.set(0, 0, -30);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -110, near: 10, far: 220 });
+  scene.add(sun, sun.target);
+
+  // ---------- 球場 ----------
+  const lambert = (color, map) => new THREE.MeshLambertMaterial(map ? { color, map } : { color });
+  const grassTex = canvasTexture(64, 256, (g, w, h) => { for (let i = 0; i < 4; i++) { g.fillStyle = i % 2 ? "#3e9a4c" : "#4cae5b"; g.fillRect(0, (h / 4) * i, w, h / 4); } }, 1, 22);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), lambert(0xffffff, grassTex));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+  const dirtColor = 0xc89a63;
+  const flat = (geo, color, y, x = 0, z = 0) => { const m = new THREE.Mesh(geo, lambert(color)); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; scene.add(m); return m; };
+  flat(new THREE.CircleGeometry(29, 64), dirtColor, 0.01, 0, -18.4);
+  const infieldGrass = flat(new THREE.PlaneGeometry(23.5, 23.5), 0x4cae5b, 0.02, 0, -19.4); infieldGrass.rotation.z = Math.PI / 4;
+  flat(new THREE.CircleGeometry(4.2, 40), dirtColor, 0.03, 0, 0);
+  const mound = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 0.25, 32), lambert(dirtColor)); mound.position.set(0, 0.12, -18.4); mound.receiveShadow = true; scene.add(mound);
+  const rubber = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.05, 0.15), lambert(0xffffff)); rubber.position.set(0, 0.27, -18.4); scene.add(rubber);
+  for (const [x, z] of [[19.4, -19.4], [0, -38.8], [-19.4, -19.4]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.45), lambert(0xffffff)); b.position.set(x, 0.05, z); b.rotation.y = Math.PI / 4; scene.add(b); }
+  const plateShape = new THREE.Shape(); [[-0.22, -0.2], [0.22, -0.2], [0.22, 0.02], [0, 0.22], [-0.22, 0.02]].forEach(([x, y], i) => (i ? plateShape.lineTo(x, y) : plateShape.moveTo(x, y)));
+  flat(new THREE.ShapeGeometry(plateShape), 0xffffff, 0.04, 0, 0);
+  for (const s of [-1, 1]) { const line = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 98), lambert(0xffffff)); line.position.set(s * 34.6, 0.04, -34.6); line.rotation.y = s * Math.PI / 4; scene.add(line); }
+  const boxMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+  for (const s of [-1, 1]) { const pts = [[0.45, -0.9], [1.6, -0.9], [1.6, 0.9], [0.45, 0.9]].map(([x, z]) => new THREE.Vector3(s * x, 0.05, z)); scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), boxMat)); }
+
+  // フェンス・スタンド(本塁中心の円弧)
+  const arc = (r1, r2, h, y, mat, spread = 1.0) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, 64, 1, true, Math.PI - spread, spread * 2), mat); m.position.y = y; m.material.side = THREE.DoubleSide; scene.add(m); return m; };
+  arc(100, 100, 3.2, 1.6, lambert(0x1e5a3c));
+  arc(100.1, 100.1, 0.3, 3.25, lambert(0xffd23f));
+  const crowdTex = canvasTexture(256, 128, (g, w, h) => {
+    g.fillStyle = "#39434f"; g.fillRect(0, 0, w, h);
+    const cols = ["#b8433a", "#d9cdb4", "#3d64a8", "#c9a63a", "#6a9a5e", "#5b6573", "#5b6573", "#5b6573"];
+    let k = 1;
+    for (let y = 0; y < h; y += 8) {
+      g.fillStyle = "#2f3842"; g.fillRect(0, y + 6, w, 2);
+      for (let x = (y / 8) % 2 ? 0 : 4; x < w; x += 8) { k = (k * 1103515245 + 12345) % 2147483648; g.fillStyle = cols[k % cols.length]; g.fillRect(x + 1, y + 1, 5, 5); }
+    }
+  }, 22, 5);
+  arc(142, 104, 34, 20, lambert(0xffffff, crowdTex), 1.15);
+  const roofMat = lambert(0x9aa7b4);
+  arc(150, 150, 2, 38, roofMat, 1.15);
+
+  // ---------- キャラクター(2頭身・トゥーン調。画像素材なし) ----------
+  const grad = new THREE.DataTexture(new Uint8Array([110, 190, 255]), 3, 1, THREE.LuminanceFormat);
+  grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
+  const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap: grad });
+  const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1b1b1b, side: THREE.BackSide });
+  function part(geo, mat, outline = 1.07) {
+    const g = new THREE.Group(), m = new THREE.Mesh(geo, mat); m.castShadow = true; g.add(m);
+    if (outline) { const o = new THREE.Mesh(geo, outlineMat); o.scale.setScalar(outline); g.add(o); }
+    return g;
+  }
+  const SKIN = 0xffd9b5, WHITE = 0xf7f7f9;
+  function makePlayer(cap, opts = {}) {
+    const root = new THREE.Group();
+    const legL = new THREE.Group(), legR = new THREE.Group();
+    for (const [leg, x] of [[legL, 0.14], [legR, -0.14]]) {
+      leg.position.set(x, 0.5, 0);
+      const l = part(new THREE.CylinderGeometry(0.11, 0.12, 0.42, 12), toon(WHITE)); l.position.y = -0.2; leg.add(l);
+      const shoe = part(new THREE.SphereGeometry(0.12, 12, 8), toon(0x2a2a2a)); shoe.scale.set(1, 0.6, 1.5); shoe.position.set(0, -0.44, 0.05); leg.add(shoe);
+      root.add(leg);
+    }
+    const torso = new THREE.Group(); torso.position.y = 0.55; root.add(torso);
+    const body = part(new THREE.CylinderGeometry(0.27, 0.31, 0.55, 18), toon(WHITE)); body.position.y = 0.27; torso.add(body);
+    const belt = part(new THREE.CylinderGeometry(0.315, 0.315, 0.06, 18), toon(cap), 0); belt.position.y = 0.03; torso.add(belt);
+    const stripe = part(new THREE.CylinderGeometry(0.275, 0.29, 0.05, 18), toon(cap), 0); stripe.position.y = 0.42; torso.add(stripe);
+    const head = new THREE.Group(); head.position.y = 0.98; torso.add(head);
+    head.add(part(new THREE.SphereGeometry(0.46, 28, 20), toon(SKIN)));
+    const capTop = part(new THREE.SphereGeometry(0.48, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), toon(cap)); capTop.position.y = 0.04; head.add(capTop);
+    const brim = part(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 24), toon(cap)); brim.scale.set(1, 1, 0.75); brim.position.set(0, 0.08, 0.4); brim.rotation.x = 0.12; head.add(brim);
+    const mark = part(new THREE.CircleGeometry(0.1, 20), toon(0xffffff), 0); mark.position.set(0, 0.26, 0.42); mark.rotation.x = -0.5; head.add(mark);
+    for (const x of [-0.15, 0.15]) {
+      const eye = part(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshBasicMaterial({ color: 0x151515 }), 0); eye.scale.set(0.75, 1.5, 0.5); eye.position.set(x, -0.02, 0.43); head.add(eye);
+      const shine = part(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0); shine.position.set(x + 0.015, 0.03, 0.47); head.add(shine);
+      const cheek = part(new THREE.CircleGeometry(0.06, 16), new THREE.MeshBasicMaterial({ color: 0xff9b9b, transparent: true, opacity: 0.6 }), 0); cheek.position.set(x * 1.75, -0.13, 0.4); cheek.rotation.y = x * 2.2; head.add(cheek);
+    }
+    const armL = new THREE.Group(), armR = new THREE.Group();
+    for (const [arm, x] of [[armL, 0.36], [armR, -0.36]]) {
+      arm.position.set(x, 0.48, 0);
+      const a = part(new THREE.CylinderGeometry(0.075, 0.07, 0.34, 10), toon(WHITE)); a.position.y = -0.17; arm.add(a);
+      const hand = part(new THREE.SphereGeometry(0.1, 12, 10), toon(SKIN)); hand.position.y = -0.38; arm.add(hand);
+      torso.add(arm);
+    }
+    if (opts.glove) { const glove = part(new THREE.SphereGeometry(0.14, 12, 10), toon(0x8a4b22)); glove.scale.set(1, 1.1, 0.6); glove.position.y = -0.4; armL.add(glove); }
+    root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    scene.add(root);
+    return { root, torso, head, armL, armR, legL, legR };
+  }
+  const HOME = 0xe8473c, AWAY = 0x2f63c8;
+
+  // 投手・野手(守備側=赤)、打者(攻撃側=青)
+  const pitcher = makePlayer(HOME, { glove: true }); pitcher.root.position.set(0, 0.25, -18.4);
+  const FIELD_POS = [[16.5, -23], [6, -32.5], [-7, -32.5], [-16.5, -23], [-38, -72], [0, -86], [38, -72]];
+  const fielders = FIELD_POS.map(([x, z]) => { const f = makePlayer(HOME, { glove: true }); f.root.position.set(x, 0, z); f.root.scale.setScalar(1.15); return f; });
+  const catcher = makePlayer(HOME, { glove: true }); catcher.root.position.set(0, -0.25, 1.3); catcher.root.rotation.y = Math.PI; catcher.root.visible = false;
+  const batter = makePlayer(AWAY); batter.root.position.set(-0.85, 0, 0.05); batter.root.rotation.y = Math.PI / 2; batter.head.rotation.y = Math.PI / 2 - 0.2;
+  // バット
+  const swing = new THREE.Group(); swing.position.set(0, 1.0, 0.05); batter.root.add(swing);
+  const batTilt = new THREE.Group(); swing.add(batTilt);
+  const bat = part(new THREE.CylinderGeometry(0.05, 0.028, 0.95, 12), toon(0xd7a25a)); bat.rotation.x = Math.PI / 2; bat.position.z = 0.5; batTilt.add(bat);
+
+  // ---------- ストライクゾーンとスイングカーソル(本塁上) ----------
+  const ZONE = { x: 0.26, y0: 0.42, y1: 1.02 };
+  const zoneGeo = new THREE.BufferGeometry();
+  const zp = [];
+  const addLine = (a, b) => zp.push(a[0], a[1], 0, b[0], b[1], 0);
+  addLine([-ZONE.x, ZONE.y0], [ZONE.x, ZONE.y0]); addLine([ZONE.x, ZONE.y0], [ZONE.x, ZONE.y1]); addLine([ZONE.x, ZONE.y1], [-ZONE.x, ZONE.y1]); addLine([-ZONE.x, ZONE.y1], [-ZONE.x, ZONE.y0]);
+  zoneGeo.setAttribute("position", new THREE.Float32BufferAttribute(zp, 3));
+  const zone = new THREE.LineSegments(zoneGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false }));
+  zone.renderOrder = 10; scene.add(zone);
+  const cursor = new THREE.Group(); cursor.renderOrder = 11; scene.add(cursor);
+  const cursorFill = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.32, depthTest: false }));
+  const cursorRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.95, depthTest: false }));
+  const cursorDot = new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+  for (const m of [cursorFill, cursorRing, cursorDot]) { m.renderOrder = 11; cursor.add(m); }
+  cursor.scale.set(0.2, 0.11, 1);
+
+  // ---------- ボール ----------
+  const ball = part(new THREE.SphereGeometry(0.1, 16, 12), toon(0xffffff), 1.12); scene.add(ball);
+  const ballShadow = new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 }));
+  ballShadow.rotation.x = -Math.PI / 2; scene.add(ballShadow);
+
+  // ---------- 演出の進行 ----------
+  const PLAYS = {
+    hit: { telop: "センター前ヒット!", land: new THREE.Vector3(9, 0, -62), peak: 7, hang: 1.5, contact: true },
+    hr: { telop: "ホームラン!!", land: new THREE.Vector3(-34, 14, -120), peak: 34, hang: 2.8, contact: true, hr: true },
+    miss: { telop: "空振り!", contact: false },
+  };
+  let mode = "hit", t0 = performance.now();
+  const target = new THREE.Vector3(0.08, 0.72, 0);
+  const BATTING_CAM = { pos: new THREE.Vector3(0, 1.25, 3.4), look: new THREE.Vector3(0, 1.0, -18) };
+  const lookNow = BATTING_CAM.look.clone();
+  const tmp = new THREE.Vector3();
+  const release = new THREE.Vector3();
+  const ease = (x) => x * x * (3 - 2 * x);
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+  function poseIdle(p) { p.armL.rotation.set(0.1, 0, 0.15); p.armR.rotation.set(0.1, 0, -0.15); p.legL.rotation.set(0, 0, 0); p.legR.rotation.set(0, 0, 0); p.torso.rotation.set(0, 0, 0); }
+  function posePitcher(t) {
+    poseIdle(pitcher);
+    if (t < 0.55) { const k = Math.sin((t / 0.55) * Math.PI * 0.5); pitcher.legL.rotation.x = -1.4 * k; pitcher.armR.rotation.x = -0.6 * k; pitcher.armL.rotation.x = -0.6 * k; pitcher.torso.rotation.x = -0.1 * k; }
+    else if (t < 0.8) { const k = (t - 0.55) / 0.25; pitcher.legL.rotation.x = -1.4 * (1 - k) - 0.4 * k; pitcher.armR.rotation.x = 2.6 - 3.9 * ease(k); pitcher.armL.rotation.x = -1.0 * (1 - k); pitcher.torso.rotation.x = 0.35 * k; }
+    else { pitcher.armR.rotation.x = -1.3; pitcher.torso.rotation.x = 0.35; pitcher.legR.rotation.x = 0.5; }
+  }
+  function poseBatter(k) {
+    // k<0: 構え、0..1: スイング
+    const s = k < 0 ? 0 : ease(clamp01(k));
+    swing.rotation.y = -1.9 + s * 3.6;
+    batTilt.rotation.x = -1.05 + s * 0.95;
+    batter.armL.rotation.set(-1.1 - 0.3 * s, 0, 0.5); batter.armR.rotation.set(-1.1 - 0.3 * s, 0, -0.5);
+    batter.torso.rotation.y = -0.4 + s * 1.0;
+    batter.legL.rotation.x = 0; batter.legR.rotation.x = -0.15;
+  }
+  function runPose(p, t) { const k = Math.sin(t * 14); p.legL.rotation.x = 0.8 * k; p.legR.rotation.x = -0.8 * k; p.armL.rotation.x = -0.7 * k; p.armR.rotation.x = 0.7 * k; }
+
+  function showTelop(text) { if (telop.textContent !== text) telop.textContent = text; telop.classList.add("show"); }
+  function hideTelop() { telop.classList.remove("show"); }
+
+  function frame(now) {
+    const play = PLAYS[mode];
+    const t = (now - t0) / 1000;
+    const windup = 1.2, flight = 0.6;
+    const releaseT = windup * 0.8;
+    // 打撃画面
+    if (t < windup + flight + 0.1 || !play.contact) {
+      camera.position.copy(BATTING_CAM.pos); lookNow.copy(BATTING_CAM.look); camera.lookAt(lookNow);
+      zone.visible = cursor.visible = true; catcher.root.visible = false; batter.root.visible = true;
+      fielders.forEach((f, i) => { poseIdle(f); f.root.position.set(FIELD_POS[i][0], 0, FIELD_POS[i][1]); f.root.rotation.y = 0; });
+      posePitcher(clamp01(t / windup));
+      pitcher.armR.updateMatrixWorld(true);
+      pitcher.armR.children[1].getWorldPosition(release);
+      const p = clamp01((t - releaseT) / flight);
+      const cx = play.contact ? target.x : target.x + 0.2;
+      cursor.position.set(cx, target.y + 0.02, 0.03);
+      const swingK = (t - (releaseT + flight * 0.78)) / 0.2;
+      poseBatter(t < releaseT + flight * 0.78 ? -1 : swingK);
+      cursorFill.material.opacity = swingK > 0 && swingK < 1.2 ? 0.6 : 0.32;
+      if (t < releaseT) { ball.visible = false; ballShadow.visible = false; }
+      else {
+        ball.visible = ballShadow.visible = true;
+        const endZ = play.contact ? 0 : 1.6;
+        const q = play.contact ? p : clamp01((t - releaseT) / (flight * 1.25));
+        const mid = tmp.set((release.x + target.x) / 2 + 0.55, (release.y + target.y) / 2 + 0.25, (release.z + endZ) / 2);
+        const a = (1 - q) * (1 - q), b = 2 * (1 - q) * q, c = q * q;
+        ball.position.set(a * release.x + b * mid.x + c * target.x, a * release.y + b * mid.y + c * (target.y - (play.contact ? 0 : 0.2)), a * release.z + b * mid.z + c * endZ);
+        ballShadow.position.set(ball.position.x, 0.06, ball.position.z);
+      }
+      if (!play.contact && t > releaseT + flight * 1.3) showTelop(play.telop); else hideTelop();
+      if (!play.contact && t > releaseT + flight + 1.8) t0 = now;
+    } else {
+      // 打球: 中継カメラで追う
+      const ft = t - (windup + flight + 0.1);
+      const p = clamp01(ft / play.hang);
+      zone.visible = cursor.visible = false; catcher.root.visible = true;
+      poseBatter(1.4);
+      const start = tmp.set(target.x, target.y, -0.2);
+      const L = play.land;
+      ball.position.set(start.x + (L.x - start.x) * p, start.y + (L.y - start.y) * p + 4 * play.peak * p * (1 - p), start.z + (L.z - start.z) * p);
+      ballShadow.position.set(ball.position.x, 0.06, ball.position.z);
+      // 最寄りの野手が落下点へ走る
+      let best = 0, bestD = 1e9;
+      FIELD_POS.forEach(([x, z], i) => { const d = Math.hypot(x - L.x, z - L.z); if (d < bestD) { bestD = d; best = i; } });
+      fielders.forEach((f, i) => {
+        const [fx, fz] = FIELD_POS[i];
+        if (i === best && !play.hr) {
+          const k = clamp01(ft / (play.hang * 1.15));
+          f.root.position.set(fx + (L.x * 0.9 - fx) * k, 0, fz + (L.z * 0.9 - fz) * k);
+          f.root.rotation.y = Math.atan2(L.x - fx, L.z - fz);
+          if (k < 1) runPose(f, ft); else poseIdle(f);
+        } else { poseIdle(f); f.root.rotation.y = Math.atan2(ball.position.x - fx, ball.position.z - fz); }
+      });
+      // カメラ: 本塁後方の高い位置から打球を追う
+      const camK = ease(clamp01(ft / 0.5));
+      const chase = new THREE.Vector3(ball.position.x * 0.45, 16 + ball.position.y * 0.35, 22 + ball.position.z * 0.45);
+      camera.position.lerpVectors(BATTING_CAM.pos, chase, camK);
+      lookNow.lerp(tmp.set(ball.position.x, Math.max(0, ball.position.y * 0.6), ball.position.z), 0.18);
+      camera.lookAt(lookNow);
+      if (p >= 1) showTelop(play.telop); else hideTelop();
+      if (ft > play.hang + 1.8) t0 = now;
+    }
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+
+  for (const [id, m] of [["btn-hit", "hit"], ["btn-hr", "hr"], ["btn-miss", "miss"]]) {
+    document.getElementById(id).addEventListener("click", () => {
+      mode = m; t0 = performance.now(); hideTelop();
+      document.querySelectorAll(".controls button").forEach((b) => b.setAttribute("aria-pressed", String(b.id === id)));
+    });
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
