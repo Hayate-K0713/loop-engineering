@@ -2,9 +2,9 @@
 name: knip-dead-code-detection
 type: decision
 status: active
-related_topics: [introduce-knip]
+related_topics: [introduce-knip, baseball-game]
 created: 2026-08-12
-updated: 2026-08-13
+updated: 2026-10-11
 ---
 
 <!-- related_topics には、この規約/落とし穴を実際に適用したtopic-slugを追記していく(convention/pitfallで特に重要)。

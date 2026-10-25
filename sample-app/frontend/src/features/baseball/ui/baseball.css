@@ -1,0 +1,879 @@
+/* ブラウザ野球: テーマ変数・ボタン共通・タイトル/結果/操作部品/HUD 部品のスタイル。クラス名は bb- 接頭辞。
+   ページ全面・オーバーレイ・HUD/ネームプレート/ティッカー/操作バーの配置は baseball-stage.css が担当する。
+   トーン(承認済みモック基調): 丸ゴシック系のシステムフォント、白文字+濃い縁取り、半透明の濃紺パネル、黄のアクセント、ハードな落ち影。 */
+
+:root {
+  --bb-bg: #0d1722;
+  --bb-panel: rgba(8, 20, 34, 0.78);
+  --bb-panel-solid: #15283a;
+  --bb-border: #2d4a63;
+  --bb-text: #f1f5f9;
+  --bb-muted: #a3b8ca;
+  --bb-accent: #ffd23f;
+  --bb-ink: #20140a;
+  --bb-out: #e8473c;
+  --bb-ball-lamp: #3fcf6b;
+  --bb-strike: #ffd23f;
+  --bb-font:
+    ui-rounded, "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif;
+  --bb-tap: 44px;
+  --bb-face: #24415c;
+  --bb-face-hover: #2e5378;
+
+  /* 白文字の縁取り(濃色の影を重ねる)。小: ボタン・ラベル、大: ロゴ・スコア */
+  --bb-outline:
+    2px 0 0 var(--bb-ink), -2px 0 0 var(--bb-ink), 0 -2px 0 var(--bb-ink), 2px 2px 0 var(--bb-ink), -2px 2px 0 var(--bb-ink), 2px -2px 0 var(--bb-ink),
+    -2px -2px 0 var(--bb-ink), 0 3px 0 var(--bb-ink);
+  --bb-outline-lg:
+    4px 0 0 var(--bb-ink), -4px 0 0 var(--bb-ink), 0 -4px 0 var(--bb-ink), 3px 3px 0 var(--bb-ink), -3px 3px 0 var(--bb-ink), 3px -3px 0 var(--bb-ink),
+    -3px -3px 0 var(--bb-ink), 0 4px 0 var(--bb-ink), 0 7px 0 var(--bb-ink), 3px 7px 0 var(--bb-ink), -3px 7px 0 var(--bb-ink);
+
+  /* 通常フローの 5×5 コースグリッド(スマホ縦・タッチは 44px、細かいポインタの広い画面は 36px) */
+  --bb-cell: 44px;
+  --bb-cell-gap: 2px;
+  --bb-grid-size: calc(var(--bb-cell) * 5 + var(--bb-cell-gap) * 4);
+}
+
+@media (min-width: 641px) and (hover: hover) and (pointer: fine) {
+  :root {
+    --bb-cell: 36px;
+  }
+}
+
+/* ページ全体のダーク化。ホーム(/)へ漏らさないよう、ゲームのページがあるときだけ付ける */
+:root:has(.bb-page) {
+  color-scheme: dark;
+}
+
+body:has(.bb-page) {
+  margin: 0;
+  background: var(--bb-bg);
+  color: var(--bb-text);
+  font-family: var(--bb-font);
+}
+
+/* 視覚的に隠すが、支援技術・テストからは読める */
+.bb-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- ボタン共通(濃い縁取り + ハードな落ち影。押すと沈む) ---- */
+
+.bb-button,
+.bb-toggle {
+  min-height: var(--bb-tap);
+  padding: 0 18px;
+  border: 3px solid var(--bb-ink);
+  border-radius: 8px;
+  background: var(--bb-face);
+  box-shadow:
+    0 4px 0 var(--bb-ink),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  color: var(--bb-text);
+  font-family: var(--bb-font);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 0 var(--bb-ink);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition:
+    transform 0.06s ease-out,
+    box-shadow 0.06s ease-out,
+    background-color 0.12s;
+}
+
+.bb-button:hover:not(:disabled),
+.bb-toggle:hover:not(:disabled) {
+  background: var(--bb-face-hover);
+}
+
+.bb-button:active:not(:disabled),
+.bb-toggle:active:not(:disabled) {
+  box-shadow:
+    0 2px 0 var(--bb-ink),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  transform: translateY(2px);
+}
+
+.bb-button:focus-visible,
+.bb-toggle:focus-visible,
+.bb-course-cell:focus-visible,
+.bb-start:focus-visible {
+  outline: 3px solid var(--bb-accent);
+  outline-offset: 3px;
+}
+
+.bb-button--primary {
+  background: var(--bb-accent);
+  box-shadow:
+    0 4px 0 var(--bb-ink),
+    inset 0 3px 0 rgba(255, 255, 255, 0.55);
+  color: var(--bb-ink);
+  text-shadow: none;
+}
+
+.bb-button--primary:hover:not(:disabled) {
+  background: #ffe06b;
+}
+
+.bb-button--primary:active:not(:disabled) {
+  box-shadow:
+    0 2px 0 var(--bb-ink),
+    inset 0 3px 0 rgba(255, 255, 255, 0.55);
+}
+
+.bb-button:disabled,
+.bb-toggle:disabled {
+  box-shadow: 0 1px 0 var(--bb-ink);
+  filter: saturate(0.25) brightness(0.8);
+  cursor: not-allowed;
+  transform: translateY(3px);
+}
+
+/* 選択中: 黄の縁取りと文字 */
+.bb-toggle[aria-pressed="true"] {
+  border-color: var(--bb-accent);
+  background: #17314a;
+  box-shadow:
+    0 4px 0 var(--bb-ink),
+    inset 0 0 0 2px rgba(255, 210, 63, 0.28);
+  color: var(--bb-accent);
+}
+
+/* ---- TitleScreen(球場の背景は CSS だけで描く: 空 → 観客席の帯 → 縞の芝) ---- */
+
+.bb-title-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 150px 26px at 14% 13%, rgba(255, 255, 255, 0.8), transparent 72%),
+    radial-gradient(ellipse 190px 30px at 84% 21%, rgba(255, 255, 255, 0.65), transparent 72%),
+    radial-gradient(ellipse 110px 20px at 58% 6%, rgba(255, 255, 255, 0.55), transparent 72%), linear-gradient(180deg, #3a7bd5 0%, #8cc5f2 30%, #f3e7c9 47%);
+  color: var(--bb-text);
+  font-family: var(--bb-font);
+}
+
+/* 観客席の帯: 屋根 / 観客(色違いの点を3層) / 緑のフェンス+黄のライン */
+.bb-title-screen::before {
+  content: "";
+  position: absolute;
+  inset: 44% 0 auto;
+  height: 24%;
+  min-height: 120px;
+  background:
+    linear-gradient(180deg, #ffd23f 0 4px, #1e5a3c 4px 100%) bottom / 100% 26px no-repeat,
+    radial-gradient(circle, #d24a3e 0 2.6px, transparent 3.2px) 0 0 / 15px 12px,
+    radial-gradient(circle, #f0e3c4 0 2.6px, transparent 3.2px) 7px 6px / 15px 12px,
+    radial-gradient(circle, #b8433a 0 2.6px, transparent 3.2px) 3px 9px / 23px 12px,
+    radial-gradient(circle, #e3b43c 0 2.4px, transparent 3px) 11px 3px / 29px 12px,
+    linear-gradient(180deg, #9aa7b4 0 9px, #4a2f37 9px 100%);
+}
+
+/* 縞の芝 + 内野の土 */
+.bb-title-screen::after {
+  content: "";
+  position: absolute;
+  inset: calc(44% + max(24%, 120px)) 0 0;
+  background:
+    radial-gradient(ellipse 52% 62% at 50% 118%, #c89a63 0 62%, transparent 63%), repeating-linear-gradient(180deg, #4cae5b 0 30px, #3e9a4c 30px 60px);
+}
+
+.bb-title__body {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  height: 100%;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+/* ロゴ風タイトル: 「ブラウザ」(白) + 「野球」(黄・特大)。縁取りと落ち影で重く見せる */
+.bb-logo {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  margin: auto 0 0;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  transform: rotate(-3deg);
+}
+
+.bb-logo__sub {
+  color: #ffffff;
+  font-size: clamp(1.5rem, 7.5vw, 2.4rem);
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  text-shadow: var(--bb-outline-lg);
+}
+
+.bb-logo__main {
+  margin-top: 4px;
+  color: var(--bb-accent);
+  font-size: clamp(4.75rem, 26vw, 8.5rem);
+  letter-spacing: 0.06em;
+  text-shadow: var(--bb-outline-lg);
+}
+
+/* ロゴに添える CSS 製のボール */
+.bb-logo::after {
+  content: "";
+  position: absolute;
+  right: -0.9em;
+  bottom: -0.2em;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 3px solid var(--bb-ink);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at -18% 50%, transparent 52%, var(--bb-out) 54% 62%, transparent 64%),
+    radial-gradient(circle at 118% 50%, transparent 52%, var(--bb-out) 54% 62%, transparent 64%), #ffffff;
+  box-shadow: 0 4px 0 var(--bb-ink);
+}
+
+/* 設定パネル: 斜めに切った形(clip-path) + 黄の上縁。落ち影はクリップの外に出るので親の filter で付ける */
+.bb-title__panel {
+  width: min(100%, 460px);
+  margin-bottom: auto;
+  filter: drop-shadow(0 6px 0 var(--bb-ink));
+}
+
+.bb-title__form {
+  display: grid;
+  gap: 14px;
+  padding: 18px 18px 22px;
+  border-top: 6px solid var(--bb-accent);
+  background: rgba(8, 20, 34, 0.86);
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+}
+
+.bb-choice {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.bb-choice__legend {
+  margin: 0 0 7px;
+  padding: 0;
+  color: var(--bb-accent);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.bb-choice__options {
+  display: flex;
+  gap: 8px;
+}
+
+.bb-choice__option {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* 視覚的に隠した radio(キーボード操作・フォーカスは生きる) */
+.bb-choice__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bb-choice__text {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 4px;
+  border: 3px solid var(--bb-ink);
+  border-radius: 8px;
+  background: var(--bb-face);
+  box-shadow:
+    0 4px 0 var(--bb-ink),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  color: var(--bb-text);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  text-shadow: 0 2px 0 var(--bb-ink);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    transform 0.06s ease-out,
+    box-shadow 0.06s ease-out,
+    background-color 0.12s;
+}
+
+.bb-choice__option:hover .bb-choice__text {
+  background: var(--bb-face-hover);
+}
+
+.bb-choice__input:checked + .bb-choice__text {
+  border-color: var(--bb-accent);
+  background: #17314a;
+  box-shadow:
+    0 4px 0 var(--bb-ink),
+    inset 0 0 0 2px rgba(255, 210, 63, 0.35),
+    0 0 14px rgba(255, 210, 63, 0.35);
+  color: var(--bb-accent);
+}
+
+.bb-choice__input:focus-visible + .bb-choice__text {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.bb-choice__option:active .bb-choice__text {
+  box-shadow: 0 2px 0 var(--bb-ink);
+  transform: translateY(2px);
+}
+
+/* 「試合開始」: 大きな黄色の主ボタン */
+.bb-start {
+  position: relative;
+  min-height: 66px;
+  margin-top: 6px;
+  padding: 0 24px 0 40px;
+  border: 4px solid var(--bb-ink);
+  border-radius: 10px;
+  background: var(--bb-accent);
+  box-shadow:
+    0 6px 0 var(--bb-ink),
+    inset 0 4px 0 rgba(255, 255, 255, 0.55);
+  color: var(--bb-ink);
+  font-family: var(--bb-font);
+  font-size: 1.75rem;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 0.06s ease-out,
+    box-shadow 0.06s ease-out,
+    background-color 0.12s;
+}
+
+.bb-start::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 22px;
+  border-top: 11px solid transparent;
+  border-bottom: 11px solid transparent;
+  border-left: 17px solid var(--bb-ink);
+  transform: translateY(-50%);
+}
+
+.bb-start:hover {
+  background: #ffe06b;
+}
+
+.bb-start:active {
+  box-shadow:
+    0 3px 0 var(--bb-ink),
+    inset 0 4px 0 rgba(255, 255, 255, 0.55);
+  transform: translateY(3px);
+}
+
+/* ---- ResultScreen(試合画面の上に重ね、背後をぼかす) ---- */
+
+.bb-result {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: rgba(6, 14, 24, 0.5);
+  -webkit-backdrop-filter: blur(10px) saturate(0.85);
+  backdrop-filter: blur(10px) saturate(0.85);
+  color: var(--bb-text);
+  font-family: var(--bb-font);
+}
+
+.bb-result__panel {
+  width: min(100%, 460px);
+  margin: auto;
+  filter: drop-shadow(0 6px 0 var(--bb-ink));
+}
+
+.bb-result__card {
+  display: grid;
+  gap: 14px;
+  padding: 22px 20px 24px;
+  border-top: 8px solid var(--bb-muted);
+  background: rgba(8, 20, 34, 0.9);
+  clip-path: polygon(0 0, calc(100% - 24px) 0, 100% 24px, 100% 100%, 24px 100%, 0 calc(100% - 24px));
+  text-align: center;
+}
+
+.bb-result__panel[data-outcome="win"] .bb-result__card {
+  border-top-color: var(--bb-accent);
+}
+
+.bb-result__panel[data-outcome="lose"] .bb-result__card {
+  border-top-color: var(--bb-out);
+}
+
+.bb-result__kicker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--bb-muted);
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+}
+
+.bb-result__kicker::before,
+.bb-result__kicker::after {
+  content: "";
+  flex: 1;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.bb-result__headline {
+  margin: 0;
+  color: #dbe9f6;
+  font-size: clamp(2rem, 9.5vw, 3.1rem);
+  font-weight: 900;
+  line-height: 1.15;
+  text-shadow: var(--bb-outline-lg);
+}
+
+.bb-result__panel[data-outcome="win"] .bb-result__headline {
+  color: var(--bb-accent);
+}
+
+.bb-result__panel[data-outcome="lose"] .bb-result__headline {
+  color: #ff7b6e;
+}
+
+.bb-result__score {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 14px;
+  margin: 4px 0 6px;
+}
+
+.bb-result__team {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 4.2em;
+}
+
+/* チーム色チップ+略称(ScoreHud と同じ表現。放送画面風に斜めに傾けたチップ) */
+.bb-result__badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bb-result__chip {
+  flex: none;
+  width: 18px;
+  height: 34px;
+  box-sizing: border-box;
+  border: 3px solid var(--bb-ink);
+  border-radius: 3px;
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  transform: skewX(-12deg);
+}
+
+.bb-result__abbr {
+  color: #ffffff;
+  font-size: 1.75rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: var(--bb-outline);
+}
+
+/* 先攻/後攻の小さな添え字 */
+.bb-result__order {
+  color: var(--bb-muted);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
+}
+
+.bb-result__runs {
+  color: #ffffff;
+  font-size: clamp(4.25rem, 22vw, 6.75rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: var(--bb-outline-lg);
+}
+
+.bb-result__score[data-leader="away"] .bb-result__team[data-side="away"] .bb-result__runs,
+.bb-result__score[data-leader="home"] .bb-result__team[data-side="home"] .bb-result__runs {
+  color: var(--bb-accent);
+}
+
+.bb-result__vs {
+  padding-bottom: 0.35rem;
+  color: var(--bb-muted);
+  font-size: 2.5rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.bb-result__actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.bb-result__restart {
+  min-height: 62px;
+  font-size: 1.5rem;
+  letter-spacing: 0.2em;
+}
+
+.bb-result__back {
+  min-height: 48px;
+  background: var(--bb-panel-solid);
+  color: var(--bb-muted);
+}
+
+/* ---- LineScore / CountLamps / BaseDiamond(ScoreHud の中で使う。.bb-hud 配下の寸法は baseball-stage.css が上書きする) ---- */
+
+.bb-line-score-wrap {
+  overflow-x: auto;
+}
+
+.bb-line-score {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: center;
+}
+
+.bb-line-score th,
+.bb-line-score td {
+  min-width: 1.7em;
+  padding: 3px 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.bb-line-score thead th {
+  color: var(--bb-muted);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+}
+
+.bb-line-score__team {
+  min-width: 4.5em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.bb-line-score tbody tr:last-child th,
+.bb-line-score tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.bb-line-score .bb-line-score__total {
+  color: var(--bb-accent);
+}
+
+.bb-count {
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  font-weight: 800;
+}
+
+.bb-count__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.bb-count__label {
+  margin-right: 0.15em;
+  font-size: 0.875em;
+}
+
+.bb-lamp {
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.bb-count__row--balls .bb-lamp--on {
+  background: var(--bb-ball-lamp);
+  box-shadow:
+    0 0 0.55em rgba(63, 207, 107, 0.75),
+    inset 0 0 0 1px var(--bb-ink);
+}
+
+.bb-count__row--strikes .bb-lamp--on {
+  background: var(--bb-strike);
+  box-shadow:
+    0 0 0.55em rgba(255, 210, 63, 0.75),
+    inset 0 0 0 1px var(--bb-ink);
+}
+
+.bb-count__row--outs .bb-lamp--on {
+  background: var(--bb-out);
+  box-shadow:
+    0 0 0.55em rgba(232, 71, 60, 0.75),
+    inset 0 0 0 1px var(--bb-ink);
+}
+
+.bb-bases {
+  width: 52px;
+  height: auto;
+  flex: none;
+  overflow: visible;
+}
+
+.bb-bases__diamond {
+  fill: rgba(255, 255, 255, 0.07);
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 2;
+}
+
+.bb-bases__home {
+  fill: #ffffff;
+  stroke: var(--bb-ink);
+  stroke-width: 1.5;
+}
+
+.bb-base {
+  fill: rgba(255, 255, 255, 0.2);
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 1.5;
+}
+
+.bb-base--occupied {
+  fill: var(--bb-accent);
+  stroke: var(--bb-ink);
+  stroke-width: 2;
+}
+
+/* スタミナバー(NamePlates が再利用する) */
+.bb-stamina {
+  display: inline-block;
+  width: 80px;
+  height: 10px;
+  border: 2px solid var(--bb-ink);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.bb-stamina__bar {
+  display: block;
+  height: 100%;
+  background: var(--bb-ball-lamp);
+}
+
+/* ---- SwingControls(右に大きな円形のスイングボタン、その左にミート/強振の切替) ---- */
+
+.bb-swing {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.bb-swing__kinds {
+  display: flex;
+  gap: 8px;
+}
+
+.bb-swing__kind {
+  padding: 0 14px;
+}
+
+.bb-swing__button {
+  flex: none;
+  width: 92px;
+  height: 92px;
+  min-height: 0;
+  padding: 0;
+  border-width: 4px;
+  border-radius: 50%;
+  box-shadow:
+    0 6px 0 var(--bb-ink),
+    inset 0 5px 0 rgba(255, 255, 255, 0.55);
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.bb-swing__button:active:not(:disabled) {
+  box-shadow:
+    0 3px 0 var(--bb-ink),
+    inset 0 5px 0 rgba(255, 255, 255, 0.55);
+  transform: translateY(3px);
+}
+
+/* ---- PitchingControls / PitchKindButtons ---- */
+
+.bb-pitching {
+  display: grid;
+  gap: 8px;
+}
+
+.bb-pitch-kinds {
+  display: flex;
+  gap: 6px;
+}
+
+.bb-pitch-kind {
+  flex: 1 1 auto;
+  padding: 0 clamp(3px, 1.6vw, 8px);
+  font-size: clamp(0.75rem, 3.6vw, 0.9375rem);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.bb-pitching__throw {
+  min-height: 56px;
+  font-size: 1.5rem;
+  letter-spacing: 0.2em;
+}
+
+/* 操作バー(守備)の並べ方(チップ・グリッド・「投げる」の配置と「投げる」の大きさ)は baseball-stage.css の .bb-bar--pitch が持つ。
+   ここには部品の中のスタイル(球種チップ・「投げる」の基本の寸法)だけを置く。 */
+
+/* ---- CourseGrid(通常フローの 5×5) ---- */
+
+.bb-course-grid {
+  display: grid;
+  grid-template-columns: repeat(5, var(--bb-cell));
+  grid-template-rows: repeat(5, var(--bb-cell));
+  gap: var(--bb-cell-gap);
+  width: max-content;
+  padding: 0;
+}
+
+.bb-course-cell {
+  position: relative;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  background: rgba(8, 20, 34, 0.72);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bb-course-cell--zone {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(241, 245, 249, 0.2);
+}
+
+.bb-course-cell:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.bb-course-cell[aria-pressed="true"] {
+  border-color: var(--bb-ink);
+  background: var(--bb-accent);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* 選択中のセルに「狙い」の黒い点 */
+.bb-course-cell[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 34%;
+  height: 34%;
+  margin: auto;
+  border-radius: 50%;
+  background: var(--bb-ink);
+}
+
+/* ---- 広い画面(デスクトップ) ---- */
+
+@media (min-width: 641px) {
+  .bb-title__form {
+    gap: 16px;
+    padding: 22px 24px 26px;
+  }
+
+  .bb-result__actions {
+    grid-template-columns: 2fr 1fr;
+  }
+
+  .bb-swing__button {
+    width: 96px;
+    height: 96px;
+  }
+}
+
+/* デスクトップでの守備バーの並べ方は baseball-stage.css(スマホ縦と同じ構造)。 */
+
+/* ---- スマホ縦 ---- */
+
+@media (max-width: 640px) {
+  .bb-title__body {
+    gap: 14px;
+  }
+
+  .bb-title__form {
+    padding: 16px 14px 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-button,
+  .bb-toggle,
+  .bb-choice__text,
+  .bb-start {
+    transition: none;
+  }
+
+  .bb-button:active:not(:disabled),
+  .bb-toggle:active:not(:disabled),
+  .bb-swing__button:active:not(:disabled),
+  .bb-choice__option:active .bb-choice__text,
+  .bb-start:active {
+    transform: none;
+  }
+}
