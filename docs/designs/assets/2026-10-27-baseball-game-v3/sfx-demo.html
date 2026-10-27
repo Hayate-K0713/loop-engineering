@@ -1,0 +1,383 @@
+<title>野球 効果音デモ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
+<style>
+/* Layout: ナイター球場の記録表のような 1 カラム。操作は大きなボタン 2 列(スマホで親指が届く)。 */
+:root {
+  --bg: #f1f3ee;
+  --panel: #ffffff;
+  --panel-2: #e7ebe3;
+  --fg: #16201a;
+  --muted: #55645a;
+  --line: #c9d2c7;
+  --stitch: #b3202a;
+  --stitch-fg: #ffffff;
+  --dirt: #a85d1f;
+  --chalk: #16201a;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "IPAGothic", sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1511; --panel: #17211b; --panel-2: #1f2c24; --fg: #eef2ea; --muted: #9db0a2; --line: #2c3b31;
+    --stitch: #e4535c; --stitch-fg: #170507; --dirt: #e0974f; --chalk: #eef2ea; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1511; --panel: #17211b; --panel-2: #1f2c24; --fg: #eef2ea; --muted: #9db0a2; --line: #2c3b31;
+  --stitch: #e4535c; --stitch-fg: #170507; --dirt: #e0974f; --chalk: #eef2ea; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+h1 { margin: 0; font-size: 26px; font-weight: 900; line-height: 1.25; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 46ch; }
+
+.deck { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.row label { font-size: 13px; color: var(--muted); }
+input[type="range"] { flex: 1 1 140px; min-width: 0; accent-color: var(--stitch); height: 28px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; }
+.toggle input { width: 20px; height: 20px; accent-color: var(--stitch); }
+.meter { width: 100%; height: 10px; border-radius: 5px; background: var(--panel-2); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--dirt), var(--stitch)); transition: width 60ms linear; }
+.state { font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-height: 1.6em; }
+
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sfx {
+  appearance: none; text-align: left; font: inherit; color: var(--fg); cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px 12px;
+  min-height: 92px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.sfx:hover { border-color: var(--muted); }
+.sfx:focus-visible, .seq:focus-visible { outline: 3px solid var(--stitch); outline-offset: 2px; }
+.sfx.on { transform: scale(.97); background: var(--stitch); border-color: var(--stitch); color: var(--stitch-fg); }
+.sfx.on .cue, .sfx.on .scene { color: var(--stitch-fg); }
+.name { font-size: 17px; font-weight: 900; line-height: 1.25; }
+.scene { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.cue { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .02em; }
+.wide { grid-column: 1 / -1; }
+
+h2 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .04em; }
+section { display: flex; flex-direction: column; gap: 10px; }
+.seqs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.seq {
+  appearance: none; font: inherit; font-weight: 700; color: var(--fg); background: transparent; cursor: pointer;
+  border: 1.5px dashed var(--muted); border-radius: 10px; padding: 10px 12px; min-height: 48px; text-align: left; touch-action: manipulation;
+}
+.seq:hover { border-color: var(--fg); }
+.seq small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+
+.notes { background: var(--panel-2); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
+.notes p { margin: 0; max-width: 60ch; }
+.notes b { font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .sfx, .meter i { transition: none; } }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">ブラウザ野球 v3 / M13</div>
+    <h1>効果音デモ</h1>
+    <p class="lede">ゲームに入れる効果音を、実際の音で聴いて決めるためのページです。音声ファイルは使わず、すべてその場で合成しています。イヤホンかスピーカーで、ボタンを押して聴いてください。</p>
+  </header>
+
+  <div class="deck">
+    <div class="row">
+      <label for="vol">音量</label>
+      <input id="vol" type="range" min="0" max="100" value="70">
+      <label class="toggle"><input id="rev" type="checkbox" checked> 響き(スタジアムの残響)</label>
+    </div>
+    <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+    <div class="state" id="state" role="status">最初のボタンを押すと音が出ます。</div>
+  </div>
+
+  <section>
+    <h2>効果音 10 種</h2>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section>
+    <h2>つなげて聴く(おまけ)</h2>
+    <div class="seqs">
+      <button class="seq" id="seq-strike" type="button">ストライクの流れ<small>ヒュッ → パン</small></button>
+      <button class="seq" id="seq-hit" type="button">ヒットの流れ<small>ヒュッ → カキーン → 歓声</small></button>
+    </div>
+  </section>
+
+  <div class="notes">
+    <p><b>聴いて決めること</b>: 音を既定で ON にするか、OFF にするか。チープに聞こえる音があれば、どれかを教えてください。</p>
+    <p><b>音が出ないとき</b>: iPhone はマナーモード(サイレントスイッチ)だと Web 音声が鳴らないことがあります。ゲーム本体でも同じなので、説明カードに一言添える予定です。ここで鳴らない場合は、スイッチと音量を確認してください。</p>
+    <p><b>この音の作り方</b>: ノイズ、フィルタ、短いエンベロープ、低音のインパクト、残響を重ねています。ゲームでは同じ「レシピ」を表にして、いつ・どの音を・どの強さで鳴らすかを純粋関数で決めます。</p>
+  </div>
+</main>
+
+<script>
+/* ===== 合成エンジン(BaseAudioContext なら OfflineAudioContext でも動く) ===== */
+var AC = window.AudioContext || window.webkitAudioContext;
+var ctx = null, bus = null, analyser = null;
+var settings = { vol: 0.7, reverb: true };
+
+function impulse(c, seconds, decay) {
+  var rate = c.sampleRate, len = Math.floor(rate * seconds);
+  var buf = c.createBuffer(2, len, rate);
+  for (var ch = 0; ch < 2; ch++) {
+    var d = buf.getChannelData(ch), lp = 0;
+    for (var i = 0; i < len; i++) {
+      var n = Math.random() * 2 - 1;
+      lp += (n - lp) * 0.35;                 // 高域を丸めて暗い残響にする
+      var env = Math.pow(1 - i / len, decay);
+      d[i] = lp * env * (i < rate * 0.012 ? i / (rate * 0.012) : 1);
+    }
+  }
+  return buf;
+}
+var noiseCache = new WeakMap();
+function noiseBuf(c) {
+  var b = noiseCache.get(c);
+  if (b) return b;
+  var len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+  var b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+  for (var i = 0; i < len; i++) {            // ピンクノイズ(Paul Kellet)
+    var w = Math.random() * 2 - 1;
+    b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+    b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+    d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926;
+  }
+  noiseCache.set(c, buf);
+  return buf;
+}
+
+function makeBus(c, opts) {
+  var master = c.createGain(); master.gain.value = opts.vol;
+  var comp = c.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.knee.value = 14; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.22;
+  var dry = c.createGain();
+  var send = c.createGain(); send.gain.value = opts.reverb ? 1 : 0;
+  var conv = c.createConvolver(); conv.buffer = impulse(c, 2.2, 2.6);
+  var wet = c.createGain(); wet.gain.value = 0.55;
+  dry.connect(master); send.connect(conv); conv.connect(wet); wet.connect(master);
+  master.connect(comp); comp.connect(c.destination);
+  return { dry: dry, send: send, master: master, comp: comp };
+}
+
+/* 出力の接続: dry に wetAmt 分を send へ分岐。pan は -1..1 */
+function route(c, b, node, wetAmt, pan) {
+  var last = node;
+  if (pan && c.createStereoPanner) { var p = c.createStereoPanner(); p.pan.value = pan; node.connect(p); last = p; }
+  last.connect(b.dry);
+  if (wetAmt > 0) { var g = c.createGain(); g.gain.value = wetAmt; last.connect(g); g.connect(b.send); }
+}
+function env(g, t, a, peak, d) {              // 指数エンベロープ(0 に落とさず 0.0001 まで)
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+}
+/* ノイズのバースト: フィルタ周波数を f0→f1 に動かす */
+function burst(c, b, o) {
+  var s = c.createBufferSource(); s.buffer = noiseBuf(c); s.loop = true;
+  var f = c.createBiquadFilter(); f.type = o.type || "bandpass"; f.Q.value = o.q || 1;
+  f.frequency.setValueAtTime(o.f0, o.t);
+  if (o.f1) f.frequency.exponentialRampToValueAtTime(o.f1, o.t + (o.sweep || o.dur));
+  var g = c.createGain(); env(g, o.t, o.a || 0.001, o.gain, o.dur);
+  s.connect(f); f.connect(g); route(c, b, g, o.wet || 0, o.pan);
+  s.start(o.t, Math.random() * 1.5); s.stop(o.t + (o.a || 0.001) + o.dur + 0.05);
+}
+function tone(c, b, o) {
+  var osc = c.createOscillator(); osc.type = o.type || "sine";
+  osc.frequency.setValueAtTime(o.f0, o.t);
+  if (o.f1) osc.frequency.exponentialRampToValueAtTime(o.f1, o.t + (o.sweep || o.dur));
+  var g = c.createGain(); env(g, o.t, o.a || 0.002, o.gain, o.dur);
+  osc.connect(g); route(c, b, g, o.wet || 0, o.pan);
+  osc.start(o.t); osc.stop(o.t + (o.a || 0.002) + o.dur + 0.05);
+}
+/* 金属・木のような非整数倍音の響き(バットの「キーン」やベル) */
+function ring(c, b, t, base, partials, gain, dur, wet) {
+  partials.forEach(function (p) {
+    tone(c, b, { t: t, f0: base * p[0], gain: gain * p[1], dur: dur * p[2], a: 0.001, wet: wet });
+  });
+}
+
+/* ===== レシピ ===== */
+function release(c, b, t) {                  // pitch-release: ヒュッ
+  burst(c, b, { t: t, type: "bandpass", f0: 700, f1: 2600, sweep: 0.2, q: 1.3, a: 0.06, dur: 0.16, gain: 0.35, wet: 0.1 });
+}
+function mitt(c, b, t, v) {                  // mitt: パン
+  v = v || 1;
+  burst(c, b, { t: t, f0: 2400, f1: 900, sweep: 0.08, q: 0.9, dur: 0.1, gain: 0.85 * v, wet: 0.15 });
+  burst(c, b, { t: t, type: "highpass", f0: 5200, q: 0.7, dur: 0.025, gain: 0.3 * v });
+  tone(c, b, { t: t, f0: 200, f1: 62, sweep: 0.12, dur: 0.15, gain: 0.95 * v, wet: 0.05 });
+  tone(c, b, { t: t, type: "triangle", f0: 540, f1: 250, sweep: 0.05, dur: 0.06, gain: 0.25 * v });
+}
+var HIT = {
+  just:   { base: 1850, parts: [[1, 0.5, 1], [1.51, 0.32, 0.75], [2.32, 0.2, 0.52], [3.4, 0.12, 0.33]], dur: 0.7, crack: 0.95, crackF: 2600, thump: 1.0, thumpF: [175, 52], thumpD: 0.26, wet: 0.5 },
+  normal: { base: 1380, parts: [[1, 0.46, 1], [1.47, 0.28, 0.7], [2.2, 0.15, 0.45]], dur: 0.42, crack: 0.75, crackF: 2000, thump: 0.9, thumpF: [150, 55], thumpD: 0.2, wet: 0.35 },
+  weak:   { base: 780, parts: [[1, 0.38, 1], [1.4, 0.2, 0.6]], dur: 0.12, crack: 0.5, crackF: 1300, thump: 0.65, thumpF: [125, 60], thumpD: 0.13, wet: 0.12 }
+};
+function hit(c, b, t, kind) {                // hit-just / hit-normal / hit-weak
+  var h = HIT[kind];
+  burst(c, b, { t: t, type: "highpass", f0: h.crackF, q: 0.7, dur: kind === "weak" ? 0.045 : 0.035, gain: h.crack, wet: h.wet * 0.5 });
+  burst(c, b, { t: t, f0: h.crackF * 0.7, f1: h.crackF * 0.35, sweep: 0.05, q: 1.1, dur: 0.07, gain: h.crack * 0.55, wet: h.wet });
+  tone(c, b, { t: t, f0: h.thumpF[0], f1: h.thumpF[1], sweep: h.thumpD, dur: h.thumpD + 0.08, gain: h.thump, wet: 0.08 });
+  tone(c, b, { t: t, type: "triangle", f0: 640, f1: 330, sweep: 0.1, dur: 0.12, gain: 0.28 });
+  ring(c, b, t, h.base, h.parts, 0.55, h.dur, h.wet);
+}
+function swingMiss(c, b, t) {                // swing-miss: ブンッ
+  burst(c, b, { t: t, type: "bandpass", f0: 320, f1: 1500, sweep: 0.11, q: 1.6, a: 0.07, dur: 0.2, gain: 0.7, wet: 0.08 });
+  burst(c, b, { t: t + 0.1, type: "bandpass", f0: 1500, f1: 420, sweep: 0.14, q: 1.4, a: 0.02, dur: 0.16, gain: 0.35 });
+  burst(c, b, { t: t, type: "highpass", f0: 2800, q: 0.6, a: 0.08, dur: 0.18, gain: 0.1 });
+  tone(c, b, { t: t + 0.09, f0: 130, f1: 70, dur: 0.18, gain: 0.35 });
+}
+/* 歓声: 母音っぽい 2 つの帯域+拍手のばらつき+ゆれ */
+function cheer(c, b, t, o) {
+  var dur = o.dur, gain = o.gain;
+  var src = c.createBufferSource(); src.buffer = noiseBuf(c); src.loop = true;
+  var sum = c.createGain(); env(sum, t, dur * 0.28, gain, dur * 0.72);
+  var swell = c.createGain(); swell.gain.value = 1;
+  var lfo = c.createOscillator(); lfo.frequency.value = o.swellHz || 2.2;
+  var lfoG = c.createGain(); lfoG.gain.value = o.swellDepth || 0.18;
+  lfo.connect(lfoG); lfoG.connect(swell.gain);
+  [[620, 1.4, 1.0], [1500, 1.8, 0.7], [2900, 2.0, 0.28]].forEach(function (fm) {
+    var f = c.createBiquadFilter(); f.type = "bandpass"; f.Q.value = fm[1];
+    f.frequency.setValueAtTime(fm[0], t);
+    f.frequency.exponentialRampToValueAtTime(fm[0] * (o.rise || 1.2), t + dur * 0.5);
+    f.frequency.exponentialRampToValueAtTime(fm[0] * 0.95, t + dur);
+    var g = c.createGain(); g.gain.value = fm[2];
+    src.connect(f); f.connect(g); g.connect(swell);
+  });
+  swell.connect(sum); route(c, b, sum, 0.55, 0);
+  src.start(t, Math.random()); src.stop(t + dur + 0.1);
+  lfo.start(t); lfo.stop(t + dur + 0.1);
+  // 人の声のような低めの「わー」を数本
+  for (var i = 0; i < (o.voices || 4); i++) {
+    var f0 = 170 + Math.random() * 190, vt = t + Math.random() * dur * 0.2;
+    var osc = c.createOscillator(); osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(f0, vt); osc.frequency.exponentialRampToValueAtTime(f0 * (1.1 + Math.random() * 0.25), vt + dur * 0.5);
+    var bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 720 + Math.random() * 300; bp.Q.value = 2.2;
+    var vg = c.createGain(); env(vg, vt, dur * 0.3, gain * 0.07, dur * 0.7);
+    osc.connect(bp); bp.connect(vg); route(c, b, vg, 0.5, (Math.random() - 0.5) * 1.2);
+    osc.start(vt); osc.stop(vt + dur + 0.1);
+  }
+  // 拍手
+  var claps = Math.round((o.claps || 14));
+  for (var k = 0; k < claps; k++) {
+    var ct = t + dur * (0.12 + Math.random() * 0.8);
+    burst(c, b, { t: ct, f0: 1300 + Math.random() * 900, q: 1.1, dur: 0.035 + Math.random() * 0.02, gain: gain * (0.07 + Math.random() * 0.07), wet: 0.4, pan: (Math.random() - 0.5) * 1.4 });
+  }
+}
+function cheerSmall(c, b, t) { cheer(c, b, t, { dur: 1.7, gain: 1.1, claps: 12, voices: 3, rise: 1.15 }); }
+function cheerBig(c, b, t) { cheer(c, b, t, { dur: 3.3, gain: 1.5, claps: 34, voices: 7, rise: 1.3, swellHz: 1.1, swellDepth: 0.3 }); }
+function bellNote(c, b, t, f, gain, dur) {
+  ring(c, b, t, f, [[1, 1, 1], [2.76, 0.35, 0.55], [5.4, 0.14, 0.3]], gain, dur, 0.45);
+}
+function homerun(c, b, t) {                  // homerun: 打撃音 + 低音の余韻 + 歓声のうねり + きらめき
+  hit(c, b, t, "just");
+  tone(c, b, { t: t, f0: 82, f1: 38, sweep: 0.6, dur: 0.7, gain: 0.55, wet: 0.2 });
+  bellNote(c, b, t + 0.03, 1760, 0.18, 1.3);
+  cheerBig(c, b, t + 0.28);
+  [1568, 2093, 2637, 3136].forEach(function (f, i) { bellNote(c, b, t + 0.85 + i * 0.1, f, 0.09, 0.9); });
+}
+function gaugeTick(c, b, t) {                // gauge-tick: 接近するほど速く・高くなる
+  var at = 0, gap = 0.17;
+  for (var i = 0; i < 9; i++) {
+    var f = 900 + (1300 * i) / 8;
+    tone(c, b, { t: t + at, type: "square", f0: f, dur: 0.022, gain: 0.16, a: 0.001 });
+    burst(c, b, { t: t + at, type: "highpass", f0: 4500, dur: 0.012, gain: 0.12 });
+    at += gap; gap *= 0.83;
+  }
+  bellNote(c, b, t + at + 0.02, 2637, 0.2, 0.55);   // ナイス帯に入った合図
+}
+function nicePitch(c, b, t) {                // nice-pitch: ミット + 上がる 2 音
+  mitt(c, b, t, 1);
+  bellNote(c, b, t + 0.1, 1319, 0.24, 0.9);
+  bellNote(c, b, t + 0.2, 1976, 0.24, 1.1);
+  burst(c, b, { t: t + 0.2, type: "highpass", f0: 7500, q: 0.7, a: 0.01, dur: 0.3, gain: 0.07, wet: 0.3 });
+}
+
+var CUES = [
+  { id: "mitt", name: "ミット音", scene: "ストライク・ボールの到達", fn: function (c, b, t) { mitt(c, b, t, 1); } },
+  { id: "hit-just", name: "打撃音 ジャスト", scene: "ジャストミート。高い「カキーン」と長い余韻", fn: function (c, b, t) { hit(c, b, t, "just"); } },
+  { id: "hit-normal", name: "打撃音 通常", scene: "ふつうに芯で当たったヒット・フライ", fn: function (c, b, t) { hit(c, b, t, "normal"); } },
+  { id: "hit-weak", name: "打撃音 弱", scene: "かすり・詰まった当たり。短く鈍い「コッ」", fn: function (c, b, t) { hit(c, b, t, "weak"); } },
+  { id: "swing-miss", name: "空振り", scene: "バットが空を切る「ブンッ」", fn: swingMiss },
+  { id: "cheer-small", name: "歓声 小", scene: "ヒット・好プレー。約 1.7 秒", fn: cheerSmall },
+  { id: "cheer-big", name: "歓声 大", scene: "長打・得点。約 3.3 秒のうねり", fn: cheerBig },
+  { id: "homerun", name: "ホームラン", scene: "打撃音 + 低音 + 歓声 + きらめき(約 4 秒)", fn: homerun },
+  { id: "gauge-tick", name: "ゲージのティック", scene: "投球ゲージ。速く高くなり、最後にナイス帯の合図", fn: gaugeTick },
+  { id: "nice-pitch", name: "ナイスピッチ", scene: "ミットの音 + 上がる 2 音のベル", fn: nicePitch }
+];
+
+/* ===== ページの配線 ===== */
+function ensure() {
+  if (!AC) { setState("このブラウザは Web Audio に対応していません。"); return false; }
+  if (!ctx) {
+    ctx = new AC();
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) { /* 非対応なら何もしない */ }
+    bus = makeBus(ctx, settings);
+    analyser = ctx.createAnalyser(); analyser.fftSize = 512;
+    bus.comp.connect(analyser);
+    loopMeter();
+  }
+  if (ctx.state !== "running") ctx.resume();
+  return true;
+}
+function setState(s) { document.getElementById("state").textContent = s; }
+var meterEl = document.getElementById("meter"), buf8 = null;
+function loopMeter() {
+  if (!analyser) return;
+  buf8 = buf8 || new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(buf8);
+  var peak = 0;
+  for (var i = 0; i < buf8.length; i++) peak = Math.max(peak, Math.abs(buf8[i] - 128) / 128);
+  meterEl.style.width = Math.min(100, peak * 110) + "%";
+  requestAnimationFrame(loopMeter);
+}
+function play(cue, btn) {
+  if (!ensure()) return;
+  cue.fn(ctx, bus, ctx.currentTime + 0.03);
+  setState("再生: " + cue.id);
+  if (btn) { btn.classList.add("on"); setTimeout(function () { btn.classList.remove("on"); }, 160); }
+}
+var grid = document.getElementById("grid");
+CUES.forEach(function (cue) {
+  var b = document.createElement("button");
+  b.type = "button"; b.className = "sfx"; b.id = "cue-" + cue.id;
+  b.innerHTML = '<span class="name"></span><span class="scene"></span><span class="cue"></span>';
+  b.querySelector(".name").textContent = cue.name;
+  b.querySelector(".scene").textContent = cue.scene;
+  b.querySelector(".cue").textContent = cue.id;
+  b.addEventListener("click", function () { play(cue, b); });
+  grid.appendChild(b);
+});
+document.getElementById("seq-strike").addEventListener("click", function () {
+  if (!ensure()) return;
+  var t = ctx.currentTime + 0.05;
+  release(ctx, bus, t); mitt(ctx, bus, t + 1.2, 1); setState("再生: pitch-release → mitt");
+});
+document.getElementById("seq-hit").addEventListener("click", function () {
+  if (!ensure()) return;
+  var t = ctx.currentTime + 0.05;
+  release(ctx, bus, t); hit(ctx, bus, t + 1.2, "just"); cheerSmall(ctx, bus, t + 1.45); setState("再生: pitch-release → hit-just → cheer-small");
+});
+var vol = document.getElementById("vol"), rev = document.getElementById("rev");
+vol.addEventListener("input", function () {
+  settings.vol = Math.pow(vol.value / 100, 1.6);
+  if (bus) bus.master.gain.value = settings.vol;
+});
+settings.vol = Math.pow(vol.value / 100, 1.6);
+rev.addEventListener("change", function () {
+  settings.reverb = rev.checked;
+  if (bus) bus.send.gain.value = rev.checked ? 1 : 0;
+});
+</script>
