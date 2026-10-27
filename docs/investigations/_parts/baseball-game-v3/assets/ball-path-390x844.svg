@@ -52,13 +52,13 @@
   <!-- 凡例 -->
   <rect x="6" y="690" width="378" height="146" fill="#000" fill-opacity="0.72"/>
   <g font-size="12" fill="#fff">
-    <text x="12" y="708">ball y speed (px/s): release-D-1048: 41 -> 60 -> 79 -> 109 -> 152</text>
-    <text x="12" y="724">D-524: 152 -> 218 -> 321 -> 495 (D-131) -> 696 -> 898 (D)</text>
-    <text x="12" y="742">ball overlaps pitcher body until about D-393 (y&lt;245)</text>
-    <text x="12" y="758">ball is &lt;=17px (rim &lt;1px) until D-655; first time clear: D-393</text>
-    <text x="12" y="774">fair window = +-91ms (foulRatio 0.61): ball 77px above cursor -> stop</text>
+    <text x="12" y="708">ball y speed px/s: release..D-655: 41, 60, 79, 109 (all &lt; 110)</text>
+    <text x="12" y="724">from D-655: 152 / D-524: 218 / D-393: 321 / D-262: 495 / D-131: 696 / D-65..D: 898</text>
+    <text x="12" y="742">ball overlaps the pitcher body (y &lt; 250) until about D-550</text>
+    <text x="12" y="758">ball &lt;= 17px (rim &lt; 1px) until D-655; &gt;= 25px only from D-393</text>
+    <text x="12" y="774">fair window = +-91ms (foulRatio 0.61): from ball 77px above cursor to D+91</text>
     <text x="12" y="790">after D the ball is held still (no motion cue for the late side)</text>
     <text x="12" y="808">source: model/world/path/pitch-path.ts, camera/rig.ts (hand calc)</text>
-    <text x="12" y="824">verified vs real frames D-400 (218,285) and D-200 (237,355)</text>
+    <text x="12" y="824">checked vs real frames D-400 (218,285) and D-200 (237,355)</text>
   </g>
 </svg>

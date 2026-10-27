@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="470" viewBox="0 0 720 470" font-family="sans-serif">
+  <!-- ストレート 145km/h(D=1310ms)・着弾=ゾーン中央・390x844 の、ボールの画面上の縦の速さ(棒, px/s)と径(線, px)。手計算(pitch-path.ts・camera/rig.ts)。
+       x 軸 = リリースからの時間(ms)。0.458 px/ms。 -->
+  <rect width="720" height="470" fill="#fff"/>
+  <text x="20" y="22" font-size="14" font-weight="bold">Ball on-screen vertical speed (bars, px/s) and diameter (line, px) vs time</text>
+  <text x="20" y="40" font-size="11" fill="#555">straight 145km/h, D=1310ms, landing=zone center, 390x844 portrait (current code)</text>
+
+  <g transform="translate(60,60)">
+    <rect x="0" y="0" width="600" height="300" fill="#fafafa" stroke="#ccc"/>
+    <!-- 投手の体(画面 y&lt;250)と重なる区間 t &lt; 760ms -->
+    <rect x="0" y="0" width="348" height="300" fill="#e8e8f4" fill-opacity="0.6"/>
+    <text x="8" y="16" font-size="11" fill="#336">overlaps pitcher body (white uniform): t &lt; 760ms (= D-550)</text>
+    <!-- フェア窓 D-91 .. D -->
+    <rect x="559" y="0" width="41" height="300" fill="#ffd23f" fill-opacity="0.35"/>
+    <text x="440" y="34" font-size="11" fill="#963">fair window starts at D-91 (1219ms)</text>
+
+    <g fill="#4a7bd0">
+      <rect x="0" y="290.9" width="120" height="9.1"/>
+      <rect x="120" y="286.6" width="60" height="13.4"/>
+      <rect x="180" y="282.4" width="60" height="17.6"/>
+      <rect x="240" y="275.7" width="60" height="24.3"/>
+      <rect x="300" y="266.1" width="60" height="33.9"/>
+      <rect x="360" y="251.5" width="60" height="48.5"/>
+      <rect x="420" y="228.5" width="60" height="71.5"/>
+      <rect x="480" y="189.8" width="60" height="110.2"/>
+      <rect x="540" y="145" width="30" height="155"/>
+      <rect x="570" y="100" width="30" height="200"/>
+    </g>
+    <g font-size="10" fill="#234" text-anchor="middle">
+      <text x="60" y="286">41</text>
+      <text x="150" y="282">60</text>
+      <text x="210" y="278">79</text>
+      <text x="270" y="271">109</text>
+      <text x="330" y="262">152</text>
+      <text x="390" y="247">218</text>
+      <text x="450" y="224">321</text>
+      <text x="510" y="185">495</text>
+      <text x="555" y="141">696</text>
+      <text x="585" y="96">898</text>
+    </g>
+
+    <polyline fill="none" stroke="#d33" stroke-width="2"
+      points="0,274.7 120,266.3 180,260.6 240,253.5 300,244.1 360,231.7 420,214.5 480,190.2 540,154.5 570,130.3 600,100"/>
+    <g fill="#d33">
+      <circle cx="0" cy="274.7" r="3"/><circle cx="300" cy="244.1" r="3"/><circle cx="420" cy="214.5" r="3"/><circle cx="540" cy="154.5" r="3"/><circle cx="600" cy="100" r="3"/>
+    </g>
+    <g font-size="10" fill="#a11">
+      <text x="4" y="266">7.5px</text>
+      <text x="304" y="236">16.6px</text>
+      <text x="424" y="207">25px</text>
+      <text x="520" y="148">43px</text>
+      <text x="560" y="88">59px</text>
+    </g>
+
+    <g font-size="10" fill="#444" text-anchor="middle">
+      <text x="0" y="316">0</text><text x="137" y="316">300</text><text x="275" y="316">600</text><text x="412" y="316">900</text><text x="550" y="316">1200</text><text x="600" y="316">1310 (D)</text>
+    </g>
+    <text x="300" y="338" font-size="11" fill="#444" text-anchor="middle">time since release (ms)</text>
+  </g>
+
+  <g font-size="11" fill="#222">
+    <text x="20" y="400">Last 400ms (= 31% of the flight): about 213 of 303px travelled, speed 355 -> 898 px/s.  First 655ms (50%): 43px travelled, speed &lt; 110 px/s.</text>
+    <text x="20" y="418">Ratio fastest/slowest interval = 898/41 = 22x.  At 60fps the ball jumps 15px per frame at arrival (ball is 59px wide).</text>
+    <text x="20" y="436">Rim of the ball (outline shell x1.12) is &lt; 1px while diameter &lt; 17px (t &lt; 655ms): a white dot on the white pitcher uniform.</text>
+    <text x="20" y="454">Looming time-to-camera at D = 2.63m / 6.9m/s (speedProfile 0.5 halves the speed at arrival) = about 380ms after D.</text>
+  </g>
+</svg>
