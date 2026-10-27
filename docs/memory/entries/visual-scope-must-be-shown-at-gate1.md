@@ -2,9 +2,9 @@
 name: visual-scope-must-be-shown-at-gate1
 type: pitfall
 status: active
-related_topics: [baseball-game]
+related_topics: [baseball-game, baseball-game-v3]
 created: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-27
 ---
 
 <!-- related_topics には、この規約/落とし穴を実際に適用したtopic-slugを追記していく(convention/pitfallで特に重要)。
