@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844" font-family="sans-serif">
+  <!-- 現行コードの投影式(camera/rig.ts・path/pitch-path.ts)から手計算した、ストレート(145km/h, D=1310ms)・着弾=ゾーン中央のボール位置。
+       390x844。実画面の連写(h12/bat-844-*.png)の D-400=(218,285) / D-200=(237,355) と ±2px で一致したため、y は実画面に合わせて +25px している。
+       背景・打者・投手は連写画像から読んだ概算の模式図(実物ではない)。 -->
+  <rect x="0" y="0" width="390" height="844" fill="#3a2a22"/>
+  <rect x="0" y="0" width="390" height="190" fill="#7a2f33"/>
+  <rect x="0" y="190" width="390" height="150" fill="#3f8f4a"/>
+  <rect x="0" y="340" width="390" height="504" fill="#c8935a"/>
+
+  <!-- 打者(概算): 画面の左 約54% 幅・上から y140〜660 を占める -->
+  <ellipse cx="62" cy="300" rx="152" ry="160" fill="#2f66c8" fill-opacity="0.75" stroke="#111" stroke-width="3"/>
+  <rect x="0" y="440" width="190" height="220" fill="#f4f4ee" fill-opacity="0.85"/>
+  <text x="8" y="318" font-size="12" fill="#fff">batter head</text>
+  <text x="8" y="560" font-size="12" fill="#222">batter body (white)</text>
+
+  <!-- 投手(概算): 白いユニフォームと赤い帽子 x192-222, y175-245 -->
+  <rect x="193" y="196" width="26" height="50" fill="#f4f4ee" stroke="#999"/>
+  <circle cx="205" cy="187" r="13" fill="#d33"/>
+  <text x="226" y="214" font-size="11" fill="#fff">pitcher</text>
+
+  <!-- ゾーン枠 155.5x174.5(x192〜347.5, y410〜585) -->
+  <rect x="192" y="410" width="155.5" height="174.5" fill="none" stroke="#fff" stroke-width="1.5"/>
+  <!-- カーソル(ミート能力56: 112x76)と、見えない当たり範囲(+ボール半径: 148x110) -->
+  <ellipse cx="269.5" cy="497" rx="74.2" ry="55.3" fill="none" stroke="#fff" stroke-dasharray="4 3" stroke-opacity="0.8"/>
+  <ellipse cx="269.5" cy="497" rx="56.3" ry="37.9" fill="#ffd23f" fill-opacity="0.32" stroke="#ffd23f" stroke-width="3"/>
+  <text x="206" y="610" font-size="11" fill="#fff">dashed = hit reach (not shown to player)</text>
+
+  <!-- ボールの軌跡: 実寸の径で描画。ラベルは「着弾 D からの残り時間」 -->
+  <g stroke="#1b1b1b" stroke-width="0.8" fill="#fff">
+    <circle cx="193" cy="194" r="3.75"/>
+    <circle cx="197" cy="205" r="5"/>
+    <circle cx="199" cy="213" r="5.85"/>
+    <circle cx="202" cy="223" r="6.9"/>
+    <circle cx="206" cy="237" r="8.3"/>
+    <circle cx="212" cy="257" r="10.15"/>
+    <circle cx="219" cy="286" r="12.7"/>
+    <circle cx="230" cy="328" r="16.3"/>
+    <circle cx="245" cy="393" r="21.6"/>
+    <circle cx="256" cy="438" r="25.2"/>
+    <circle cx="269" cy="497" r="29.7"/>
+  </g>
+  <g font-size="11" fill="#fff" stroke="#000" stroke-width="0.3">
+    <text x="262" y="176">D-1310 (release) 7.5px</text>
+    <text x="268" y="237">D-655 16.6px</text>
+    <text x="282" y="290">D-393 25px</text>
+    <text x="294" y="332">D-262 33px</text>
+    <text x="300" y="397">D-131 43px</text>
+    <text x="306" y="446">D-65 50px</text>
+    <text x="322" y="520" font-size="10">D 59px</text>
+  </g>
+
+  <!-- 凡例 -->
+  <rect x="6" y="690" width="378" height="146" fill="#000" fill-opacity="0.72"/>
+  <g font-size="12" fill="#fff">
+    <text x="12" y="708">ball y speed (px/s): release-D-1048: 41 -> 60 -> 79 -> 109 -> 152</text>
+    <text x="12" y="724">D-524: 152 -> 218 -> 321 -> 495 (D-131) -> 696 -> 898 (D)</text>
+    <text x="12" y="742">ball overlaps pitcher body until about D-393 (y&lt;245)</text>
+    <text x="12" y="758">ball is &lt;=17px (rim &lt;1px) until D-655; first time clear: D-393</text>
+    <text x="12" y="774">fair window = +-91ms (foulRatio 0.61): ball 77px above cursor -> stop</text>
+    <text x="12" y="790">after D the ball is held still (no motion cue for the late side)</text>
+    <text x="12" y="808">source: model/world/path/pitch-path.ts, camera/rig.ts (hand calc)</text>
+    <text x="12" y="824">verified vs real frames D-400 (218,285) and D-200 (237,355)</text>
+  </g>
+</svg>
