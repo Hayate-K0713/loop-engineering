@@ -1,0 +1,119 @@
+/* 試遊ログの画面(開発/試遊ビルドだけ)。全面の幕+スクロールできるシート。コピー・ダウンロードが使えない環境でも、下の枠(textarea)から取り出せる */
+
+.bb-playtest {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  background: rgba(4, 10, 18, 0.82);
+  pointer-events: auto;
+  touch-action: pan-y;
+}
+
+.bb-playtest__sheet {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 520px);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px 16px;
+  border: 3px solid var(--bs-ink, #20140a);
+  border-radius: 10px;
+  background: var(--bs-panel-solid, #15283a);
+  color: var(--bs-text, #f1f5f9);
+  font-family: var(--bs-font, system-ui, sans-serif);
+  font-size: 13px;
+}
+
+.bb-playtest__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bb-playtest__title {
+  margin: 0;
+  color: var(--bs-accent, #ffd23f);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+/* ボタンは 44px 以上 */
+.bb-playtest .bb-playtest__button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.bb-playtest .bb-playtest__button--danger {
+  color: #ff8d80;
+}
+
+.bb-playtest__warn {
+  margin: 0;
+  padding: 8px 10px;
+  border: 2px solid var(--bs-out, #e8473c);
+  border-radius: 6px;
+  background: rgba(232, 71, 60, 0.18);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.bb-playtest__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.bb-playtest__table th,
+.bb-playtest__table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 700;
+  text-align: left;
+}
+
+.bb-playtest__table td {
+  width: 6em;
+  text-align: right;
+}
+
+.bb-playtest__json {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 120px;
+  padding: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: #0b1722;
+  color: var(--bs-text, #f1f5f9);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  resize: vertical;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.bb-playtest__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bb-playtest__status {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--bs-muted, #a3b8ca);
+  font-weight: 700;
+  line-height: 1.5;
+}

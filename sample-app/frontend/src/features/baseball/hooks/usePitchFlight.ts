@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { arrivalDue, holdArrival, type ArrivalHold } from "../model/world/sequence/arrival";
-import { swingAtMs } from "../model/world/sequence/swing-time";
+import { inputLatencyOf, swingAtMs } from "../model/world/sequence/swing-time";
 import type { SwingOrigin } from "../types/batting";
 import type { PitchFlight } from "../types/pitch";
 import { useAnimationFrame, type FrameResult } from "./useAnimationFrame";
@@ -32,6 +32,12 @@ export type UsePitchFlightResult = {
    * 入力イベントの `origin` があればその時刻から求め、`null`(プログラムからの呼び出し)は現在時刻から求める(`swingAtMs`)。
    */
   readonly getSwingAtMs: (origin: SwingOrigin | null) => number;
+  /**
+   * 入力イベント `origin` の時刻での、リリースからの経過ゲーム時間(ms。入力の遅延補正を引かない)。ロックオンの進行度(押下時刻の `progress`)に使う:
+   * その時刻に画面に出ていた有効カーソルと、判定に使う有効カーソルを一致させるため、`getSwingAtMs`(補正後の過去の時刻)ではなくこちらを使う。
+   * `origin` が `null` は現在時刻(`getElapsedMs` と同じ)。一度も `flight` が出ていなければ 0。
+   */
+  readonly getElapsedAtMs: (origin: SwingOrigin | null) => number;
   /**
    * 到達通知(`onArrive`)を `ms`(壁時計 ms。`TAP_ARRIVAL_HOLD_MS` を上限)だけ保留する。タップ候補の指が下りている間に呼ぶ。
    * 保留は時間で自動的に切れる(指を離すイベントが届かなくても試合が止まらない)。`ms` が正でない・`NaN` は何もしない。
@@ -74,6 +80,12 @@ export function usePitchFlight(options: UsePitchFlightOptions): UsePitchFlightRe
     [latest],
   );
 
+  const getElapsedAtMs = useCallback(
+    (origin: SwingOrigin | null): number =>
+      origin === null || startedAtRef.current === null ? getElapsedMs() : getSwingAtMs(origin) + inputLatencyOf(origin.inputKind),
+    [getElapsedMs, getSwingAtMs],
+  );
+
   const holdArrivalFor = useCallback(
     (ms: number): void => {
       const { flight } = latest.current;
@@ -102,5 +114,5 @@ export function usePitchFlight(options: UsePitchFlightOptions): UsePitchFlightRe
     return "stop";
   }, seq);
 
-  return { getElapsedMs, getSwingAtMs, holdArrivalFor, releaseArrival };
+  return { getElapsedMs, getSwingAtMs, getElapsedAtMs, holdArrivalFor, releaseArrival };
 }

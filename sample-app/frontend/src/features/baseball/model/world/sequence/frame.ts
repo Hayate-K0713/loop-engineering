@@ -1,19 +1,32 @@
-import type { CursorRadii } from "../../../types/batting";
+import type { AssistParams, CursorRadii } from "../../../types/batting";
 import type { ZonePoint } from "../../../types/common";
-import type { CourseCell, PitchFlight } from "../../../types/pitch";
+import type { PitchFlight } from "../../../types/pitch";
 import type { BatterPose, CameraPose, CharacterPose, SafeArea, SceneFrame, SceneLayout, ScenePhase, UniformColors, Vec3 } from "../../../types/scene";
-import { cellToPoint, clamp } from "../../pitch/zone";
-import { ballScaleFor, battingCameraFor, blendCamera, chaseBlendAt, chaseCamera, portraitBlendAt, usableSafeArea } from "../camera/rig";
+import { previewCenterOf } from "../../batting/assist";
+import { clamp } from "../../pitch/zone";
+import {
+  ballScaleFor,
+  battingCameraFor,
+  blendCamera,
+  chaseBlendAt,
+  chaseCamera,
+  outlineScaleFor,
+  portraitBlendAt,
+  ringWidthFor,
+  usableSafeArea,
+} from "../camera/rig";
 import { batterStancePose, batterSwingPose } from "../motion/batter";
+import { batLengthScaleFor, batterRootFor } from "../motion/batter-layout";
 import { catcherPose, fielderIdlePose, fielderRunPose } from "../motion/fielder";
 import { pitcherFollowPose, pitcherWindupPose } from "../motion/pitcher";
-import { type JointPose, type PoseRoot, placeBatter, placeCharacter } from "../motion/pose";
+import { type JointPose, placeBatter, placeCharacter } from "../motion/pose";
 import { type BattedPlan, battedBallAt } from "../path/batted-path";
 import { FIELDER_SLOTS, type FielderSlot, fielderRunAt } from "../path/fielders";
 import { heldBallAt, pitchBallAt } from "../path/pitch-path";
-import { ZONE_HALF_HEIGHT, cellToWorld, zoneToWorld } from "../space/coords";
+import { ZONE_HALF_HEIGHT, zoneToWorld } from "../space/coords";
 import { RELEASE_POINT, WORLD_PARAMS } from "../space/params";
-import { lerp } from "../space/vec3";
+import { ballHaloAt, ballSpinAt } from "./ball-look";
+import { guideFrameAt, HIDDEN_GUIDE } from "./guide";
 import { type PlayFielder, type PlayPlan, swingProgressAt } from "./play-plan";
 
 // 時刻 t の画面の全状態(`SceneFrame`)の合成。唯一の外向き関数は `sceneFrameAt`。状態を持たず、入力と時刻だけで決まる。
@@ -36,10 +49,13 @@ export type SceneFrameInput = {
   readonly safeArea: SafeArea | null;
   /** 描画に使うユニフォーム色。そのまま `SceneFrame.uniforms` に写す(どの色を渡すかは呼び出し側が決める)。 */
   readonly uniforms: UniformColors;
-  /** スイングカーソル(人間打撃中のみ `visible`)。 */
-  readonly cursor: { readonly visible: boolean; readonly point: ZonePoint; readonly radii: CursorRadii };
-  /** 人間守備で選択中のセル。 */
-  readonly aim: CourseCell | null;
+  /**
+   * スイングカーソル(人間打撃中のみ `visible`)。`point` = 判定と表示に使う有効カーソル(ロックオン適用後。hooks が `lockOnCursor` で作る)、
+   * `raw` = 指で動かした素のカーソル(有効カーソルと離れているときだけ薄い印を出す)。
+   */
+  readonly cursor: { readonly visible: boolean; readonly point: ZonePoint; readonly raw: ZonePoint; readonly radii: CursorRadii };
+  /** 打撃のアシスト(予告の見せ方 `preview`・`fade` の半径とずれ)。難易度から `assistFor` で引いた値を渡す。 */
+  readonly assist: AssistParams;
   /** 5×5 格子の表示(人間守備)。 */
   readonly grid: boolean;
 };
@@ -49,12 +65,12 @@ const HALF_WIDTH = WORLD_PARAMS.zone.halfWidth;
 const CHASE = WORLD_PARAMS.chaseCamera;
 const ZONE_PULSE = WORLD_PARAMS.cue.zonePulse;
 const LANDING_MARK = WORLD_PARAMS.landingMark;
+const BALL = WORLD_PARAMS.ball;
+const GUIDE = WORLD_PARAMS.guide;
+const CATCH = WORLD_PARAMS.catch;
 
-/** グリッドの1セルの幅(ゾーン単位。隣り合うセル中心の差から求める = 2/3)。 */
-const CELL_SPAN = cellToPoint({ col: 3, row: 2 }).x - cellToPoint({ col: 2, row: 2 }).x;
-
-/** 狙いが無いときの `aim.position`(中央のセル)。 */
-const CENTER_CELL: CourseCell = { col: 2, row: 2 };
+/** 素のカーソルの印を出す、有効カーソルとの最小の距離(ゾーン単位。390×844 で約 4px)。これより近いと印は有効カーソルに隠れるので出さない。 */
+const RAW_MARK_MIN_DISTANCE = 0.05;
 
 /** 縦横比が使えない(非有限・0 以下)ときに使う値(横長)。 */
 const DEFAULT_ASPECT = 16 / 9;
@@ -149,12 +165,38 @@ function cameraFrame(ctx: FrameContext): CameraPose {
   return blendCamera(base, chaseCamera(ctx.ball, ctx.aspect, 0), ctx.chase.position, ctx.chase.target);
 }
 
-/** ボール。中継カメラ中(`ctx.chase !== null`)だけ、最小表示径を保つ倍率 `scale` を掛ける(それ以外は 1)。 */
-function ballFrame(ctx: FrameContext, camera: CameraPose): SceneFrame["ball"] {
-  if (ctx.ball === null) {
-    return { visible: false, position: RELEASE_POINT, scale: 1 };
+/**
+ * 縫い目の回転に使う経過時間(ms)。接触前は到達 `D` で止める(着弾点で待つ間は回らない)、接触後は `D` から連続して進める。
+ * 投球が無い(`flight = null`)ときは `tMs` のまま。
+ */
+function spinMsOf(ctx: FrameContext): number {
+  const { flight } = ctx.input;
+  if (flight === null) {
+    return ctx.tMs;
   }
-  return { visible: true, position: ctx.ball, scale: ctx.chase === null ? 1 : ballScaleFor(camera, ctx.ball) };
+  const contactMs = ctx.plan?.contactMs ?? null;
+  return ctx.batted === null || contactMs === null ? Math.min(ctx.tMs, flight.durationMs) : flight.durationMs + (ctx.tMs - contactMs);
+}
+
+/**
+ * ボール。`scale` は最小表示径を保つ倍率(1 以上): 中継カメラ中(`ctx.chase !== null`)は `minScreenDiameterRatio`、
+ * それ以外(打撃カメラの飛行中)は `minScreenDiameterRatioFlight`。`outlineScale` は縁取りの殻が画面で 2px 以上になる倍率。
+ * 非表示のときも `rotation`・`halo`・`outlineScale` は有限の値を返す。
+ */
+function ballFrame(ctx: FrameContext, camera: CameraPose): SceneFrame["ball"] {
+  const kind = ctx.input.flight?.kind ?? "straight";
+  if (ctx.ball === null) {
+    return { visible: false, position: RELEASE_POINT, scale: 1, rotation: ballSpinAt(kind, 0), halo: ballHaloAt(), outlineScale: outlineScaleFor(camera, RELEASE_POINT, 1) };
+  }
+  const scale = ballScaleFor(camera, ctx.ball, ctx.chase === null ? BALL.minScreenDiameterRatioFlight : BALL.minScreenDiameterRatio);
+  return {
+    visible: true,
+    position: ctx.ball,
+    scale,
+    rotation: ballSpinAt(kind, spinMsOf(ctx)),
+    halo: ballHaloAt(),
+    outlineScale: outlineScaleFor(camera, ctx.ball, scale),
+  };
 }
 
 /** 投手の関節ポーズ。idle は待機、windup は壁時計の進行 `u`、リリース後はフォロースルー(`t = 0` から)。 */
@@ -182,23 +224,20 @@ function catcherFrame(ctx: FrameContext): CharacterPose {
 /**
  * バット高さを、ワールドでの高さ(m)から打者ローカルの値に直す。motion は構え・接触(`swing.height`)・巻き上げをワールドの高さで返すが、
  * バットは打者の root の子なので、描画では root の拡大率がかかり、足元の y が足される(ワールドの高さ = y + 拡大率 × ローカル値)。
- * 打ち消さないと、拡大率 0.92 の打者ではバットがボールより低くなる。
+ * 打ち消さないと、拡大率の小さい打者ではバットがボールより低くなる。`rootScale` は縦横比の補間後の拡大率(`batterRootFor(aspect).scale`)。
  */
-function batHeightInRoot(worldHeight: number): number {
-  return (worldHeight - ACTORS.batter.position.y) / ACTORS.batter.scale;
+function batHeightInRoot(worldHeight: number, rootScale: number): number {
+  return (worldHeight - ACTORS.batter.position.y) / rootScale;
 }
 
-/** 打者の足元。x は横長 `position.x` から縦長 `portraitX` へ縦横比の補間 `k` で混ぜる(y・z は不変)。 */
-function batterRoot(aspect: number): PoseRoot {
-  const { position, portraitX, yaw, scale } = ACTORS.batter;
-  return { position: { x: lerp(position.x, portraitX, portraitBlendAt(aspect)), y: position.y, z: position.z }, yaw, scale };
-}
-
+/** 打者。足元・拡大率は `batterRootFor(aspect)`、バット軸の長さは `batLengthScaleFor(aspect)`(縦長の縮小に合わせて伸ばす)。 */
 function batterFrame(ctx: FrameContext): BatterPose {
   const swing = ctx.plan?.swing ?? null;
   const portrait = portraitBlendAt(ctx.aspect);
+  const root = batterRootFor(ctx.aspect);
   const joints = swing === null ? batterStancePose(portrait) : batterSwingPose(swingProgressAt(swing, ctx.tMs), swing.height, portrait);
-  return placeBatter({ ...joints, bat: { ...joints.bat, height: batHeightInRoot(joints.bat.height) } }, batterRoot(ctx.aspect));
+  const bat = { ...joints.bat, height: batHeightInRoot(joints.bat.height, root.scale), lengthScale: batLengthScaleFor(ctx.aspect) };
+  return placeBatter({ ...joints, bat }, root);
 }
 
 /** 打球を追う野手。走っている間は走りのポーズ、到着後は待機姿勢で、向きは目的地の方向。 */
@@ -287,25 +326,49 @@ function isSwinging(ctx: FrameContext): boolean {
   return progress > 0 && progress < 1;
 }
 
+/** スイングカーソル(有効カーソル)と、素のカーソルの印。素の印は有効カーソルと `RAW_MARK_MIN_DISTANCE` 以上離れているときだけ出す。 */
 function cursorFrame(ctx: FrameContext): SceneFrame["cursor"] {
   const { cursor } = ctx.input;
+  const shown = cursor.visible && ctx.chase === null;
+  const apart = Math.hypot(cursor.raw.x - cursor.point.x, cursor.raw.y - cursor.point.y) >= RAW_MARK_MIN_DISTANCE;
   return {
-    visible: cursor.visible && ctx.chase === null,
+    visible: shown,
     position: zoneToWorld(cursor.point),
     scaleX: cursor.radii.rx * HALF_WIDTH,
     scaleY: cursor.radii.ry * ZONE_HALF_HEIGHT,
     flash: isSwinging(ctx),
+    raw: { visible: shown && apart, position: zoneToWorld(cursor.raw) },
   };
 }
 
-function aimFrame(ctx: FrameContext): SceneFrame["aim"] {
-  const { aim } = ctx.input;
-  return {
-    visible: aim !== null && ctx.chase === null,
-    position: cellToWorld(aim ?? CENTER_CELL),
-    width: CELL_SPAN * HALF_WIDTH,
-    height: CELL_SPAN * ZONE_HALF_HEIGHT,
-  };
+/**
+ * 着弾点の予告を消す時刻(ms)。接触なしの plan はボールが消える時刻(`ballHoldUntilMs` = `max(D + holdMs, 受付時刻)`)、
+ * plan が無い間(人間の判定待ち)と接触ありは `D + holdMs`。
+ */
+function guideHideAtMs(ctx: FrameContext, flight: PitchFlight): number {
+  const plan = ctx.plan;
+  return plan !== null && plan.contactMs === null ? plan.ballHoldUntilMs : flight.durationMs + CATCH.holdMs;
+}
+
+/**
+ * 打撃の予告(着弾点の印と縮むリング)。人間打撃(`layout = "batting"`)の飛行中・演出中で、中継カメラに移り始めるまで出す。
+ * 守備の `guide`(照準・ゲージ)は段階 B で合成するので、ここでは出さない。リングの線幅は最終のカメラから `ringWidthFor` で m に直す。
+ */
+function guideFrame(ctx: FrameContext, camera: CameraPose): SceneFrame["guide"] {
+  const { flight, phase, layout, assist } = ctx.input;
+  if (layout !== "batting" || flight === null || (phase !== "flight" && phase !== "play") || ctx.chase !== null) {
+    return HIDDEN_GUIDE;
+  }
+  return guideFrameAt({
+    tMs: ctx.tMs,
+    durationMs: flight.durationMs,
+    hideAtMs: guideHideAtMs(ctx, flight),
+    landing: flight.landing,
+    preview: assist.preview,
+    fadeRadius: assist.fadeRadius,
+    fadeCenter: previewCenterOf(assist, flight.landing, flight.seq),
+    ringWidth: ringWidthFor(camera, zoneToWorld(flight.landing), GUIDE.ringWidthRatio),
+  });
 }
 
 /** 時刻 `input.tMs` の画面の全状態。同じ入力は同じ結果になり、入力を変更しない。 */
@@ -325,6 +388,6 @@ export function sceneFrameAt(input: SceneFrameInput): SceneFrame {
     zone: zoneFrame(ctx),
     landingMark: landingMarkFrame(ctx, camera),
     cursor: cursorFrame(ctx),
-    aim: aimFrame(ctx),
+    guide: guideFrame(ctx, camera),
   };
 }

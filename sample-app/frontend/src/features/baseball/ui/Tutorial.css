@@ -1,0 +1,356 @@
+/* 遊び方の説明カード。全面の幕(背後の入力を受け止める)+中央のカード。絵は CSS だけ(画像なし)。
+   baseball-stage.css の --bs-* を使う(未定義でも崩れないよう既定値を持たせる) */
+
+.bb-tutorial {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(4, 10, 18, 0.62);
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bb-tutorial__card {
+  box-sizing: border-box;
+  display: grid;
+  gap: 10px;
+  width: min(100%, 340px);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 16px 18px 18px;
+  border: 3px solid var(--bs-ink, #20140a);
+  border-radius: 10px;
+  background: var(--bs-panel-solid, #15283a);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.45);
+  color: var(--bs-text, #f1f5f9);
+  font-family: var(--bs-font, system-ui, sans-serif);
+  text-align: center;
+}
+
+.bb-tutorial__page {
+  margin: 0;
+  color: var(--bs-muted, #a3b8ca);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1em;
+}
+
+.bb-tutorial__title {
+  margin: 0;
+  color: var(--bs-accent, #ffd23f);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.3;
+  text-shadow: var(--bs-stroke-thin, none);
+}
+
+.bb-tutorial__body {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.65;
+  text-align: left;
+}
+
+.bb-tutorial__dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.bb-tutorial__dot-page {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.bb-tutorial__dot-page--current {
+  background: var(--bs-accent, #ffd23f);
+}
+
+/* 「つぎへ」「はじめる」: 44px 以上 */
+.bb-tutorial .bb-tutorial__next {
+  min-width: 140px;
+  min-height: 48px;
+  justify-self: center;
+}
+
+/* ---- 絵(幅 220px × 高さ 118px。部品は種類ごとに必要なものだけ出す) ---- */
+
+.bb-tutorial__art {
+  position: relative;
+  width: 220px;
+  height: 118px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(90deg, #4fa563 0 22px, #459858 22px 44px) left bottom / 100% 62% no-repeat,
+    linear-gradient(180deg, #3a7bd5 0%, #8cc5f2 100%);
+}
+
+.bb-tutorial__art > span {
+  position: absolute;
+  display: none;
+}
+
+/* ゾーン枠 */
+.bb-tutorial__zone {
+  left: 76px;
+  top: 22px;
+  width: 68px;
+  height: 78px;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+/* ボールの来る場所(シアンの点) */
+.bb-tutorial__target {
+  left: 106px;
+  top: 52px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #12222f;
+  border-radius: 50%;
+  background: #5ce1ff;
+}
+
+/* 縮むリング */
+.bb-tutorial__ring {
+  left: 90px;
+  top: 36px;
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  border: 3px solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(92, 225, 255, 0.8);
+  animation: bb-tutorial-ring 1.6s ease-in infinite;
+}
+
+/* カーソル(黄) */
+.bb-tutorial__cursor {
+  left: 98px;
+  top: 64px;
+  width: 24px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 3px solid #ffd23f;
+  border-radius: 50%;
+  background: rgba(255, 210, 63, 0.3);
+}
+
+/* 指 */
+.bb-tutorial__finger {
+  left: 116px;
+  top: 78px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #20140a;
+  border-radius: 50%;
+  background: #ffe0b8;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* 球種チップ */
+.bb-tutorial__chips {
+  left: 40px;
+  top: 42px;
+  gap: 8px;
+}
+
+.bb-tutorial__chips i {
+  display: block;
+  width: 34px;
+  height: 34px;
+  box-sizing: border-box;
+  border: 3px solid #20140a;
+  border-radius: 8px;
+  background: #1b3a56;
+}
+
+.bb-tutorial__chips i:nth-child(2) {
+  border-color: #ffd23f;
+}
+
+/* drag: ゾーンとカーソルと指。指のスライドにカーソルがついていく */
+.bb-tutorial__art--drag .bb-tutorial__zone,
+.bb-tutorial__art--drag .bb-tutorial__cursor,
+.bb-tutorial__art--drag .bb-tutorial__finger {
+  display: block;
+}
+
+.bb-tutorial__art--drag .bb-tutorial__cursor {
+  animation: bb-tutorial-slide-cursor 2.2s ease-in-out infinite;
+}
+
+.bb-tutorial__art--drag .bb-tutorial__finger {
+  animation: bb-tutorial-slide-finger 2.2s ease-in-out infinite;
+}
+
+/* preview: ゾーンと点とカーソル。カーソルが点へ寄っていく */
+.bb-tutorial__art--preview .bb-tutorial__zone,
+.bb-tutorial__art--preview .bb-tutorial__target,
+.bb-tutorial__art--preview .bb-tutorial__cursor {
+  display: block;
+}
+
+.bb-tutorial__art--preview .bb-tutorial__cursor {
+  animation: bb-tutorial-to-target 2.2s ease-in-out infinite;
+}
+
+/* tap: ゾーン・点・リング・カーソル(点の上)・指がポンと押す */
+.bb-tutorial__art--tap .bb-tutorial__zone,
+.bb-tutorial__art--tap .bb-tutorial__target,
+.bb-tutorial__art--tap .bb-tutorial__ring,
+.bb-tutorial__art--tap .bb-tutorial__cursor,
+.bb-tutorial__art--tap .bb-tutorial__finger {
+  display: block;
+}
+
+.bb-tutorial__art--tap .bb-tutorial__cursor {
+  left: 98px;
+  top: 49px;
+}
+
+.bb-tutorial__art--tap .bb-tutorial__finger {
+  left: 150px;
+  top: 76px;
+  animation: bb-tutorial-tap 1.6s ease-in infinite;
+}
+
+/* select: 球種チップを指で選ぶ */
+.bb-tutorial__art--select .bb-tutorial__chips,
+.bb-tutorial__art--select .bb-tutorial__finger {
+  display: flex;
+}
+
+.bb-tutorial__art--select .bb-tutorial__chips {
+  left: 41px;
+  top: 28px;
+}
+
+.bb-tutorial__art--select .bb-tutorial__finger {
+  left: 96px;
+  top: 64px;
+  animation: bb-tutorial-tap 1.6s ease-in-out infinite;
+}
+
+/* aim: ゾーンをなぞって狙いを決める(狙いの点が指についていく) */
+.bb-tutorial__art--aim .bb-tutorial__zone,
+.bb-tutorial__art--aim .bb-tutorial__target,
+.bb-tutorial__art--aim .bb-tutorial__finger {
+  display: block;
+}
+
+.bb-tutorial__art--aim .bb-tutorial__target {
+  animation: bb-tutorial-slide-target 2.2s ease-in-out infinite;
+}
+
+.bb-tutorial__art--aim .bb-tutorial__finger {
+  animation: bb-tutorial-slide-finger 2.2s ease-in-out infinite;
+}
+
+/* gauge: 縮むリングが狙いに重なる瞬間に指でタップ */
+.bb-tutorial__art--gauge .bb-tutorial__zone,
+.bb-tutorial__art--gauge .bb-tutorial__target,
+.bb-tutorial__art--gauge .bb-tutorial__ring,
+.bb-tutorial__art--gauge .bb-tutorial__finger {
+  display: block;
+}
+
+.bb-tutorial__art--gauge .bb-tutorial__finger {
+  left: 150px;
+  top: 76px;
+  animation: bb-tutorial-tap 1.6s ease-in infinite;
+}
+
+@keyframes bb-tutorial-ring {
+  from {
+    transform: scale(2.3);
+    opacity: 0.4;
+  }
+
+  80%,
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bb-tutorial-slide-cursor {
+  0%,
+  100% {
+    transform: translate(-14px, 8px);
+  }
+
+  50% {
+    transform: translate(14px, -18px);
+  }
+}
+
+@keyframes bb-tutorial-slide-finger {
+  0%,
+  100% {
+    transform: translate(-14px, 8px);
+  }
+
+  50% {
+    transform: translate(14px, -18px);
+  }
+}
+
+@keyframes bb-tutorial-slide-target {
+  0%,
+  100% {
+    transform: translate(-16px, 14px);
+  }
+
+  50% {
+    transform: translate(16px, -14px);
+  }
+}
+
+@keyframes bb-tutorial-to-target {
+  0%,
+  15% {
+    transform: translate(-16px, 16px);
+  }
+
+  75%,
+  100% {
+    transform: translate(0, -15px);
+  }
+}
+
+/* 80% = リングが点に重なる瞬間にポン */
+@keyframes bb-tutorial-tap {
+  0%,
+  70% {
+    transform: scale(1);
+  }
+
+  80% {
+    transform: scale(0.8);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-tutorial__art * {
+    animation: none !important;
+  }
+}

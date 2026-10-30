@@ -3,9 +3,11 @@ import type { BattedBall, InPlayResult, SwingInput } from "../../../types/battin
 import type { PitchFlight } from "../../../types/pitch";
 import type { CameraPose, SafeArea, SceneFrame, SceneLayout, ScenePhase, UniformColors, Vec3 } from "../../../types/scene";
 import type { PitchOutcomeView } from "../../../types/view";
+import { ASSIST_TABLE, previewCenterOf } from "../../batting/assist";
 import { BATTING_PARAMS } from "../../batting/params";
-import { ballScaleFor, battingCamera, battingCameraFor, blendCamera, chaseBlendAt, chaseCamera, portraitBlendAt } from "../camera/rig";
+import { ballScaleFor, battingCamera, battingCameraFor, blendCamera, chaseBlendAt, chaseCamera, outlineScaleFor, portraitBlendAt, ringWidthFor } from "../camera/rig";
 import { batterStancePose, batterSwingPose } from "../motion/batter";
+import { batLengthScaleFor, batterRootFor } from "../motion/batter-layout";
 import { catcherPose, fielderIdlePose } from "../motion/fielder";
 import { pitcherFollowPose, pitcherWindupPose } from "../motion/pitcher";
 import { type BatterJoints, placeBatter, placeCharacter } from "../motion/pose";
@@ -32,7 +34,11 @@ const PORTRAIT_SAFE_AREA: SafeArea = { top: 0.1837, bottom: 0.7 };
 const UNIFORMS_A: UniformColors = { offense: 0x2f63c8, defense: 0xe8473c };
 const UNIFORMS_B: UniformColors = { offense: 0xe8473c, defense: 0x2f63c8 };
 
-const FLIGHT: PitchFlight = { seq: 7, kind: "straight", aim: { x: 0.2, y: 0.1 }, landing: { x: 0.2, y: 0.1 }, speedKmh: 140, durationMs: 480 };
+const FLIGHT: PitchFlight = { seq: 7, kind: "straight", aim: { x: 0.2, y: 0.1 }, landing: { x: 0.2, y: 0.1 }, speedKmh: 140, durationMs: 480, quality: "normal" };
+const NORMAL = ASSIST_TABLE.normal;
+const HARD = ASSIST_TABLE.hard;
+const BALL = WORLD_PARAMS.ball;
+const GUIDE = WORLD_PARAMS.guide;
 const CPU_RESOLVED_MS = FLIGHT.durationMs - CPU_SWING_LEAD_MS;
 /** 人間の遅いクリック(durationMs より後)。contactMs = atMs + 60。 */
 const LATE_SWING: SwingInput = { kind: "meet", cursor: { x: 0.3, y: -0.2 }, atMs: FLIGHT.durationMs - 10 };
@@ -86,8 +92,8 @@ function inputOf(overrides: Partial<SceneFrameInput> = {}): SceneFrameInput {
     layout: "batting",
     safeArea: null,
     uniforms: UNIFORMS_A,
-    cursor: { visible: true, point: { x: 0.25, y: -0.4 }, radii: { rx: 0.5, ry: 0.3 } },
-    aim: { col: 1, row: 3 },
+    cursor: { visible: true, point: { x: 0.25, y: -0.4 }, raw: { x: 0.25, y: -0.4 }, radii: { rx: 0.5, ry: 0.3 } },
+    assist: NORMAL,
     grid: true,
     ...overrides,
   };
@@ -227,16 +233,18 @@ describe("sceneFrameAt: ボール", () => {
 
   it("flight: リリース直後はリリース点、durationMs までは pitchBallAt、以降は plan が無い間ずっと着弾点(動かない・消えない)", () => {
     const at = (tMs: number): SceneFrame["ball"] => frameAt(null, tMs, { phase: "flight" }).ball;
-    expect(at(0)).toEqual({ visible: true, position: RELEASE_POINT, scale: 1 });
-    expect(at(200)).toEqual({ visible: true, position: pitchBallAt(FLIGHT, 200), scale: 1 });
+    expect(at(0)).toMatchObject({ visible: true, position: RELEASE_POINT });
+    expect(at(200)).toMatchObject({ visible: true, position: pitchBallAt(FLIGHT, 200) });
     expect(at(FLIGHT.durationMs).position).toEqual(zoneToWorld(FLIGHT.landing));
-    expect(at(FLIGHT.durationMs + 80)).toEqual({ visible: true, position: heldBallAt(FLIGHT), scale: 1 });
-    expect(at(FLIGHT.durationMs + 1000)).toEqual({ visible: true, position: heldBallAt(FLIGHT), scale: 1 });
-    expect(at(FLIGHT.durationMs + 100000)).toEqual({ visible: true, position: heldBallAt(FLIGHT), scale: 1 });
+    for (const tMs of [FLIGHT.durationMs + 80, FLIGHT.durationMs + 1000, FLIGHT.durationMs + 100000]) {
+      expect(at(tMs)).toMatchObject({ visible: true, position: heldBallAt(FLIGHT) });
+    }
   });
 
   it("phase が play でも plan が無い間(人間が振る/見逃すのを待っている間)は着弾点に留める", () => {
-    expect(frameAt(null, FLIGHT.durationMs + 400, { phase: "play" }).ball).toEqual({ visible: true, position: heldBallAt(FLIGHT), scale: 1 });
+    const ball = frameAt(null, FLIGHT.durationMs + 400, { phase: "play" }).ball;
+    expect(ball.visible).toBe(true);
+    expect(ball.position).toEqual(heldBallAt(FLIGHT));
   });
 
   it("flight が無ければ(play で打球が始まる前)非表示", () => {
@@ -391,13 +399,40 @@ describe("sceneFrameAt: ボールの消失と再出現(性質 #8b)", () => {
   });
 });
 
-describe("sceneFrameAt: ball.scale(中継カメラ中の最小表示径)", () => {
-  it("中継カメラに移る前(投球中・接触前・打球なし)は 1", () => {
-    const scaled = GRID_INPUTS.filter((input) => {
+/** 表示高に対するボール(倍率込み)の直径の比。 */
+function diameterRatio(frame: SceneFrame): number {
+  const dist = distance(frame.ball.position, frame.camera.position);
+  return (frame.ball.scale * 2 * WORLD_PARAMS.ballRadius) / (2 * dist * Math.tan((frame.camera.fovDeg * Math.PI) / 360));
+}
+
+describe("sceneFrameAt: ball.scale(飛行中・中継カメラ中の最小表示径)", () => {
+  it("中継カメラに移る前(投球中・接触前・打球なし)は、最終のカメラの ballScaleFor(飛行用の最小径)と一致する", () => {
+    const wrong = GRID_INPUTS.filter((input) => {
       const frame = sceneFrameAt(input);
-      return frame.zone.visible && frame.ball.scale !== 1;
+      return frame.ball.visible && frame.zone.visible && Math.abs(frame.ball.scale - ballScaleFor(frame.camera, frame.ball.position, BALL.minScreenDiameterRatioFlight)) > 1e-12;
     });
-    expect(scaled).toHaveLength(0);
+    expect(wrong).toHaveLength(0);
+  });
+
+  it("飛行中(リリースから D 以降も)の表示径は、どの構図でも minScreenDiameterRatioFlight 以上。倍率は 1 以上で、リリース直後の倍率は 1 を超え、時間とともに減る(連続・単調非増加)", () => {
+    const wrong = COMPOSITIONS.filter((composition) => {
+      const times = Array.from({ length: 100 }, (_, i) => (i * (FLIGHT.durationMs + 200)) / 99);
+      const frames = times.map((tMs) => frameAt(null, tMs, { phase: "flight", ...composition }));
+      const scales = frames.map((frame) => frame.ball.scale);
+      const monotone = scales.every((scale, i) => i === 0 || scale <= (scales.at(i - 1) ?? 0) + 1e-9);
+      const large = frames.every((frame) => frame.ball.scale >= 1 && diameterRatio(frame) >= BALL.minScreenDiameterRatioFlight - 1e-12);
+      return !(monotone && large && (scales.at(0) ?? 0) > 1);
+    });
+    expect(wrong.map((composition) => composition.aspect)).toEqual([]);
+  });
+
+  it("390×844 の縦長: リリース直後の倍率は約 2.0、D−730ms 付近までに 1 に戻る(play 分冊 §1-4)", () => {
+    const long: PitchFlight = { ...FLIGHT, durationMs: 1300 };
+    const at = (tMs: number): number => frameAt(null, tMs, { phase: "flight", flight: long, aspect: PORTRAIT_ASPECT }).ball.scale;
+    expect(at(0)).toBeGreaterThan(1.8);
+    expect(at(0)).toBeLessThan(2.2);
+    expect(at(long.durationMs - 600)).toBe(1);
+    expect(at(long.durationMs)).toBe(1);
   });
 
   it("中継カメラ中は、最終のカメラ(blend 中を含む)の ballScaleFor と一致し、表示高に対する直径の比が minScreenDiameterRatio 以上", () => {
@@ -406,11 +441,8 @@ describe("sceneFrameAt: ball.scale(中継カメラ中の最小表示径)", () =>
     const cases = CHASE_PLANS.flatMap((plan) => COMPOSITIONS.flatMap((composition) => sinces.map((since) => ({ plan, composition, since }))));
     const wrong = cases.filter(({ plan, composition, since }) => {
       const frame = frameAt(plan, chaseFrom(plan) + since, composition);
-      const camera = frame.camera;
-      const dist = distance(frame.ball.position, camera.position);
-      const ratio = (frame.ball.scale * 2 * WORLD_PARAMS.ballRadius) / (2 * dist * Math.tan((camera.fovDeg * Math.PI) / 360));
-      const matches = Math.abs(frame.ball.scale - ballScaleFor(camera, frame.ball.position)) < 1e-12;
-      return !(frame.ball.visible && matches && frame.ball.scale >= 1 && ratio >= minScreenDiameterRatio - 1e-12);
+      const matches = Math.abs(frame.ball.scale - ballScaleFor(frame.camera, frame.ball.position, minScreenDiameterRatio)) < 1e-12;
+      return !(frame.ball.visible && matches && frame.ball.scale >= 1 && diameterRatio(frame) >= minScreenDiameterRatio - 1e-12);
     });
     expect(wrong.map(({ since, composition }) => `${since}/aspect${composition.aspect}`)).toEqual([]);
   });
@@ -489,7 +521,9 @@ describe("sceneFrameAt: カメラ", () => {
     expect(mismatched).toHaveLength(0);
     const portrait = frameAt(null, 100, { phase: "flight", aspect: PORTRAIT_ASPECT, layout: "batting" }).camera;
     expect(portrait.lift).toBeGreaterThan(0);
-    expect(portrait.position.x).toBeLessThan(0);
+    // v3: 縦長のカメラは x = 0 の正面(打者を左へ寄せるのはカメラではなく打者の位置)。
+    expect(portrait.position.x).toBeCloseTo(WORLD_PARAMS.battingCameraPortrait.position.x, 12);
+    expect(portrait.position.x).toBeCloseTo(0, 12);
   });
 
   it("無効な縦横比(NaN・0)は 16/9 とみなす", () => {
