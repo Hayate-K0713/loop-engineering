@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CameraPose, SafeArea, SceneLayout, Vec3 } from "../../../types/scene";
 import { battedBallAt, type BattedPlan } from "../path/batted-path";
+import { pitchBallAt } from "../path/pitch-path";
 import { buildStageGeometry, standsHeightAt } from "../space/geometry";
 import { WORLD_PARAMS } from "../space/params";
 import { projectPoint, zoneRectOf, type ViewSize, type ZoneBox } from "./project";
@@ -17,7 +18,9 @@ import {
   fitPortraitFraming,
   fovForAspect,
   legacyLift,
+  outlineScaleFor,
   portraitBlendAt,
+  ringWidthFor,
 } from "./rig";
 
 const CHASE = WORLD_PARAMS.chaseCamera;
@@ -44,10 +47,9 @@ function isNonDecreasing(values: readonly number[]): boolean {
   return values.every((value, i) => i === 0 || value >= (values.at(i - 1) ?? 0));
 }
 
-/** 下のオーバーレイの上端 y(px)。打撃はティッカーが下から 181px、守備は高さ 800px 未満で 300px・以上で 368px。 */
+/** 下のオーバーレイの上端 y(px)。打撃はティッカーが下から 181px、守備(v3)は操作バーが約 130px(球種チップ 52 + 余白 + ティッカー 52。contract §7)。 */
 function overlayTop(height: number, layout: SceneLayout): number {
-  if (layout === "batting") return height - 181;
-  return height - (height < 800 ? 300 : 368);
+  return height - (layout === "batting" ? 181 : 130);
 }
 
 /** HUD の下端を上から 155px、下のオーバーレイの上端を `overlayTop` とした空き領域(画面高比)。 */
@@ -204,12 +206,13 @@ describe("構図の式(fitPortraitFraming)", () => {
     expect(PORTRAIT_FRAMING_COEFFICIENTS.headTop).toBeLessThan(-0.0513);
   });
 
-  it("390×844 の既定の空き領域: 打撃は水平半幅 tan = 既定 0.25、守備は設計値の下限 0.38 以上で格子がオーバーレイの上に収まる", () => {
+  it("390×844 の既定の空き領域: 打撃も守備(v3)も水平半幅 tan = 既定 0.25(守備の hReq ≈ 0.22 < 0.25)で、lift も同じ", () => {
     const batting = fitPortraitFraming(390 / 844, "batting", null);
     expect(batting.halfWidthTan).toBe(FIT.batting.defaultHalfWidthTan);
     const pitching = fitPortraitFraming(390 / 844, "pitching", null);
-    expect(pitching.halfWidthTan).toBeGreaterThanOrEqual(FIT.pitching.defaultHalfWidthTan);
-    expect(pitching.halfWidthTan).toBeLessThanOrEqual(FIT.pitching.maxHalfWidthTan);
+    expect(pitching.halfWidthTan).toBe(FIT.pitching.defaultHalfWidthTan);
+    expect(FIT.pitching.defaultHalfWidthTan).toBe(0.25);
+    expect(pitching.lift).toBeCloseTo(batting.lift, 12);
   });
 
   it("投手の頭頂が HUD の直下 headGapRatio に来る(390×844 の既定の空き領域・打撃)", () => {
@@ -299,6 +302,59 @@ describe("構図の式(fitPortraitFraming)", () => {
   });
 });
 
+describe("v3 の構図の数値(390×844。contract §7 の「段階 A 完了時」の列)", () => {
+  const size = { width: 390, height: 844 };
+
+  it.each(LAYOUTS)("%s: カメラの位置・注視点が x = 0(ゾーンと投手が画面中央の x 195 に並ぶ)で、ゾーン矩形が x 117.7〜272.3・y 410〜585(±3px)・155×175 前後", (layout) => {
+    const pose = battingCameraFor(size.width / size.height, layout, safeAreaFor(size.height, layout));
+    expect(pose.position.x).toBe(0);
+    expect(pose.target.x).toBe(0);
+    const rect = zoneRectOf(pose, size, ZONE);
+    expect(Math.abs(rect.left - 117.7)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.left + rect.width - 272.3)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.top - 410)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.top + rect.height - 585)).toBeLessThanOrEqual(3);
+    expect(rect.width).toBeGreaterThanOrEqual(150);
+    expect(rect.height).toBeGreaterThanOrEqual(170);
+    expect(rect.left + rect.width / 2).toBeCloseTo(195, 6);
+  });
+
+  it("守備の 5×5 格子の下端が、空き領域の下端(0.846)から 8px 以上上(設計値 y 642)", () => {
+    const safeArea = safeAreaFor(size.height, "pitching");
+    expect(safeArea.bottom).toBeCloseTo(FIT.defaultSafeArea.pitching.bottom, 3);
+    const pose = battingCameraFor(size.width / size.height, "pitching", safeArea);
+    expect(bottomEdgeOf(pose, size, "pitching")).toBeLessThanOrEqual(FIT.defaultSafeArea.pitching.bottom * size.height - 8);
+    expect(Math.abs(bottomEdgeOf(pose, size, "pitching") - 642)).toBeLessThanOrEqual(3);
+  });
+
+  it("投手の頭頂(scale 1.0 の段階 A)は HUD の直下 y ≈ 171 に来る", () => {
+    const pose = battingCameraFor(size.width / size.height, "batting", null);
+    expect(Math.abs(projectPoint(pose, size, PITCHER_HEAD_TOP).y - 171)).toBeLessThanOrEqual(2);
+  });
+
+  it("390×664(ツールバーあり): 打撃のゾーンが 115×130 以上、守備のゾーン幅は打撃以上", () => {
+    const aspect = 390 / 664;
+    const batting = zoneRectOf(battingCameraFor(aspect, "batting", safeAreaFor(664, "batting")), { width: 390, height: 664 }, ZONE);
+    const pitching = zoneRectOf(battingCameraFor(aspect, "pitching", safeAreaFor(664, "pitching")), { width: 390, height: 664 }, ZONE);
+    expect(batting.width).toBeGreaterThanOrEqual(115);
+    expect(batting.height).toBeGreaterThanOrEqual(130);
+    expect(pitching.width).toBeGreaterThanOrEqual(batting.width);
+  });
+
+  it("高さ 560〜900px(幅 390、20px 刻み)で、守備のゾーン幅は打撃以上、どちらも下のオーバーレイに掛からない", () => {
+    const heights = Array.from({ length: 18 }, (_, i) => 560 + i * 20);
+    for (const height of heights) {
+      const widths = LAYOUTS.map((layout) => {
+        const safeArea = safeAreaFor(height, layout);
+        const pose = battingCameraFor(390 / height, layout, safeArea);
+        expect(bottomEdgeOf(pose, { width: 390, height }, layout)).toBeLessThanOrEqual((safeArea.bottom - FIT.marginRatio) * height + 0.5);
+        return zoneRectOf(pose, { width: 390, height }, ZONE).width;
+      });
+      expect(widths.at(1) ?? 0, `高さ ${height}`).toBeGreaterThanOrEqual((widths.at(0) ?? 0) - 1e-9);
+    }
+  });
+});
+
 describe("chaseCamera", () => {
   it.each(BALLS)("横長(16:9): WORLD_PARAMS の係数から計算した位置・注視点・FOV に一致し、lift は引数のまま (%o)", (ball) => {
     const pose = chaseCamera(ball, 16 / 9, 0.1);
@@ -345,22 +401,125 @@ describe("chaseCamera", () => {
   });
 });
 
-describe("ballScaleFor", () => {
+describe("ballScaleFor(camera, ball, minRatio)", () => {
   const camera = chaseCamera({ x: 0, y: 5, z: -60 }, 390 / 844);
+  const MIN_RATIO = WORLD_PARAMS.ball.minScreenDiameterRatio;
 
-  it("遠いボールは表示高の minRatio を満たす倍率、近いボールは 1", () => {
+  it("遠いボールは表示高の minRatio を満たす倍率(ratio × 2 × dist × tan(fov/2) の式)、近いボールは 1", () => {
     const far = { x: 0, y: 5, z: -300 };
-    const scale = ballScaleFor(camera, far);
+    const scale = ballScaleFor(camera, far, MIN_RATIO);
     expect(scale).toBeGreaterThan(1);
     const dist = distanceBetween(camera.position, far);
     const visibleHeight = 2 * dist * Math.tan((camera.fovDeg * Math.PI) / 360);
-    expect((scale * 2 * WORLD_PARAMS.ballRadius) / visibleHeight).toBeCloseTo(WORLD_PARAMS.ball.minScreenDiameterRatio, 9);
-    expect(ballScaleFor(camera, { x: camera.position.x, y: camera.position.y, z: camera.position.z - 1 })).toBe(1);
+    expect(scale).toBeCloseTo((MIN_RATIO * visibleHeight) / (2 * WORLD_PARAMS.ballRadius), 9);
+    expect((scale * 2 * WORLD_PARAMS.ballRadius) / visibleHeight).toBeCloseTo(MIN_RATIO, 9);
+    expect(ballScaleFor(camera, { x: camera.position.x, y: camera.position.y, z: camera.position.z - 1 }, MIN_RATIO)).toBe(1);
   });
 
-  it("距離について単調非減少", () => {
-    const scales = [20, 50, 100, 200].map((distance) => ballScaleFor(camera, { x: 0, y: camera.position.y, z: camera.position.z - distance }));
+  it("距離について単調非減少、minRatio について単調非減少で、minRatio 0 は 1", () => {
+    const scales = [20, 50, 100, 200].map((distance) => ballScaleFor(camera, { x: 0, y: camera.position.y, z: camera.position.z - distance }, MIN_RATIO));
     expect(isNonDecreasing(scales)).toBe(true);
+    const far = { x: 0, y: 5, z: -300 };
+    const byRatio = [0, 0.005, 0.0095, 0.0175].map((ratio) => ballScaleFor(camera, far, ratio));
+    expect(isNonDecreasing(byRatio)).toBe(true);
+    expect(byRatio.at(0)).toBe(1);
+  });
+
+  describe("飛行中(打撃カメラ・390×844。minScreenDiameterRatioFlight = 0.0175 ≈ 14.8px)", () => {
+    const size = { width: 390, height: 844 };
+    const pose = battingCameraFor(size.width / size.height, "batting", null);
+    const FLIGHT_RATIO = WORLD_PARAMS.ball.minScreenDiameterRatioFlight;
+    const straight = (elapsedMs: number): Vec3 =>
+      pitchBallAt({ seq: 1, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 0, y: 0 }, speedKmh: 145, durationMs: 1300, quality: "normal" }, elapsedMs);
+
+    it("リリース直後は約 2.0 倍(設計 1.96)で、表示径は minRatio × 画面高 = 14.8px", () => {
+      const scale = ballScaleFor(pose, straight(0), FLIGHT_RATIO);
+      expect(Math.abs(scale - 1.96)).toBeLessThanOrEqual(0.1);
+      const dist = distanceBetween(pose.position, straight(0));
+      const visibleHeight = 2 * dist * Math.tan((pose.fovDeg * Math.PI) / 360);
+      expect(((scale * 2 * WORLD_PARAMS.ballRadius) / visibleHeight) * size.height).toBeCloseTo(FLIGHT_RATIO * size.height, 9);
+      expect(FLIGHT_RATIO * size.height).toBeCloseTo(14.8, 1);
+    });
+
+    it("経過について単調非増加で連続(1 ステップ 20ms で 0.05 以内)、D−730ms 付近(ここでは 570ms)までに 1 倍へ戻り、以降は 1", () => {
+      const scales = Array.from({ length: 66 }, (_, i) => ballScaleFor(pose, straight(i * 20), FLIGHT_RATIO));
+      expect(isNonDecreasing([...scales].reverse())).toBe(true);
+      const steps = scales.slice(1).map((scale, i) => Math.abs(scale - (scales.at(i) ?? scale)));
+      expect(Math.max(...steps)).toBeLessThan(0.05);
+      expect(ballScaleFor(pose, straight(1300 - 730 + 100), FLIGHT_RATIO)).toBe(1);
+      expect(ballScaleFor(pose, straight(1300), FLIGHT_RATIO)).toBe(1);
+      expect(ballScaleFor(pose, straight(1300 - 730 - 100), FLIGHT_RATIO)).toBeGreaterThan(1);
+    });
+  });
+});
+
+describe("outlineScaleFor(縁取りの殻の倍率。画面で shellMinRatio 以上の太さ)", () => {
+  const size = { width: 390, height: 844 };
+  const pose = battingCameraFor(size.width / size.height, "batting", null);
+  const SHELL = WORLD_PARAMS.ball.shellMinRatio;
+
+  function shellThicknessM(ball: Vec3, ballScale: number): number {
+    return WORLD_PARAMS.ballRadius * ballScale * (outlineScaleFor(pose, ball, ballScale) - 1);
+  }
+
+  it("殻の太さ(m)が ratio × 2 × dist × tan(fov/2) 以上で、v2 の 1.12 を下回らない。式が効く距離では一致する", () => {
+    for (const ball of [{ x: 0, y: 1.65, z: -18 }, { x: 0, y: 1, z: -10 }, { x: 0, y: 0.72, z: 0.03 }, { x: 0, y: 1, z: -2 }]) {
+      const dist = distanceBetween(pose.position, ball);
+      const required = SHELL * 2 * dist * Math.tan((pose.fovDeg * Math.PI) / 360);
+      const scale = ballScaleFor(pose, ball, WORLD_PARAMS.ball.minScreenDiameterRatioFlight);
+      const outline = outlineScaleFor(pose, ball, scale);
+      expect(outline).toBeGreaterThanOrEqual(1.12);
+      expect(shellThicknessM(ball, scale)).toBeGreaterThanOrEqual(required - 1e-12);
+      if (outline > 1.12 + 1e-9) {
+        expect(shellThicknessM(ball, scale)).toBeCloseTo(required, 12);
+      }
+    }
+  });
+
+  it("リリース付近(奥・倍率 約 2)では、床の 1.12 でなく式が効き、殻は画面で 2px(0.0024 × 844)", () => {
+    const release = { x: 0, y: 1.65, z: -18 };
+    const scale = ballScaleFor(pose, release, WORLD_PARAMS.ball.minScreenDiameterRatioFlight);
+    expect(outlineScaleFor(pose, release, scale)).toBeGreaterThan(1.12);
+    const dist = distanceBetween(pose.position, release);
+    const pxPerM = size.height / (2 * dist * Math.tan((pose.fovDeg * Math.PI) / 360));
+    expect(shellThicknessM(release, scale) * pxPerM).toBeCloseTo(SHELL * size.height, 9);
+    expect(SHELL * size.height).toBeCloseTo(2, 1);
+  });
+
+  it("近い(ゾーン付近の)ボールでは殻が十分太いので 1.12 のまま。倍率 1 未満の入力は 1 として扱う", () => {
+    const near = { x: 0, y: 0.72, z: 0.03 };
+    expect(outlineScaleFor(pose, near, 6)).toBe(1.12);
+    const far = { x: 0, y: 1.65, z: -18 };
+    expect(outlineScaleFor(pose, far, 0.2)).toBeCloseTo(outlineScaleFor(pose, far, 1), 12);
+  });
+
+  it("距離が遠いほど(同じ倍率で)大きい", () => {
+    const scales = [-5, -10, -15, -18].map((z) => outlineScaleFor(pose, { x: 0, y: 1.2, z }, 1));
+    expect(isNonDecreasing(scales)).toBe(true);
+  });
+});
+
+describe("ringWidthFor(リング・線の太さ m = ratio × 2 × dist × tan(fov/2))", () => {
+  const size = { width: 390, height: 844 };
+  const pose = battingCameraFor(size.width / size.height, "batting", null);
+  const RATIO = WORLD_PARAMS.guide.ringWidthRatio;
+
+  it("式と一致する", () => {
+    for (const point of [{ x: 0, y: 0.72, z: 0.03 }, { x: 0.2, y: 1, z: -5 }, { x: 0, y: 1.65, z: -18 }]) {
+      const dist = distanceBetween(pose.position, point);
+      expect(ringWidthFor(pose, point, RATIO)).toBeCloseTo(RATIO * 2 * dist * Math.tan((pose.fovDeg * Math.PI) / 360), 12);
+    }
+  });
+
+  it("ゾーン平面の中心では約 3px(0.0036 × 844)に換算され、比に比例し、距離が遠いほど太い(m)", () => {
+    const center = { x: 0, y: 0.72, z: 0.03 };
+    const dist = distanceBetween(pose.position, center);
+    const pxPerM = size.height / (2 * dist * Math.tan((pose.fovDeg * Math.PI) / 360));
+    expect(ringWidthFor(pose, center, RATIO) * pxPerM).toBeCloseTo(RATIO * size.height, 9);
+    expect(RATIO * size.height).toBeCloseTo(3, 1);
+    expect(ringWidthFor(pose, center, RATIO * 2)).toBeCloseTo(2 * ringWidthFor(pose, center, RATIO), 12);
+    expect(ringWidthFor(pose, center, 0)).toBe(0);
+    expect(ringWidthFor(pose, { ...center, z: -10 }, RATIO)).toBeGreaterThan(ringWidthFor(pose, center, RATIO));
   });
 });
 
