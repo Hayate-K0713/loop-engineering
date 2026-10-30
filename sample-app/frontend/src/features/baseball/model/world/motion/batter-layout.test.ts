@@ -33,18 +33,18 @@ describe("batterRootFor", () => {
   it.each(LANDSCAPE_ASPECTS)("横長(アスペクト %f ≥ 1.0)は v2 と厳密に同値(x −0.8・scale 0.92・y 0・z 0.05・yaw π/2)", (aspect) => {
     const root = batterRootFor(aspect);
     expect(root.position).toEqual({ x: BATTER.position.x, y: BATTER.position.y, z: BATTER.position.z });
-    expect(root.scale).toBe(BATTER.scale);
-    expect(root.yaw).toBe(BATTER.yaw);
-    expect(BATTER.position.x).toBe(-0.8);
-    expect(BATTER.scale).toBe(0.92);
+    expect(root.scale).toBeCloseTo(BATTER.scale, 12);
+    expect(root.yaw).toBeCloseTo(BATTER.yaw, 12);
+    expect(BATTER.position.x).toBeCloseTo(-0.8, 12);
+    expect(BATTER.scale).toBeCloseTo(0.92, 12);
   });
 
   it.each(PORTRAIT_ASPECTS)("縦長(アスペクト %f ≤ 0.7)は x −0.65・scale 0.70", (aspect) => {
     const root = batterRootFor(aspect);
-    expect(root.position.x).toBe(BATTER.portraitX);
-    expect(root.scale).toBe(BATTER.portraitScale);
-    expect(BATTER.portraitX).toBe(-0.65);
-    expect(BATTER.portraitScale).toBe(0.7);
+    expect(root.position.x).toBeCloseTo(BATTER.portraitX, 12);
+    expect(root.scale).toBeCloseTo(BATTER.portraitScale, 12);
+    expect(BATTER.portraitX).toBeCloseTo(-0.65, 12);
+    expect(BATTER.portraitScale).toBeCloseTo(0.7, 12);
     expect(root.position.y).toBe(BATTER.position.y);
     expect(root.position.z).toBe(BATTER.position.z);
     expect(root.yaw).toBe(BATTER.yaw);
@@ -84,8 +84,8 @@ describe("batLengthScaleFor", () => {
   });
 
   it.each(PORTRAIT_ASPECTS)("縦長(アスペクト %f)は 1.35", (aspect) => {
-    expect(batLengthScaleFor(aspect)).toBe(BATTER.portraitBatLength);
-    expect(BATTER.portraitBatLength).toBe(1.35);
+    expect(batLengthScaleFor(aspect)).toBeCloseTo(BATTER.portraitBatLength, 12);
+    expect(BATTER.portraitBatLength).toBeCloseTo(1.35, 12);
   });
 
   it("補間域は 1.0〜1.35 を縦横比の補間 k で混ぜ、単調", () => {

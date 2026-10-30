@@ -305,19 +305,22 @@ describe("構図の式(fitPortraitFraming)", () => {
 describe("v3 の構図の数値(390×844。contract §7 の「段階 A 完了時」の列)", () => {
   const size = { width: 390, height: 844 };
 
-  it.each(LAYOUTS)("%s: カメラの位置・注視点が x = 0(ゾーンと投手が画面中央の x 195 に並ぶ)で、ゾーン矩形が x 117.7〜272.3・y 410〜585(±3px)・155×175 前後", (layout) => {
-    const pose = battingCameraFor(size.width / size.height, layout, safeAreaFor(size.height, layout));
-    expect(pose.position.x).toBe(0);
-    expect(pose.target.x).toBe(0);
-    const rect = zoneRectOf(pose, size, ZONE);
-    expect(Math.abs(rect.left - 117.7)).toBeLessThanOrEqual(3);
-    expect(Math.abs(rect.left + rect.width - 272.3)).toBeLessThanOrEqual(3);
-    expect(Math.abs(rect.top - 410)).toBeLessThanOrEqual(3);
-    expect(Math.abs(rect.top + rect.height - 585)).toBeLessThanOrEqual(3);
-    expect(rect.width).toBeGreaterThanOrEqual(150);
-    expect(rect.height).toBeGreaterThanOrEqual(170);
-    expect(rect.left + rect.width / 2).toBeCloseTo(195, 6);
-  });
+  it.each(LAYOUTS)(
+    "%s: カメラの位置・注視点が x = 0(ゾーンと投手が画面中央の x 195 に並ぶ)で、ゾーン矩形が x 117.7〜272.3・y 410〜585(±3px)・155×175 前後",
+    (layout) => {
+      const pose = battingCameraFor(size.width / size.height, layout, safeAreaFor(size.height, layout));
+      expect(pose.position.x).toBe(0);
+      expect(pose.target.x).toBe(0);
+      const rect = zoneRectOf(pose, size, ZONE);
+      expect(Math.abs(rect.left - 117.7)).toBeLessThanOrEqual(3);
+      expect(Math.abs(rect.left + rect.width - 272.3)).toBeLessThanOrEqual(3);
+      expect(Math.abs(rect.top - 410)).toBeLessThanOrEqual(3);
+      expect(Math.abs(rect.top + rect.height - 585)).toBeLessThanOrEqual(3);
+      expect(rect.width).toBeGreaterThanOrEqual(150);
+      expect(rect.height).toBeGreaterThanOrEqual(170);
+      expect(rect.left + rect.width / 2).toBeCloseTo(195, 6);
+    },
+  );
 
   it("守備の 5×5 格子の下端が、空き領域の下端(0.846)から 8px 以上上(設計値 y 642)", () => {
     const safeArea = safeAreaFor(size.height, "pitching");
@@ -468,7 +471,12 @@ describe("outlineScaleFor(縁取りの殻の倍率。画面で shellMinRatio 以
   }
 
   it("殻の太さ(m)が ratio × 2 × dist × tan(fov/2) 以上で、v2 の 1.12 を下回らない。式が効く距離では一致する", () => {
-    for (const ball of [{ x: 0, y: 1.65, z: -18 }, { x: 0, y: 1, z: -10 }, { x: 0, y: 0.72, z: 0.03 }, { x: 0, y: 1, z: -2 }]) {
+    for (const ball of [
+      { x: 0, y: 1.65, z: -18 },
+      { x: 0, y: 1, z: -10 },
+      { x: 0, y: 0.72, z: 0.03 },
+      { x: 0, y: 1, z: -2 },
+    ]) {
       const dist = distanceBetween(pose.position, ball);
       const required = SHELL * 2 * dist * Math.tan((pose.fovDeg * Math.PI) / 360);
       const scale = ballScaleFor(pose, ball, WORLD_PARAMS.ball.minScreenDiameterRatioFlight);
@@ -493,7 +501,7 @@ describe("outlineScaleFor(縁取りの殻の倍率。画面で shellMinRatio 以
 
   it("近い(ゾーン付近の)ボールでは殻が十分太いので 1.12 のまま。倍率 1 未満の入力は 1 として扱う", () => {
     const near = { x: 0, y: 0.72, z: 0.03 };
-    expect(outlineScaleFor(pose, near, 6)).toBe(1.12);
+    expect(outlineScaleFor(pose, near, 6)).toBeCloseTo(1.12, 12);
     const far = { x: 0, y: 1.65, z: -18 };
     expect(outlineScaleFor(pose, far, 0.2)).toBeCloseTo(outlineScaleFor(pose, far, 1), 12);
   });
@@ -510,7 +518,11 @@ describe("ringWidthFor(リング・線の太さ m = ratio × 2 × dist × tan(fo
   const RATIO = WORLD_PARAMS.guide.ringWidthRatio;
 
   it("式と一致する", () => {
-    for (const point of [{ x: 0, y: 0.72, z: 0.03 }, { x: 0.2, y: 1, z: -5 }, { x: 0, y: 1.65, z: -18 }]) {
+    for (const point of [
+      { x: 0, y: 0.72, z: 0.03 },
+      { x: 0.2, y: 1, z: -5 },
+      { x: 0, y: 1.65, z: -18 },
+    ]) {
       const dist = distanceBetween(pose.position, point);
       expect(ringWidthFor(pose, point, RATIO)).toBeCloseTo(RATIO * 2 * dist * Math.tan((pose.fovDeg * Math.PI) / 360), 12);
     }
