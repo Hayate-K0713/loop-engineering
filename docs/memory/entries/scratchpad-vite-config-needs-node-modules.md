@@ -2,7 +2,7 @@
 name: scratchpad-vite-config-needs-node-modules
 type: pitfall
 status: active
-related_topics: [baseball-game]
+related_topics: [baseball-game, baseball-game-v3]
 created: 2026-10-19
 updated: 2026-10-19
 ---
