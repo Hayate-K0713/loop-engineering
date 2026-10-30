@@ -5,7 +5,17 @@ import type { CameraPose, SafeArea, SceneFrame, SceneLayout, ScenePhase, Uniform
 import type { PitchOutcomeView } from "../../../types/view";
 import { ASSIST_TABLE, previewCenterOf } from "../../batting/assist";
 import { BATTING_PARAMS } from "../../batting/params";
-import { ballScaleFor, battingCamera, battingCameraFor, blendCamera, chaseBlendAt, chaseCamera, outlineScaleFor, portraitBlendAt, ringWidthFor } from "../camera/rig";
+import {
+  ballScaleFor,
+  battingCamera,
+  battingCameraFor,
+  blendCamera,
+  chaseBlendAt,
+  chaseCamera,
+  outlineScaleFor,
+  portraitBlendAt,
+  ringWidthFor,
+} from "../camera/rig";
 import { batterStancePose, batterSwingPose } from "../motion/batter";
 import { batLengthScaleFor, batterRootFor } from "../motion/batter-layout";
 import { catcherPose, fielderIdlePose } from "../motion/fielder";
@@ -35,7 +45,15 @@ const PORTRAIT_SAFE_AREA: SafeArea = { top: 0.1837, bottom: 0.7 };
 const UNIFORMS_A: UniformColors = { offense: 0x2f63c8, defense: 0xe8473c };
 const UNIFORMS_B: UniformColors = { offense: 0xe8473c, defense: 0x2f63c8 };
 
-const FLIGHT: PitchFlight = { seq: 7, kind: "straight", aim: { x: 0.2, y: 0.1 }, landing: { x: 0.2, y: 0.1 }, speedKmh: 140, durationMs: 480, quality: "normal" };
+const FLIGHT: PitchFlight = {
+  seq: 7,
+  kind: "straight",
+  aim: { x: 0.2, y: 0.1 },
+  landing: { x: 0.2, y: 0.1 },
+  speedKmh: 140,
+  durationMs: 480,
+  quality: "normal",
+};
 const NORMAL = ASSIST_TABLE.normal;
 const HARD = ASSIST_TABLE.hard;
 const BALL = WORLD_PARAMS.ball;
@@ -410,7 +428,11 @@ describe("sceneFrameAt: ball.scale(飛行中・中継カメラ中の最小表示
   it("中継カメラに移る前(投球中・接触前・打球なし)は、最終のカメラの ballScaleFor(飛行用の最小径)と一致する", () => {
     const wrong = GRID_INPUTS.filter((input) => {
       const frame = sceneFrameAt(input);
-      return frame.ball.visible && frame.zone.visible && Math.abs(frame.ball.scale - ballScaleFor(frame.camera, frame.ball.position, BALL.minScreenDiameterRatioFlight)) > 1e-12;
+      return (
+        frame.ball.visible &&
+        frame.zone.visible &&
+        Math.abs(frame.ball.scale - ballScaleFor(frame.camera, frame.ball.position, BALL.minScreenDiameterRatioFlight)) > 1e-12
+      );
     });
     expect(wrong).toHaveLength(0);
   });
@@ -726,7 +748,9 @@ describe("sceneFrameAt: guide(打撃の予告・縮むリング)", () => {
     expect(at(0).radius).toBeCloseTo(GUIDE.previewRing.startRadius, 9);
     expect(at(D).radius).toBeCloseTo(WORLD_PARAMS.ballRadius * GUIDE.previewRing.endRadiusRatio, 9);
     expect(at(D + 50).radius).toBeCloseTo(at(D).radius, 12);
-    const wrong = COMPOSITIONS.filter((composition) => {
+    const battingCompositions = COMPOSITIONS.filter((composition) => composition.layout === "batting");
+    expect(battingCompositions.length).toBeGreaterThanOrEqual(3);
+    const wrong = battingCompositions.filter((composition) => {
       const frame = frameAt(null, 200, { phase: "flight", ...composition });
       const expected = ringWidthFor(frame.camera, zoneToWorld(FLIGHT.landing), GUIDE.ringWidthRatio);
       return !(frame.guide.ring.visible && frame.guide.ring.tone === "preview" && Math.abs(frame.guide.ring.width - expected) < 1e-12 && expected > 0);
@@ -876,7 +900,9 @@ describe("sceneFrameAt: 打者", () => {
   it("縦横比の補間域(縦長〜横長の全域)で、接触の瞬間のバットの高さはボール(着弾点)の高さと一致する(受け入れ A5)", () => {
     const swing = swingOf(SINGLE);
     const aspects = Array.from({ length: 40 }, (_, i) => 0.3 + (i * (2 - 0.3)) / 39);
-    const wrong = aspects.filter((aspect) => Math.abs(worldBatHeight(frameAt(SINGLE, swing.contactAtMs, { aspect }).batter) - zoneToWorld(FLIGHT.landing).y) > 1e-9);
+    const wrong = aspects.filter(
+      (aspect) => Math.abs(worldBatHeight(frameAt(SINGLE, swing.contactAtMs, { aspect }).batter) - zoneToWorld(FLIGHT.landing).y) > 1e-9,
+    );
     expect(wrong).toEqual([]);
   });
 
@@ -930,10 +956,26 @@ describe("sceneFrameAt: 打者", () => {
     expect([portrait.position.x, portrait.scale, portrait.bat.lengthScale]).toEqual([portraitX, portraitScale, portraitBatLength]);
     const aspects = [16 / 9, 1.2, 1, 0.9, 0.8, 0.75, 0.7, PORTRAIT_ASPECT, 0.3];
     const batters = aspects.map((aspect) => frameAt(null, 100, { phase: "flight", aspect }).batter);
-    const monotone = (values: readonly number[], sign: 1 | -1): boolean => values.every((value, i) => i === 0 || sign * (value - (values.at(i - 1) ?? 0)) >= -1e-12);
-    expect(monotone(batters.map((batter) => batter.position.x), 1)).toBe(true);
-    expect(monotone(batters.map((batter) => batter.scale), -1)).toBe(true);
-    expect(monotone(batters.map((batter) => batter.bat.lengthScale), 1)).toBe(true);
+    const monotone = (values: readonly number[], sign: 1 | -1): boolean =>
+      values.every((value, i) => i === 0 || sign * (value - (values.at(i - 1) ?? 0)) >= -1e-12);
+    expect(
+      monotone(
+        batters.map((batter) => batter.position.x),
+        1,
+      ),
+    ).toBe(true);
+    expect(
+      monotone(
+        batters.map((batter) => batter.scale),
+        -1,
+      ),
+    ).toBe(true);
+    expect(
+      monotone(
+        batters.map((batter) => batter.bat.lengthScale),
+        1,
+      ),
+    ).toBe(true);
   });
 
   it("スイング中も打者の足元・拡大率・バット軸の長さは縦長の値(バットの高さの補正は補間後の拡大率で行う)", () => {

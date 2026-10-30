@@ -136,15 +136,56 @@ function SummaryTable({ rows }: { readonly rows: readonly SummaryRow[] }) {
   );
 }
 
+type ActionButtonsProps = {
+  readonly json: string;
+  readonly csv: string;
+  /** 結果の文言(成功・失敗とも)を、画面の `role="status"` に出す。 */
+  readonly onStatus: (message: string) => void;
+  readonly onClear: () => void;
+};
+
+/** コピー・ダウンロード(JSON/CSV)・共有・消去。どれも 44px 以上で、使えない経路も無効にせず、失敗を `onStatus` で知らせる。 */
+function ActionButtons({ json, csv, onStatus, onClear }: ActionButtonsProps) {
+  const run = (task: Promise<string>): void => {
+    void task.then(onStatus);
+  };
+  return (
+    <div className="bb-playtest__actions">
+      <button type="button" className="bb-button bb-playtest__button" data-testid="playtest-copy" onClick={() => run(copyText(json))}>
+        コピー
+      </button>
+      <button
+        type="button"
+        className="bb-button bb-playtest__button"
+        data-testid="playtest-download-json"
+        onClick={() => onStatus(downloadText("playtest-log.json", "application/json", json))}
+      >
+        JSON を保存
+      </button>
+      <button
+        type="button"
+        className="bb-button bb-playtest__button"
+        data-testid="playtest-download-csv"
+        onClick={() => onStatus(downloadText("playtest-log.csv", "text/csv", csv))}
+      >
+        CSV を保存
+      </button>
+      <button type="button" className="bb-button bb-playtest__button" data-testid="playtest-share" onClick={() => run(shareText(json))}>
+        共有
+      </button>
+      <button type="button" className="bb-button bb-playtest__button bb-playtest__button--danger" data-testid="playtest-clear" onClick={onClear}>
+        消去
+      </button>
+    </div>
+  );
+}
+
 /**
  * 試遊ログの画面(開発/試遊ビルドだけ。入口は親が出す)。必ず動く経路は「要約表」と「全選択できる `<textarea readonly>`(JSON)」。
  * コピー・ダウンロード・共有は、使えない環境でも無効にせず、失敗を `role="status"` で表示する。保存失敗と縮小表示の疑いは上部に出す。
  */
 export function PlaytestPanel({ summary, recordCount, json, csv, saveFailed, scaleWarning, onClear, onClose }: PlaytestPanelProps) {
   const [status, setStatus] = useState<string | null>(null);
-  const run = (task: Promise<string>): void => {
-    void task.then(setStatus);
-  };
   return (
     <div className="bb-playtest" data-testid="playtest-panel" role="dialog" aria-modal="true" aria-labelledby="bb-playtest-title">
       <div className="bb-playtest__sheet">
@@ -178,33 +219,7 @@ export function PlaytestPanel({ summary, recordCount, json, csv, saveFailed, sca
           onFocus={selectAll}
           onClick={selectAll}
         />
-        <div className="bb-playtest__actions">
-          <button type="button" className="bb-button bb-playtest__button" data-testid="playtest-copy" onClick={() => run(copyText(json))}>
-            コピー
-          </button>
-          <button
-            type="button"
-            className="bb-button bb-playtest__button"
-            data-testid="playtest-download-json"
-            onClick={() => setStatus(downloadText("playtest-log.json", "application/json", json))}
-          >
-            JSON を保存
-          </button>
-          <button
-            type="button"
-            className="bb-button bb-playtest__button"
-            data-testid="playtest-download-csv"
-            onClick={() => setStatus(downloadText("playtest-log.csv", "text/csv", csv))}
-          >
-            CSV を保存
-          </button>
-          <button type="button" className="bb-button bb-playtest__button" data-testid="playtest-share" onClick={() => run(shareText(json))}>
-            共有
-          </button>
-          <button type="button" className="bb-button bb-playtest__button bb-playtest__button--danger" data-testid="playtest-clear" onClick={onClear}>
-            消去
-          </button>
-        </div>
+        <ActionButtons json={json} csv={csv} onStatus={setStatus} onClear={onClear} />
         <p className="bb-playtest__status" role="status" data-testid="playtest-status">
           {status}
         </p>

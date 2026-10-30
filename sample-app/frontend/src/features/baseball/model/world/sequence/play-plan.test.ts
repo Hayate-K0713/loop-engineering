@@ -24,7 +24,7 @@ const STRENGTHS: readonly Strength[] = ["weak", "medium", "strong"];
 const DIRECTIONS: readonly Direction[] = ["pull", "center", "opposite"];
 
 function flightOf(seq: number, durationMs: number, landing: ZonePoint): PitchFlight {
-  return { seq, kind: "straight", aim: landing, landing, speedKmh: 140, durationMs };
+  return { seq, kind: "straight", aim: landing, landing, speedKmh: 140, durationMs, quality: "normal" };
 }
 
 const FIRST_FLIGHT = flightOf(1, 420, { x: 0, y: 0 });

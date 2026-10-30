@@ -172,8 +172,8 @@ describe("縦長の構えの手・腕・バットは、ゾーン枠(打撃)・5�
   });
 });
 
-/** 接触の瞬間のバットとボールの中心の画面上のずれ(縦、px)。ボールの x でのバット軸の画面の y とボールの y の差。 */
-function contactOffsetPx(width: number, height: number, overlayTop: number, landing: { readonly x: number; readonly y: number }): number {
+/** 接触の瞬間のフレーム(`landing` に着弾する投球を、そのカーソルでジャストにとらえたインプレー)。 */
+function contactFrameAt(width: number, height: number, overlayTop: number, landing: { readonly x: number; readonly y: number }): SceneFrame {
   const flight: PitchFlight = { ...FLIGHT, aim: landing, landing };
   const outcome: PitchOutcomeView = {
     seq: flight.seq,
@@ -186,8 +186,13 @@ function contactOffsetPx(width: number, height: number, overlayTop: number, land
   if (swing === null) {
     throw new Error("plan に swing が無い");
   }
+  return frameFor(width, height, "batting", overlayTop, { plan, tMs: swing.contactAtMs, flight });
+}
+
+/** 接触の瞬間のバットとボールの中心の画面上のずれ(縦、px)。ボールの x でのバット軸の画面の y とボールの y の差。 */
+function contactOffsetPx(width: number, height: number, overlayTop: number, landing: { readonly x: number; readonly y: number }): number {
   const size = { width, height };
-  const frame = frameFor(width, height, "batting", overlayTop, { plan, tMs: swing.contactAtMs, flight });
+  const frame = contactFrameAt(width, height, overlayTop, landing);
   const ball = projectPoint(frame.camera, size, zoneToWorld(landing));
   const axis = [0.025, 0.25, 0.5, 0.75, 0.975].map((s) => projectPoint(frame.camera, size, batPoint(frame.batter, s)));
   const segment = axis.find((point, index) => {
@@ -219,11 +224,10 @@ describe("接触の瞬間のバット先端(縦長 390×844。v3: バット軸 1
   it("先端のワールド x が batTipX に一致し、+0.28m 以上(ゾーン右端 0.26m の外)、画面では x 270px 以上でゾーン枠の右端の外側まで届く", () => {
     const aspect = 390 / 844;
     const size = { width: 390, height: 844 };
-    const batter = v3Batter(aspect, { height: 0.72 });
-    const tip = batPoint(batter, 0.975);
+    const frame = contactFrameAt(390, 844, 663, { x: 0, y: 0 });
+    const tip = batPoint(frame.batter, 0.975);
     expect(tip.x).toBeCloseTo(batTipX(aspect), 9);
     expect(tip.x).toBeGreaterThanOrEqual(0.28);
-    const frame = frameFor(390, 844, "batting", 663);
     const zone = targetRect(frame, size, "batting");
     expect(projectPoint(frame.camera, size, tip).x).toBeGreaterThanOrEqual(zone.right - 3);
   });

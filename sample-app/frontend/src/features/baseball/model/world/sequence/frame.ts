@@ -186,7 +186,14 @@ function spinMsOf(ctx: FrameContext): number {
 function ballFrame(ctx: FrameContext, camera: CameraPose): SceneFrame["ball"] {
   const kind = ctx.input.flight?.kind ?? "straight";
   if (ctx.ball === null) {
-    return { visible: false, position: RELEASE_POINT, scale: 1, rotation: ballSpinAt(kind, 0), halo: ballHaloAt(), outlineScale: outlineScaleFor(camera, RELEASE_POINT, 1) };
+    return {
+      visible: false,
+      position: RELEASE_POINT,
+      scale: 1,
+      rotation: ballSpinAt(kind, 0),
+      halo: ballHaloAt(),
+      outlineScale: outlineScaleFor(camera, RELEASE_POINT, 1),
+    };
   }
   const scale = ballScaleFor(camera, ctx.ball, ctx.chase === null ? BALL.minScreenDiameterRatioFlight : BALL.minScreenDiameterRatio);
   return {

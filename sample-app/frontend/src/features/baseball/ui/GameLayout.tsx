@@ -34,7 +34,7 @@ type GameLayoutProps = ActionBarProps & {
   /** `useGameStage().stageProps`。`StageView` にそのまま展開する。`zoneFeedback`・`zoneRect` は `ZoneFeedback` にも使う。 */
   readonly stageProps: GameStageViewProps;
   /** タイミングのピルの 2 行目(接触の質)。省略・`null` ならピルは 1 行。`StageView` へそのまま渡す。 */
-  readonly contactQuality?: ContactQuality | null;
+  readonly contactQuality?: ContactQuality | null | undefined;
   /** 説明(チュートリアル)のカード(`<Tutorial>`)。表示中だけ渡す。試合画面の全面に重なる。 */
   readonly tutorial?: ReactNode;
   /** 試遊ログの画面(`<PlaytestPanel>`)。開いている間だけ渡す。試合画面の全面に重なる。 */

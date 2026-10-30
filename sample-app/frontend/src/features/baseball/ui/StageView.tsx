@@ -12,7 +12,7 @@ import { StageTelop } from "./StageTelop";
  */
 type StageViewProps = GameStageViewProps & {
   /** タイミングのピルの 2 行目(「芯」「ふつう」「かすり」「ミス」)。`timingCue` と同じ区間に出す。 */
-  readonly contactQuality?: ContactQuality | null;
+  readonly contactQuality?: ContactQuality | null | undefined;
 };
 
 /** WebGL が使えない・描画が中断されたときの案内。`loading`/`ready` では出さない。 */
@@ -120,9 +120,15 @@ function TimingCuePill({ cue, quality, zoneRect }: { readonly cue: TimingCue; re
  * 操作は受けず(`pointer-events: none`)、支援技術へは `role="status"` で控えめに伝える。
  */
 function StageHint({ text, isTap, zoneRect }: { readonly text: string; readonly isTap: boolean; readonly zoneRect: ScreenRect | null }) {
-  const position: CSSProperties | undefined = zoneRect === null ? undefined : { top: `min(${zoneRect.top + zoneRect.height + 10}px, calc(100% - 190px))`, bottom: "auto" };
+  const position: CSSProperties | undefined =
+    zoneRect === null ? undefined : { top: `min(${zoneRect.top + zoneRect.height + 10}px, calc(100% - 190px))`, bottom: "auto" };
   return (
-    <p className={isTap ? "bb-stage__hint bb-stage__hint--tap" : "bb-stage__hint"} data-testid={isTap ? "tap-hint" : "stage-hint"} role="status" style={position}>
+    <p
+      className={isTap ? "bb-stage__hint bb-stage__hint--tap" : "bb-stage__hint"}
+      data-testid={isTap ? "tap-hint" : "stage-hint"}
+      role="status"
+      style={position}
+    >
       {text}
     </p>
   );
