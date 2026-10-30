@@ -34,7 +34,7 @@ type GameLayoutProps = ActionBarProps & {
   /** `useGameStage().stageProps`。`StageView` にそのまま展開する。`zoneFeedback`・`zoneRect` は `ZoneFeedback` にも使う。 */
   readonly stageProps: GameStageViewProps;
   /** タイミングのピルの 2 行目(接触の質)。省略・`null` ならピルは 1 行。`StageView` へそのまま渡す。 */
-  readonly contactQuality?: ContactQuality | null | undefined;
+  readonly contactQuality?: ContactQuality | null;
   /** 説明(チュートリアル)のカード(`<Tutorial>`)。表示中だけ渡す。試合画面の全面に重なる。 */
   readonly tutorial?: ReactNode;
   /** 試遊ログの画面(`<PlaytestPanel>`)。開いている間だけ渡す。試合画面の全面に重なる。 */
@@ -95,7 +95,7 @@ export function GameLayout({ stageProps, contactQuality, tutorial, playtest, ...
   const { view } = bar;
   return (
     <div className={`bb-game bb-game--${barVariant(view.mode)}`} data-safe-area-root>
-      <StageView {...stageProps} contactQuality={contactQuality} />
+      <StageView {...stageProps} contactQuality={contactQuality ?? null} />
       <ZoneFeedback feedback={stageProps.zoneFeedback} zoneRect={stageProps.zoneRect} />
       <div className="bb-overlay">
         <div className="bb-overlay__top" data-inset="top">

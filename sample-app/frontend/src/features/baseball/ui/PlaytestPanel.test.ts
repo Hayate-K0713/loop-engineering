@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PlaytestSummary } from "../types/telemetry";
-import panelCss from "./PlaytestPanel.css?raw";
 import { PlaytestPanel } from "./PlaytestPanel";
+
+// vitest は CSS の import を空にするので、ファイルを直接読む(frontend ディレクトリから実行する前提の固定パス)。
+const panelCss = readFileSync("src/features/baseball/ui/PlaytestPanel.css", "utf8");
 
 const SUMMARY: PlaytestSummary = {
   battingPitches: 60,
@@ -54,7 +57,7 @@ describe("PlaytestPanel", () => {
 
   it("全選択できる読み取り専用の textarea に JSON を出す", () => {
     const html = render();
-    expect(html).toMatch(/<textarea[^>]*readonly=""[^>]*data-testid="playtest-json"|<textarea[^>]*data-testid="playtest-json"[^>]*readonly=""/);
+    expect(html).toMatch(/<textarea[^>]*readOnly=""[^>]*data-testid="playtest-json"|<textarea[^>]*data-testid="playtest-json"[^>]*readOnly=""/);
     expect(html).toContain("&quot;type&quot;:&quot;session&quot;");
   });
 

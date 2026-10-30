@@ -108,7 +108,7 @@
   - 依存: A0, A1, A2, A3, A5。担当ファイル: `model/world/sequence/{frame,play-plan}.ts`(+test)、`sequence/{world-consistency,batter-screen}.test.ts`。
   - やること: `guide`(打撃の予告)・`cursor.raw`・`ball.rotation/halo/scale(飛行中の最小径)/outlineScale`・`BatPose.lengthScale`・`batterRootFor` を合成。`batHeightInRoot` は補間後の scale で割る。旧 `aim` を削除。`SceneFrameInput` に `assist`。`PlayPlan.chaseFromMs` は v2 のまま `contactMs`(変更しない)。位置ずれは A13 の director が props に渡すので `frame.ts` では合成しない。
   - 完了条件: 単体テスト — `guide` の `exact` がリリースから D+hold まで可視、リング半径が `previewRingAt` に一致、ボールの表示径が飛行中ずっと最小径以上(「一度消えたら再出現しない」性質を維持)、縦横比の補間域でバットの高さがボールの高さと一致、接触後のカメラが v2 と同じ時刻表のままで `rig.test` の既存のテストが不変、既存の性質を維持。`batter-screen.test.ts` は v3 の数値に更新。各関数 60 行以内。
-- [ ] **A12: UI — 説明・試遊ログ画面・位置ずれ(DOM)・ピル・ヒント・入力面の抑止**
+- [x] **A12: UI — 説明・試遊ログ画面・位置ずれ(DOM)・ピル・ヒント・入力面の抑止**
   - 依存: A0, A5, A6。担当ファイル: 新規 `ui/{Tutorial,PlaytestPanel,ZoneFeedback}.tsx`+CSS、`ui/{StageView,SwingControls,GameLayout}.tsx`、`ui/baseball-stage.css`。
   - やること: `Tutorial`(タップ方式のカード)・`PlaytestPanel`(要約表・全選択できる `<textarea readonly>`・コピー・ダウンロード・共有・消去・保存失敗の表示・縮小表示の警告)。`ZoneFeedback`(`zoneRect` に固定した DOM のミニ図。線のみ、`pointer-events: none`)。`StageView` のピルを 2 行に、ヒント文(**タップのヒント `tapHint`: 「ポンと おす」**)、`data-*` ミラー、**ステージの `contextmenu` を `preventDefault`**。`SwingControls` を縮小(80px)。`GameLayout` に `tutorial`/`playtest`/`zoneFeedback` スロット。CSS: `.bb-stage__input--active` に callout/user-select 抑止を足し、人間守備中も付けられる構造にする。
   - 完了条件: lint 0 件・typecheck 起因 0 件。`ui/` が `../model`・`../render`・`../audio` を import していない。hooks を呼ばない。ピル・ヒント・`ZoneFeedback` が `pointer-events: none`。ボタンは 44px 以上。`ZoneFeedback` が `zoneRect` の変化に追従する。

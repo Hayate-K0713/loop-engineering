@@ -1,11 +1,14 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ScreenRect } from "../types/stage";
 import type { ZoneFeedbackView } from "../types/view";
-import stageCss from "./baseball-stage.css?raw";
-import feedbackCss from "./ZoneFeedback.css?raw";
 import { ZoneFeedback } from "./ZoneFeedback";
+
+// vitest は CSS の import を空にするので、ファイルを直接読む(frontend ディレクトリから実行する前提の固定パス)。
+const feedbackCss = readFileSync("src/features/baseball/ui/ZoneFeedback.css", "utf8");
+const stageCss = readFileSync("src/features/baseball/ui/baseball-stage.css", "utf8");
 
 const RECT: ScreenRect = { left: 100, top: 400, width: 160, height: 180 };
 

@@ -34,7 +34,7 @@ const BASE: GameStageViewProps = {
 };
 
 function render(props: Partial<GameStageViewProps>, contactQuality?: ContactQuality | null): string {
-  return renderToStaticMarkup(createElement(StageView, { ...BASE, ...props, contactQuality }));
+  return renderToStaticMarkup(createElement(StageView, { ...BASE, ...props, contactQuality: contactQuality ?? null }));
 }
 
 describe("StageView: タイミングのピル(2 行)", () => {
@@ -101,7 +101,9 @@ describe("StageView: data-* ミラーと入力面", () => {
   });
 
   it("ステージの contextmenu を preventDefault する", () => {
-    const root = StageView({ ...BASE }) as ReactElement<{ readonly onContextMenu: (event: { readonly preventDefault: () => void }) => void }>;
+    const root = StageView({ ...BASE, contactQuality: null }) as ReactElement<{
+      readonly onContextMenu: (event: { readonly preventDefault: () => void }) => void;
+    }>;
     const preventDefault = vi.fn();
     root.props.onContextMenu({ preventDefault });
     expect(preventDefault).toHaveBeenCalledTimes(1);

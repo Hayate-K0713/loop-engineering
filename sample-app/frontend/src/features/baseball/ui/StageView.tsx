@@ -8,11 +8,11 @@ import { StageTelop } from "./StageTelop";
 
 /**
  * `StageView` の props。`GameStageViewProps`(A0 が凍結)に、タイミングのピルの 2 行目(接触の質)を足したもの。
- * `contactQuality` を渡さない(省略・`null`)ときは、ピルは 1 行(v2 と同じ)。
+ * `contactQuality` が `null` のときは、ピルは 1 行(v2 と同じ)。
  */
 type StageViewProps = GameStageViewProps & {
   /** タイミングのピルの 2 行目(「芯」「ふつう」「かすり」「ミス」)。`timingCue` と同じ区間に出す。 */
-  readonly contactQuality?: ContactQuality | null | undefined;
+  readonly contactQuality: ContactQuality | null;
 };
 
 /** WebGL が使えない・描画が中断されたときの案内。`loading`/`ready` では出さない。 */
@@ -178,7 +178,7 @@ export function StageView(props: StageViewProps) {
       <div className="bb-stage__canvas" ref={containerRef} />
       <div className={inputActive ? "bb-stage__input bb-stage__input--active" : "bb-stage__input"} {...pointerHandlers} />
       <StageTelop text={telop} />
-      {timingCue === null ? null : <TimingCuePill cue={timingCue} quality={contactQuality ?? null} zoneRect={zoneRect} />}
+      {timingCue === null ? null : <TimingCuePill cue={timingCue} quality={contactQuality} zoneRect={zoneRect} />}
       {typeof hintText === "string" ? <StageHint text={hintText} isTap={typeof tapHint === "string"} zoneRect={zoneRect} /> : null}
       {skipHint ? <SkipHint /> : null}
       {fallback === null ? null : (

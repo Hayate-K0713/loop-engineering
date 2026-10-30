@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { TutorialStep } from "../types/view";
-import tutorialCss from "./Tutorial.css?raw";
 import { Tutorial } from "./Tutorial";
+
+// vitest は CSS の import を空にするので、ファイルを直接読む(frontend ディレクトリから実行する前提の固定パス)。
+const tutorialCss = readFileSync("src/features/baseball/ui/Tutorial.css", "utf8");
 
 const STEPS: readonly TutorialStep[] = [
   { id: "a", title: "カーソルを うごかす", body: "ゆびを のせて スライド", illustration: "drag" },
