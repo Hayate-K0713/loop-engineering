@@ -1,4 +1,4 @@
-import type { PointerEventHandler } from "react";
+import type { MouseEvent, PointerEventHandler } from "react";
 import type { SwingKind } from "../types/batting";
 
 const SWING_KINDS: readonly { readonly kind: SwingKind; readonly label: string }[] = [
@@ -14,9 +14,15 @@ type SwingControlsProps = {
   readonly onSwing: PointerEventHandler<HTMLButtonElement>;
 };
 
+/** 長押しのメニューを出さない(スイングボタンを押し続けたときに、メニューが出て pointercancel になるのを防ぐ)。 */
+function suppressContextMenu(event: MouseEvent<HTMLElement>): void {
+  event.preventDefault();
+}
+
 /**
  * スイング操作(スイングボタンとミート/強振の切替)。
  * スイングは pointerdown で受ける(click は pointerup 時点になりタイミングが遅れるため)。キーボード操作は hooks 側(Space/Enter)が担う。
+ * スイングボタンは 80px(CSS。`.bb-swing .bb-swing__button`)。切替ボタンも含め、押せる大きさは 44px 以上。
  */
 export function SwingControls({ ready, swingKind, onSelectSwingKind, onSwing }: SwingControlsProps) {
   return (
@@ -35,7 +41,14 @@ export function SwingControls({ ready, swingKind, onSelectSwingKind, onSwing }: 
           </button>
         ))}
       </div>
-      <button type="button" className="bb-button bb-button--primary bb-swing__button" data-testid="swing-button" disabled={!ready} onPointerDown={onSwing}>
+      <button
+        type="button"
+        className="bb-button bb-button--primary bb-swing__button"
+        data-testid="swing-button"
+        disabled={!ready}
+        onPointerDown={onSwing}
+        onContextMenu={suppressContextMenu}
+      >
         スイング
       </button>
     </div>

@@ -26,7 +26,7 @@ function toLocalPx(point: ZonePoint, rect: ScreenRect): { readonly x: number; re
  * 塗りつぶさないので、追跡カメラに切り替わったあとも背後の打球が見える。操作は受けず(`pointer-events: none`)、支援技術にも読ませない。
  */
 export function ZoneFeedback({ feedback, zoneRect }: ZoneFeedbackProps) {
-  if (feedback === null || zoneRect === null) {
+  if (!feedback || zoneRect === null) {
     return null;
   }
   const from = toLocalPx(feedback.from, zoneRect);

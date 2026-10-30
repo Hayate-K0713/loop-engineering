@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEventHandler } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEventHandler, type RefObject } from "react";
 import { assistFor, lockOnCursor, type LockOn } from "../model/batting/assist";
 import { INITIAL_CURSOR } from "../model/batting/cursor";
 import type { ViewSize } from "../model/world/camera/project";
@@ -129,35 +129,24 @@ function clampToView(point: ZonePoint, options: UseBattingControlsOptions): Zone
   return clampCursorToView(point, zoneRect, size.width, freeBottomPxOf(options.getSafeArea(), size.height));
 }
 
-/**
- * 打撃操作(ポインタ・キーボード・ボタン)の合成。スイング種別(`swingKind`、初期 `"meet"`)の state もここに持つ。
- * 素のカーソル位置は ref(`INITIAL_CURSOR` から開始)に保持し、描画は director が `getCursorView()` を毎フレーム読んで `SceneFrame` に載せる
- * (DOM を直接更新しない)。ポインタは入力面の div に展開する。カーソルの移動は `moveCursorTo` で画面内に制限する(`clampCursorToView`)。
- * スイングの `SwingInput.cursor`/`assistK` は、素のカーソルに**入力イベントの時刻の進行度**でロックオン(`effectiveCursorAt`)を適用して作る
- * (表示する有効カーソルと判定に使うカーソルを一致させる。タップは押下の時刻)。
- */
-export function useBattingControls(options: UseBattingControlsOptions): BattingControls {
-  const { enabled, holding, swingReady, cursorRadii, onSkip, pickZone, getZoneRect, holdArrivalFor, releaseArrival } = options;
-  const [swingKind, setSwingKind] = useState<SwingKind>("meet");
-  const latest = useLatest({ ...options, swingKind });
-  const positionRef = useRef<ZonePoint>(INITIAL_CURSOR);
-  const swungRef = useRef<SwungCursor | null>(null);
-  const flightSeq = options.flight === null ? null : options.flight.seq;
+type LatestOptions = RefObject<UseBattingControlsOptions & { readonly swingKind: SwingKind }>;
 
-  // 次の投球が始まったら、前のスイングの表示の固定を捨てる。
+type LockOnControls = Pick<BattingControls, "getCursorView" | "swingNow" | "swingFromButton"> & {
+  readonly swingFromKey: (origin: SwingOrigin) => void;
+};
+
+/**
+ * ロックオンの適用: 表示用の有効カーソル(`getCursorView`。現在時刻の進行度)と、スイング(`swingNow`。入力イベントの時刻の進行度)。
+ * 振った後の演出中は、振ったときの値を見せ続ける(有効カーソルが素のカーソルへ戻って見えないように。次の投球で捨てる)。
+ */
+function useLockOn(latest: LatestOptions, positionRef: RefObject<ZonePoint>, flightSeq: number | null): LockOnControls {
+  const swungRef = useRef<SwungCursor | null>(null);
+
   useEffect(() => {
     if (flightSeq !== null) {
       swungRef.current = null;
     }
   }, [flightSeq]);
-
-  const getCursor = useCallback((): ZonePoint => positionRef.current, []);
-  const moveCursorTo = useCallback(
-    (point: ZonePoint): void => {
-      positionRef.current = clampToView(point, latest.current);
-    },
-    [latest],
-  );
 
   const getCursorView = useCallback((): CursorView => {
     const current = latest.current;
@@ -169,7 +158,7 @@ export function useBattingControls(options: UseBattingControlsOptions): BattingC
     const raw = positionRef.current;
     const lock = effectiveCursorAt(assistFor(current.difficulty), current.flight, raw, current.getElapsedMs());
     return { point: lock.cursor, raw, k: lock.k, radii };
-  }, [latest]);
+  }, [latest, positionRef]);
 
   const swingNow = useCallback(
     (origin?: SwingOrigin, cursorAtDown?: ZonePoint, detail: SwingDetail = BUTTON_DETAIL): void => {
@@ -186,11 +175,36 @@ export function useBattingControls(options: UseBattingControlsOptions): BattingC
         swingMetaOf(origin, raw, lock, detail),
       );
     },
-    [latest],
+    [latest, positionRef],
   );
 
   const swingFromButton = useCallback<PointerEventHandler<HTMLButtonElement>>((event) => swingNow(swingOriginOf(event), undefined, BUTTON_DETAIL), [swingNow]);
   const swingFromKey = useCallback((origin: SwingOrigin): void => swingNow(origin, undefined, KEY_DETAIL), [swingNow]);
+  return { getCursorView, swingNow, swingFromButton, swingFromKey };
+}
+
+/**
+ * 打撃操作(ポインタ・キーボード・ボタン)の合成。スイング種別(`swingKind`、初期 `"meet"`)の state もここに持つ。
+ * 素のカーソル位置は ref(`INITIAL_CURSOR` から開始)に保持し、描画は director が `getCursorView()` を毎フレーム読んで `SceneFrame` に載せる
+ * (DOM を直接更新しない)。ポインタは入力面の div に展開する。カーソルの移動は `moveCursorTo` で画面内に制限する(`clampCursorToView`)。
+ * スイングの `SwingInput.cursor`/`assistK` は、素のカーソルに**入力イベントの時刻の進行度**でロックオン(`effectiveCursorAt`)を適用して作る
+ * (表示する有効カーソルと判定に使うカーソルを一致させる。タップは押下の時刻)。
+ */
+export function useBattingControls(options: UseBattingControlsOptions): BattingControls {
+  const { enabled, holding, swingReady, cursorRadii, onSkip, pickZone, getZoneRect, holdArrivalFor, releaseArrival } = options;
+  const [swingKind, setSwingKind] = useState<SwingKind>("meet");
+  const latest = useLatest({ ...options, swingKind });
+  const positionRef = useRef<ZonePoint>(INITIAL_CURSOR);
+  const { getCursorView, swingNow, swingFromButton, swingFromKey } = useLockOn(latest, positionRef, options.flight === null ? null : options.flight.seq);
+
+  const getCursor = useCallback((): ZonePoint => positionRef.current, []);
+  const moveCursorTo = useCallback(
+    (point: ZonePoint): void => {
+      positionRef.current = clampToView(point, latest.current);
+    },
+    [latest],
+  );
+
   const reportIgnored = useCallback((reason: IgnoredInputReason): void => latest.current.onIgnoredInput?.(reason), [latest]);
   const reportPointerCancel = useCallback((): void => latest.current.onPointerCancel?.(), [latest]);
 

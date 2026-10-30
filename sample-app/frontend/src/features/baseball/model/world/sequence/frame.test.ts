@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BattedBall, InPlayResult, SwingInput } from "../../../types/batting";
+import type { AssistParams, BattedBall, InPlayResult, SwingInput } from "../../../types/batting";
 import type { PitchFlight } from "../../../types/pitch";
 import type { CameraPose, SafeArea, SceneFrame, SceneLayout, ScenePhase, UniformColors, Vec3 } from "../../../types/scene";
 import type { PitchOutcomeView } from "../../../types/view";
@@ -15,9 +15,10 @@ import { BAT_FOLLOW_LIFT, BAT_STANCE_HEIGHT } from "../motion/rig";
 import { type BattedPlan, battedBallAt } from "../path/batted-path";
 import { FIELDER_SLOTS } from "../path/fielders";
 import { heldBallAt, pitchBallAt } from "../path/pitch-path";
-import { cellToWorld, zoneToWorld } from "../space/coords";
+import { zoneToWorld } from "../space/coords";
 import { CPU_SWING_LEAD_MS, RELEASE_POINT, WORLD_PARAMS } from "../space/params";
-import { lerp, lerpVec3 } from "../space/vec3";
+import { lerpVec3 } from "../space/vec3";
+import { ballSpinAt } from "./ball-look";
 import { type SceneFrameInput, sceneFrameAt, zonePulseAt } from "./frame";
 import { type PlayPlan, planPlay, swingProgressAt } from "./play-plan";
 
@@ -640,7 +641,7 @@ describe("sceneFrameAt: ゾーン・カーソル・狙い", () => {
   });
 
   it("cursor.visible は入力が真かつ中継カメラに移る前のみ", () => {
-    const hidden = { visible: false, point: { x: 0, y: 0 }, radii: { rx: 0.5, ry: 0.3 } };
+    const hidden = { visible: false, point: { x: 0, y: 0 }, raw: { x: 0, y: 0 }, radii: { rx: 0.5, ry: 0.3 } };
     expect(frameAt(SINGLE, chaseFrom(SINGLE) - 1).cursor.visible).toBe(true);
     expect(frameAt(SINGLE, chaseFrom(SINGLE)).cursor.visible).toBe(false);
     expect(frameAt(MISS_HUMAN, 2000).cursor.visible).toBe(true);
@@ -669,22 +670,145 @@ describe("sceneFrameAt: ゾーン・カーソル・狙い", () => {
     expect(frameAt(TAKE, 700).cursor.flash).toBe(false);
   });
 
-  it("aim: visible は aim の入力があるときのみ。position は cellToWorld、幅・高さは (2/3) × 0.26・(2/3) × 0.30", () => {
-    const aim = frameAt(null, 0, { phase: "windup", aim: { col: 1, row: 3 } }).aim;
-    expect(aim.visible).toBe(true);
-    expect(aim.position).toEqual(cellToWorld({ col: 1, row: 3 }));
-    expect(aim.width).toBeCloseTo((2 / 3) * 0.26, 12);
-    expect(aim.height).toBeCloseTo((2 / 3) * 0.3, 12);
-    const none = frameAt(null, 0, { phase: "windup", aim: null }).aim;
-    expect(none.visible).toBe(false);
-    expect(Number.isFinite(none.width) && Number.isFinite(none.position.x)).toBe(true);
+  it("旧 aim(狙いセルのハイライト)は SceneFrame に無い", () => {
+    expect("aim" in frameAt(null, 100, { phase: "flight" })).toBe(false);
+  });
+});
+
+describe("sceneFrameAt: cursor.raw(素のカーソルの印)", () => {
+  const RAW_FAR = { x: -0.6, y: 0.5 };
+
+  it("有効カーソルと離れているときだけ出す(同じ位置・ごく近い位置では出さない)。位置は素のカーソルのゾーン上の点", () => {
+    const apart = frameAt(null, 100, { phase: "flight", cursor: { ...inputOf().cursor, raw: RAW_FAR } }).cursor;
+    expect(apart.raw.visible).toBe(true);
+    expect(apart.raw.position).toEqual(zoneToWorld(RAW_FAR));
+    expect(apart.position).toEqual(zoneToWorld({ x: 0.25, y: -0.4 }));
+    expect(frameAt(null, 100, { phase: "flight" }).cursor.raw.visible).toBe(false);
+    const near = { x: 0.26, y: -0.4 };
+    expect(frameAt(null, 100, { phase: "flight", cursor: { ...inputOf().cursor, raw: near } }).cursor.raw.visible).toBe(false);
   });
 
-  it("aim は入力が無ければ、どの phase・時刻でも非表示。中継カメラに移ったあとはゾーンと一緒に消える", () => {
-    const shown = GRID_INPUTS.filter((input) => sceneFrameAt({ ...input, aim: null }).aim.visible);
+  it("カーソル自体が非表示、または中継カメラに移ったあとは出さない", () => {
+    const base = inputOf().cursor;
+    expect(frameAt(null, 100, { phase: "flight", cursor: { ...base, raw: RAW_FAR, visible: false } }).cursor.raw.visible).toBe(false);
+    expect(frameAt(SINGLE, chaseFrom(SINGLE) - 1, { cursor: { ...base, raw: RAW_FAR } }).cursor.raw.visible).toBe(true);
+    expect(frameAt(SINGLE, chaseFrom(SINGLE), { cursor: { ...base, raw: RAW_FAR } }).cursor.raw.visible).toBe(false);
+  });
+});
+
+/** 打撃(人間)の予告。`preview` を差し替えたアシスト。 */
+const assistWith = (preview: "exact" | "fade" | "none"): AssistParams => ({ ...HARD, preview, fadeRadius: 0.45, fadeJitter: 0.25 });
+
+describe("sceneFrameAt: guide(打撃の予告・縮むリング)", () => {
+  const D = FLIGHT.durationMs;
+  const guideAt = (plan: PlayPlan | null, tMs: number, overrides: Partial<SceneFrameInput> = {}): SceneFrame["guide"] =>
+    frameAt(plan, tMs, { phase: plan === null ? "flight" : "play", ...overrides }).guide;
+
+  it("exact: リリースから D + holdMs まで可視で、点は flight.landing に厳密一致(plan が無い間・CPU・人間の空振りと見逃し)", () => {
+    const plans: readonly (PlayPlan | null)[] = [null, MISS_CPU, TAKE, SINGLE, FOUL];
+    const wrong = plans.flatMap((plan) =>
+      TIMES.filter((tMs) => tMs >= 0 && tMs <= D + HOLD_MS).filter((tMs) => {
+        const guide = guideAt(plan, tMs);
+        return !(guide.visible && guide.mode === "exact" && JSON.stringify(guide.position) === JSON.stringify(zoneToWorld(FLIGHT.landing)));
+      }),
+    );
+    expect(wrong).toEqual([]);
+  });
+
+  it("フェードイン 120ms 後は、不透明度 0.9 以上を D + holdMs まで保つ(受け入れ C3)", () => {
+    const times = Array.from({ length: 200 }, (_, i) => GUIDE.fadeInMs + (i * (D + HOLD_MS - GUIDE.fadeInMs)) / 199);
+    expect(times.filter((tMs) => guideAt(null, tMs).alpha < 0.9)).toEqual([]);
+    expect(guideAt(null, 0).alpha).toBe(0);
+  });
+
+  it("リング半径は previewRingAt に一致(t = 0 で 0.30m、t = D で 0.125m)し、線幅は ringWidthFor(最終のカメラ)に一致する", () => {
+    const at = (tMs: number): SceneFrame["guide"]["ring"] => guideAt(null, tMs).ring;
+    expect(at(0).radius).toBeCloseTo(GUIDE.previewRing.startRadius, 9);
+    expect(at(D).radius).toBeCloseTo(WORLD_PARAMS.ballRadius * GUIDE.previewRing.endRadiusRatio, 9);
+    expect(at(D + 50).radius).toBeCloseTo(at(D).radius, 12);
+    const wrong = COMPOSITIONS.filter((composition) => {
+      const frame = frameAt(null, 200, { phase: "flight", ...composition });
+      const expected = ringWidthFor(frame.camera, zoneToWorld(FLIGHT.landing), GUIDE.ringWidthRatio);
+      return !(frame.guide.ring.visible && frame.guide.ring.tone === "preview" && Math.abs(frame.guide.ring.width - expected) < 1e-12 && expected > 0);
+    });
+    expect(wrong.map((composition) => composition.aspect)).toEqual([]);
+    const radii = [0, 100, 200, 300, 400, D].map((tMs) => at(tMs).radius);
+    expect(radii.every((radius, i) => i === 0 || radius < (radii.at(i - 1) ?? 0))).toBe(true);
+  });
+
+  it("fade: 円の中心は previewCenterOf(決定論)で、円は真の着弾点を含む。none: 点も円も出さずリングだけ出す", () => {
+    const fade = guideAt(null, 300, { assist: assistWith("fade") });
+    const center = previewCenterOf(assistWith("fade"), FLIGHT.landing, FLIGHT.seq);
+    expect(fade.mode).toBe("fade");
+    expect(fade.position).toEqual(zoneToWorld(center));
+    const landing = zoneToWorld(FLIGHT.landing);
+    expect(Math.hypot(fade.position.x - landing.x, fade.position.y - landing.y)).toBeLessThanOrEqual(fade.fadeRadius + 1e-12);
+    expect(guideAt(null, 300, { assist: assistWith("fade") })).toEqual(fade);
+    const none = guideAt(null, 300, { assist: assistWith("none") });
+    expect(none).toMatchObject({ visible: true, mode: "none", markerRadius: 0, fadeRadius: 0 });
+    expect(none.ring.visible).toBe(true);
+  });
+
+  it("接触なしの plan では、ボールが消える時刻(ballHoldUntilMs)まで残り、その後は消える(受付が遅い人間の空振り・見逃しを含む)", () => {
+    for (const plan of [MISS_HUMAN, MISS_CPU, TAKE, TAKE_HUMAN]) {
+      expect(guideAt(plan, plan.ballHoldUntilMs).visible).toBe(true);
+      expect(guideAt(plan, plan.ballHoldUntilMs + 1).visible).toBe(false);
+    }
+    expect(TAKE_HUMAN.ballHoldUntilMs).toBeGreaterThan(D + HOLD_MS);
+  });
+
+  it("plan が無い間(人間の判定待ち)と接触ありは、どちらも D + holdMs で消える(接触が早くても D + holdMs までは残る)", () => {
+    expect(guideAt(null, D + HOLD_MS).visible).toBe(true);
+    expect(guideAt(null, D + HOLD_MS + 1).visible).toBe(false);
+    for (const plan of CHASE_PLANS) {
+      expect(guideAt(plan, D + HOLD_MS).visible).toBe(true);
+      expect(guideAt(plan, D + HOLD_MS + 1).visible).toBe(false);
+      expect(guideAt(plan, plan.ballHoldUntilMs + 500).visible).toBe(false);
+    }
+  });
+
+  it("idle・windup・投球なし・守備のレイアウト(pitching)では出ない。全入力でリングの半径・線幅は有限", () => {
+    const shown = GRID_INPUTS.filter((input) => {
+      const guide = sceneFrameAt(input).guide;
+      return guide.visible && (input.phase === "idle" || input.phase === "windup" || input.flight === null);
+    });
     expect(shown).toHaveLength(0);
-    expect(frameAt(SINGLE, chaseFrom(SINGLE) - 1).aim.visible).toBe(true);
-    expect(frameAt(SINGLE, chaseFrom(SINGLE) + 100).aim.visible).toBe(false);
+    expect(guideAt(null, 300, { layout: "pitching" }).visible).toBe(false);
+    expect(frameAt(null, 300, { phase: "flight", flight: null }).guide.visible).toBe(false);
+    expect([...GRID_INPUTS, ...COMPOSED_INPUTS].filter((input) => !numbersIn(sceneFrameAt(input).guide).every(Number.isFinite))).toHaveLength(0);
+  });
+});
+
+describe("sceneFrameAt: ball の見え方(回転・ハロー・縁取り)", () => {
+  const SLIDER: PitchFlight = { ...FLIGHT, kind: "slider" };
+  const FORK: PitchFlight = { ...FLIGHT, kind: "fork" };
+  const ballOf = (tMs: number, flight: PitchFlight): SceneFrame["ball"] => frameAt(null, tMs, { phase: "flight", flight }).ball;
+
+  it("rotation は球種ごとの回転 ballSpinAt(kind, t)。到達後(着弾点で待つ間)は止まり、球種で異なる", () => {
+    expect(ballOf(200, FLIGHT).rotation).toEqual(ballSpinAt("straight", 200));
+    expect(ballOf(200, SLIDER).rotation).toEqual(ballSpinAt("slider", 200));
+    expect(ballOf(FLIGHT.durationMs + 50, FLIGHT).rotation).toEqual(ballSpinAt("straight", FLIGHT.durationMs));
+    expect(ballOf(300, SLIDER).rotation).not.toEqual(ballOf(300, FORK).rotation);
+    expect(ballOf(0, FLIGHT).rotation).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it("rotation は接触の瞬間に連続する(接触前は D で止まり、接触後は D から進む)", () => {
+    const contactMs = SINGLE.contactMs ?? Number.NaN;
+    const before = frameAt(SINGLE, contactMs - 1).ball.rotation;
+    const at = frameAt(SINGLE, contactMs).ball.rotation;
+    expect(at).toEqual(ballSpinAt("straight", FLIGHT.durationMs));
+    expect(before).toEqual(at);
+    expect(frameAt(SINGLE, contactMs + 100).ball.rotation).toEqual(ballSpinAt("straight", FLIGHT.durationMs + 100));
+  });
+
+  it("halo は常に > 0(WORLD_PARAMS.ball.halo.opacity)。outlineScale は outlineScaleFor(最終のカメラ, 位置, scale)で 1.12 以上", () => {
+    const wrong = [...GRID_INPUTS, ...COMPOSED_INPUTS].filter((input) => {
+      const frame = sceneFrameAt(input);
+      const position = frame.ball.visible ? frame.ball.position : RELEASE_POINT;
+      const expected = outlineScaleFor(frame.camera, position, frame.ball.scale);
+      return !(frame.ball.halo === BALL.halo.opacity && frame.ball.halo > 0 && frame.ball.outlineScale === expected && expected >= 1.12);
+    });
+    expect(wrong).toHaveLength(0);
   });
 });
 
@@ -708,12 +832,13 @@ function worldBatHeight(pose: SceneFrame["batter"]): number {
 }
 
 /**
- * 打者が motion の `joints` どおりに配置されている: バットの高さ以外は `placeBatter(joints, ACTORS.batter)` と一致し、
- * バットのワールドでの高さ(root の位置と拡大率を考慮)は motion が意図した高さ(`joints.bat.height`)と一致する。
+ * 打者が motion の `joints` どおりに配置されている: バットの高さ・長さ以外は `placeBatter(joints, batterRootFor(aspect))` と一致し、
+ * バット軸の長さは `batLengthScaleFor(aspect)`、バットのワールドでの高さ(root の位置と拡大率を考慮)は motion が意図した高さ(`joints.bat.height`)と一致する。
  */
-function expectBatterAt(actual: SceneFrame["batter"], joints: BatterJoints): void {
-  const withoutHeight = (pose: SceneFrame["batter"]): SceneFrame["batter"] => ({ ...pose, bat: { ...pose.bat, height: 0 } });
-  expect(withoutHeight(actual)).toEqual(withoutHeight(placeBatter(joints, ACTORS.batter)));
+function expectBatterAt(actual: SceneFrame["batter"], joints: BatterJoints, aspect = 16 / 9): void {
+  const withoutHeight = (pose: SceneFrame["batter"]): SceneFrame["batter"] => ({ ...pose, bat: { ...pose.bat, height: 0, lengthScale: 1 } });
+  expect(withoutHeight(actual)).toEqual(withoutHeight(placeBatter(joints, batterRootFor(aspect))));
+  expect(actual.bat.lengthScale).toBe(batLengthScaleFor(aspect));
   expect(worldBatHeight(actual)).toBeCloseTo(joints.bat.height, 9);
 }
 
@@ -739,11 +864,20 @@ describe("sceneFrameAt: 打者", () => {
     expect(near(swing.height, zoneToWorld(FLIGHT.landing).y)).toBe(true);
   });
 
-  it("打者の拡大率と足元の y を打ち消す: frame のバット高さは (ワールドの高さ − y) / 拡大率(打者ローカルの値)", () => {
+  it("打者の拡大率と足元の y を打ち消す: frame のバット高さは (ワールドの高さ − y) / 補間後の拡大率(打者ローカルの値。縦長は 0.70)", () => {
     const swing = swingOf(SINGLE);
-    const expectLocal = (worldHeight: number): number => (worldHeight - ACTORS.batter.position.y) / ACTORS.batter.scale;
-    expect(frameAt(SINGLE, swing.contactAtMs).batter.bat.height).toBeCloseTo(expectLocal(swing.height), 9);
-    expect(frameAt(null, 0, { phase: "windup" }).batter.bat.height).toBeCloseTo(expectLocal(BAT_STANCE_HEIGHT), 9);
+    for (const aspect of [16 / 9, 1, 0.85, PORTRAIT_ASPECT]) {
+      const expectLocal = (worldHeight: number): number => (worldHeight - ACTORS.batter.position.y) / batterRootFor(aspect).scale;
+      expect(frameAt(SINGLE, swing.contactAtMs, { aspect }).batter.bat.height).toBeCloseTo(expectLocal(swing.height), 9);
+      expect(frameAt(null, 0, { phase: "windup", aspect }).batter.bat.height).toBeCloseTo(expectLocal(BAT_STANCE_HEIGHT), 9);
+    }
+  });
+
+  it("縦横比の補間域(縦長〜横長の全域)で、接触の瞬間のバットの高さはボール(着弾点)の高さと一致する(受け入れ A5)", () => {
+    const swing = swingOf(SINGLE);
+    const aspects = Array.from({ length: 40 }, (_, i) => 0.3 + (i * (2 - 0.3)) / 39);
+    const wrong = aspects.filter((aspect) => Math.abs(worldBatHeight(frameAt(SINGLE, swing.contactAtMs, { aspect }).batter) - zoneToWorld(FLIGHT.landing).y) > 1e-9);
+    expect(wrong).toEqual([]);
   });
 
   it("構え(ワールドで BAT_STANCE_HEIGHT)・接触(swing.height)・振り切り(swing.height + BAT_FOLLOW_LIFT)の高さが、打者の拡大率によらず意図どおり", () => {
@@ -770,31 +904,44 @@ describe("sceneFrameAt: 打者", () => {
     expect(hidden).toHaveLength(0);
   });
 
-  it("打者の x は縦横比の補間 k で横長(position.x)から縦長(portraitX)へ混ざる。y・z・向き・拡大率は不変", () => {
-    const { position, portraitX, yaw, scale } = ACTORS.batter;
+  it("打者の足元・拡大率・向きは batterRootFor(aspect)、バット軸の長さは batLengthScaleFor(aspect)。y・z・向きは不変", () => {
+    const { position, yaw } = ACTORS.batter;
     const aspects = [16 / 9, 1.2, 1, 0.9, 0.8, 0.75, 0.7, PORTRAIT_ASPECT, 0.3];
     const wrong = aspects.filter((aspect) => {
       const batter = frameAt(null, 100, { phase: "flight", aspect }).batter;
-      const expectedX = lerp(position.x, portraitX, portraitBlendAt(aspect));
+      const root = batterRootFor(aspect);
       return (
-        Math.abs(batter.position.x - expectedX) > 1e-12 ||
+        JSON.stringify(batter.position) !== JSON.stringify(root.position) ||
+        batter.scale !== root.scale ||
         batter.position.y !== position.y ||
         batter.position.z !== position.z ||
         batter.yaw !== yaw ||
-        batter.scale !== scale
+        batter.bat.lengthScale !== batLengthScaleFor(aspect)
       );
     });
     expect(wrong).toEqual([]);
-    expect(frameAt(null, 100, { phase: "flight", aspect: 16 / 9 }).batter.position.x).toBe(position.x);
-    expect(frameAt(null, 100, { phase: "flight", aspect: PORTRAIT_ASPECT }).batter.position.x).toBe(portraitX);
-    const xs = aspects.map((aspect) => frameAt(null, 100, { phase: "flight", aspect }).batter.position.x);
-    expect(xs.every((x, i) => i === 0 || x >= (xs.at(i - 1) ?? Number.NEGATIVE_INFINITY) - 1e-12)).toBe(true);
   });
 
-  it("スイング中も打者の x は縦長の値(バットの高さの補正は変わらない)", () => {
+  it("横長(k = 0)は v2 と同値(x −0.8・拡大率 0.92・バット 1.0)、縦長(k = 1)は v3(x −0.65・拡大率 0.70・バット 1.35)。x は縦横比の補間で単調に動く", () => {
+    const { position, portraitX, scale, portraitScale, batLength, portraitBatLength } = ACTORS.batter;
+    const landscape = frameAt(null, 100, { phase: "flight", aspect: 16 / 9 }).batter;
+    const portrait = frameAt(null, 100, { phase: "flight", aspect: PORTRAIT_ASPECT }).batter;
+    expect([landscape.position.x, landscape.scale, landscape.bat.lengthScale]).toEqual([position.x, scale, batLength]);
+    expect([portrait.position.x, portrait.scale, portrait.bat.lengthScale]).toEqual([portraitX, portraitScale, portraitBatLength]);
+    const aspects = [16 / 9, 1.2, 1, 0.9, 0.8, 0.75, 0.7, PORTRAIT_ASPECT, 0.3];
+    const batters = aspects.map((aspect) => frameAt(null, 100, { phase: "flight", aspect }).batter);
+    const monotone = (values: readonly number[], sign: 1 | -1): boolean => values.every((value, i) => i === 0 || sign * (value - (values.at(i - 1) ?? 0)) >= -1e-12);
+    expect(monotone(batters.map((batter) => batter.position.x), 1)).toBe(true);
+    expect(monotone(batters.map((batter) => batter.scale), -1)).toBe(true);
+    expect(monotone(batters.map((batter) => batter.bat.lengthScale), 1)).toBe(true);
+  });
+
+  it("スイング中も打者の足元・拡大率・バット軸の長さは縦長の値(バットの高さの補正は補間後の拡大率で行う)", () => {
     const swing = swingOf(SINGLE);
     const portrait = frameAt(SINGLE, swing.contactAtMs, { aspect: PORTRAIT_ASPECT }).batter;
     expect(portrait.position.x).toBe(ACTORS.batter.portraitX);
+    expect(portrait.scale).toBe(ACTORS.batter.portraitScale);
+    expect(portrait.bat.lengthScale).toBe(ACTORS.batter.portraitBatLength);
     expect(worldBatHeight(portrait)).toBeCloseTo(swing.height, 9);
   });
 

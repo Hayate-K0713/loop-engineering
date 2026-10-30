@@ -351,12 +351,13 @@ function guideHideAtMs(ctx: FrameContext, flight: PitchFlight): number {
 }
 
 /**
- * 打撃の予告(着弾点の印と縮むリング)。人間打撃(`layout = "batting"`)の飛行中・演出中で、中継カメラに移り始めるまで出す。
+ * 打撃の予告(着弾点の印と縮むリング)。人間打撃(`layout = "batting"`)の飛行中・演出中に、リリースから `guideHideAtMs` まで出す
+ * (消す時刻は D + holdMs か、接触なしならボールが消える時刻。接触後の追跡カメラへの移り始めはこの直後なので、カメラでは消さない)。
  * 守備の `guide`(照準・ゲージ)は段階 B で合成するので、ここでは出さない。リングの線幅は最終のカメラから `ringWidthFor` で m に直す。
  */
 function guideFrame(ctx: FrameContext, camera: CameraPose): SceneFrame["guide"] {
   const { flight, phase, layout, assist } = ctx.input;
-  if (layout !== "batting" || flight === null || (phase !== "flight" && phase !== "play") || ctx.chase !== null) {
+  if (layout !== "batting" || flight === null || (phase !== "flight" && phase !== "play")) {
     return HIDDEN_GUIDE;
   }
   return guideFrameAt({

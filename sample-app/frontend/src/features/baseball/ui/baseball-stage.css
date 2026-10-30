@@ -144,18 +144,24 @@ body:has(.bb-page) {
   pointer-events: none;
 }
 
-/* canvas 上の入力面。オーバーレイより下。タッチのスクロールを止めるのは人間打撃中だけ */
+/* canvas 上の入力面。オーバーレイより下。タッチのスクロールなどを止めるのは `--active`(人間打撃中・人間守備中)だけ */
 .bb-stage__input {
   position: absolute;
   inset: 0;
   z-index: 1;
   touch-action: manipulation;
   user-select: none;
+  -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 操作を受けている間(`inputActive` = 人間打撃中・人間守備中)の入力面。スクロール・ピンチ・長押しのメニュー・テキスト選択を無効にする。
+   Android/iOS の長押しでメニューや選択が出ると pointercancel でスイング・狙いが途切れるため(contextmenu は StageView が preventDefault する) */
 .bb-stage__input--active {
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* スキップのヒント。小さく低コントラスト。出たり消えたりが目障りにならないよう、少し遅れてフェードインする */
@@ -197,23 +203,28 @@ body:has(.bb-page) {
   }
 }
 
-/* スイング後のタイミング表示(早い/ジャスト/遅い)。ゾーン枠の上端中央の直上に出る小さなピル。
+/* スイング後のタイミング表示(2 行。1 行目 = ジャスト!/早い −62ms/遅い +48ms、2 行目 = 芯/ふつう/かすり/ミス)。
+   ゾーン枠の上端中央の直上に出る小さなピル。濃い地に、ラベルの色(ジャスト=黄・早い=青・遅い=橙)の縁と 1 行目。
    位置(left/top = 枠の上端中央)は StageView がゾーン枠の矩形から style で与え、ここでは枠の真上へ持ち上げるだけ。
    操作は受けない(pointer-events: none)。出入りは StageView が 900ms で切り替える */
 .bb-stage__timing {
+  --bs-timing-color: #ffd23f;
+
   position: absolute;
   z-index: 2;
   box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  min-width: 112px;
   margin: 0;
-  padding: 3px 12px 4px;
+  padding: 3px 14px 4px;
   transform: translate(-50%, calc(-100% - 6px));
-  border: 2px solid var(--bs-ink);
-  border-radius: 999px;
+  border: 2px solid var(--bs-timing-color);
+  border-radius: 12px;
+  background: rgba(8, 20, 34, 0.9);
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
-  color: var(--bs-ink);
-  font-size: 14px;
   font-weight: 900;
-  letter-spacing: 0.04em;
   line-height: 1.2;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -221,16 +232,62 @@ body:has(.bb-page) {
   animation: bb-timing-pop 0.14s ease-out both;
 }
 
+.bb-stage__timing-main {
+  color: var(--bs-timing-color);
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  text-shadow: var(--bs-stroke-thin);
+}
+
+.bb-stage__timing-sub {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
 .bb-stage__timing--just {
-  background: #ffd23f;
+  --bs-timing-color: #ffd23f;
 }
 
 .bb-stage__timing--early {
-  background: #6ec1ff;
+  --bs-timing-color: #6ec1ff;
 }
 
 .bb-stage__timing--late {
-  background: #ff9f43;
+  --bs-timing-color: #ff9f43;
+}
+
+/* 1 行のヒント(最初の数球の操作案内、タップが通らなかったときの「ポンと おす」)。ゾーン枠の下に出る(top は StageView が style で与える)。
+   矩形が未計測のときは画面下寄り(bottom)。操作は受けない。出たり消えたりが目障りにならないよう、短くフェードインする */
+.bb-stage__hint {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 200px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 5px 14px 6px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(8, 20, 34, 0.78);
+  color: var(--bs-text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  text-align: center;
+  text-shadow: var(--bs-stroke-thin);
+  pointer-events: none;
+  animation: bb-fade-in 0.2s ease-out both;
+}
+
+/* タップが通らなかったときのヒントは目立たせる */
+.bb-stage__hint--tap {
+  background: var(--bs-accent);
+  color: var(--bs-ink);
+  text-shadow: none;
 }
 
 /* WebGL 不可・描画中断の表示。文言そのもの(直下のテキストでも段落でも)をパネルにする */
@@ -829,6 +886,14 @@ body:has(.bb-page) {
   margin-left: auto;
 }
 
+/* スイングボタンは 80px(v2 は 92〜96px)。縦長の構図でゾーン枠の下の余裕を広げるため縮小した。常に押せる大きさ(44px 以上)は保つ。
+   baseball.css の 92px/96px より詳細度を上げて、画面幅によらず 80px にする */
+.bb-swing .bb-swing__button {
+  width: 80px;
+  height: 80px;
+  -webkit-touch-callout: none;
+}
+
 /* 守備: 球種チップ(1段目)、5x5 のグリッド(2段目の左)、投げる(2段目の右)。バー直下に [PitchingControls, CourseGrid] の順で置く。
    スマホ縦とデスクトップで同じ構造(幅とセルの大きさだけが違う)。この配置は baseball-stage.css が一本で持つ(baseball.css は部品の中だけ)。
    「投げる」は pitch-controls の中にあるので、サブグリッドで同じ表に載せる(pitch-controls の箱は残す。E2E の可視判定のため display: contents は使わない)。
@@ -1035,7 +1100,7 @@ body:has(.bb-page) {
 
 /* ---- 縦長で画面の高さが 800px 未満(ブラウザのツールバーがあるとき等) ----
    構図は実測した空き領域(data-inset の 2 要素の間)から決まるので、下のオーバーレイが低いほどゾーン枠・格子を大きく取れる。
-   打撃: ティッカーを 1 行にして余白を詰め、スイングボタンも 80px に(タップ目標 64px 以上は保つ)。ゾーン枠の下の余裕とゾーン枠の大きさに効く。
+   打撃: ティッカーを 1 行にして余白を詰める(スイングボタンは常に 80px)。ゾーン枠の下の余裕とゾーン枠の大きさに効く。
    守備: ティッカーを隠し、グリッドのセルを 44px から 36px に、余白を縮めて、操作バーを 300px 以内(下端から)に収める。 */
 
 @media (max-aspect-ratio: 1/1) and (max-height: 799px) {
@@ -1066,11 +1131,6 @@ body:has(.bb-page) {
 
   .bb-bar--swing {
     padding: 9px 14px 8px;
-  }
-
-  .bb-bar--swing .bb-swing__button {
-    width: 80px;
-    height: 80px;
   }
 
   .bb-game--pitching .bb-ticker {
@@ -1118,6 +1178,7 @@ body:has(.bb-page) {
   }
 
   .bb-stage__skip-hint,
+  .bb-stage__hint,
   .bb-stage__timing {
     animation: none;
   }

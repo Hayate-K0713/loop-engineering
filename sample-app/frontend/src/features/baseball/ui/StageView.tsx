@@ -173,7 +173,7 @@ export function StageView(props: StageViewProps) {
       <div className={inputActive ? "bb-stage__input bb-stage__input--active" : "bb-stage__input"} {...pointerHandlers} />
       <StageTelop text={telop} />
       {timingCue === null ? null : <TimingCuePill cue={timingCue} quality={contactQuality ?? null} zoneRect={zoneRect} />}
-      {hintText === null ? null : <StageHint text={hintText} isTap={tapHint !== null} zoneRect={zoneRect} />}
+      {typeof hintText === "string" ? <StageHint text={hintText} isTap={typeof tapHint === "string"} zoneRect={zoneRect} /> : null}
       {skipHint ? <SkipHint /> : null}
       {fallback === null ? null : (
         <p className="bb-stage__fallback" role="status" data-testid="stage-fallback">

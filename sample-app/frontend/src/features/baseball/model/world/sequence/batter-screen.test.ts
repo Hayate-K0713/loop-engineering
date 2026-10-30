@@ -3,13 +3,13 @@ import type { InPlayResult } from "../../../types/batting";
 import type { PitchFlight } from "../../../types/pitch";
 import type { BatterPose, SafeArea, SceneFrame, SceneLayout, Vec3 } from "../../../types/scene";
 import type { PitchOutcomeView } from "../../../types/view";
+import { ASSIST_TABLE } from "../../batting/assist";
 import { projectPoint, zoneRectOf, type ViewSize, type ZoneBox } from "../camera/project";
-import { portraitBlendAt } from "../camera/rig";
 import { handPosition, rotateEuler } from "../motion/fk";
-import { batterStancePose, batterSwingPose } from "../motion/batter";
-import { batLengthScaleFor, batTipX, batterRootFor } from "../motion/batter-layout";
+import { batterStancePose } from "../motion/batter";
+import { batTipX } from "../motion/batter-layout";
 import { placeBatter } from "../motion/pose";
-import { CHARACTER_RIG, SWING_CONTACT_PROGRESS } from "../motion/rig";
+import { CHARACTER_RIG } from "../motion/rig";
 import { zoneToWorld } from "../space/coords";
 import { WORLD_PARAMS } from "../space/params";
 import { sceneFrameAt } from "./frame";
@@ -61,24 +61,11 @@ function frameFor(
     layout,
     safeArea,
     uniforms: { offense: 0x2f63c8, defense: 0xe8473c },
-    cursor: { visible: false, point: { x: 0, y: 0 }, radii: { rx: 0.5, ry: 0.3 } },
-    aim: null,
+    cursor: { visible: false, point: { x: 0, y: 0 }, raw: { x: 0, y: 0 }, radii: { rx: 0.5, ry: 0.3 } },
+    assist: ASSIST_TABLE.normal,
     grid: layout === "pitching",
   });
-  return { ...frame, batter: v3Batter(width / height, overrides.plan?.swing ?? null) };
-}
-
-/**
- * v3 の打者(`batterRootFor` の足元と拡大率・`batLengthScaleFor` のバット軸の長さ)。`sceneFrameAt` の打者は A11 が `batterRootFor` に結線するまで
- * v2 の拡大率 0.92 のままなので、この検証では A2 の純関数から直接組み立てる(構えは `batterStancePose`、スイングは接触の瞬間の姿勢。バット高さは打者ローカルへ直す)。
- * A11 が結線したら、この上書きは外して `sceneFrameAt` の打者をそのまま使ってよい。
- */
-function v3Batter(aspect: number, swing: { readonly height: number } | null): BatterPose {
-  const root = batterRootFor(aspect);
-  const k = portraitBlendAt(aspect);
-  const joints = swing === null ? batterStancePose(k) : batterSwingPose(SWING_CONTACT_PROGRESS, swing.height, k);
-  const height = (joints.bat.height - root.position.y) / root.scale;
-  return placeBatter({ ...joints, bat: { ...joints.bat, height, lengthScale: batLengthScaleFor(aspect) } }, root);
+  return frame;
 }
 
 /** 打撃はゾーン枠、守備は 5×5 格子(ゾーンの中心から 5/3 倍)の画面矩形。 */

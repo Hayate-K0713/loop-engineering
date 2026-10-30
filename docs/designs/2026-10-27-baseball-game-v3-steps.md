@@ -96,7 +96,7 @@
 
 ### ウェーブ A-3(接続・合成・UI。4 並列)
 
-- [ ] **A9: hooks — 打撃入力(タップ方式のまま)**
+- [x] **A9: hooks — 打撃入力(タップ方式のまま)**
   - 依存: A0, A1, A4。担当ファイル: `hooks/{usePointerInput,useBattingControls,usePitchFlight,useKeyboardInput}.ts`。
   - やること: **`usePointerInput` のジェスチャ処理(ドラッグ・タップ候補・保留・held)は v2 のまま**。変更は (1) `onSwing(origin, cursorAtDown)` を受ける `useBattingControls` が、**押下時刻の `progress`** で `lockOnCursor(cursorAtDown)` を適用して `SwingInput.cursor` と `assistK` を作る(play 分冊 §1-1 の T4)、(2) 有効カーソルを director へ渡す、(3) `tapReleaseReason` で分類した理由を通知する(ヒント・ログ)、(4) pointercancel を記録する。`usePitchFlight` の `isAiming` などは不要。
   - 完了条件: lint 0 件・typecheck 起因 0 件。`usePointerInput` が `holding` を直接参照していない。unmount・pointercancel でタップ候補と保留が解除される。スキップに使った指の離しでスイングしない。**タップのスイングの `SwingInput.cursor` が、押下時刻に表示されていた有効カーソルと一致する**(離した時刻の進行度で計算しない)。
