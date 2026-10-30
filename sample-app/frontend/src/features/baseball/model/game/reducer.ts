@@ -5,7 +5,7 @@ import type { GameState, LineScore, LogEntry } from "../../types/game";
 import type { PitchCommand, PitchFlight } from "../../types/pitch";
 import { resolvePitch } from "../batting/resolve-pitch";
 import { decideCpuBat } from "../cpu/cpu-batter";
-import { chooseCpuPitch } from "../cpu/cpu-pitcher";
+import { chooseCpuPitch, commandOfChoice } from "../cpu/cpu-pitcher";
 import { getDifficulty } from "../cpu/difficulty";
 import { deliverPitch } from "../pitch/delivery";
 import { buildResolutionLines, type ResolutionSummary } from "./commentary";
@@ -54,13 +54,13 @@ function handleCpuPitch(state: GameState): GameState {
     return state;
   }
   const difficulty = getDifficulty(state.config.difficulty);
-  const [command, rng] = chooseCpuPitch(state.rng, {
+  const [choice, rng] = chooseCpuPitch(state.rng, {
     count: state.count,
     pitcher: currentPitcher(state),
     lastKind: state.lastPitchKind,
     difficulty,
   });
-  return launchPitch(state, rng, command, difficulty.aimSigmaScale);
+  return launchPitch(state, rng, commandOfChoice(choice), difficulty.aimSigmaScale);
 }
 
 function handleThrow(state: GameState, command: PitchCommand): GameState {

@@ -4,8 +4,8 @@ const SEED_PATTERN = /^\d{1,10}$/;
 const SEED_MAX = 4_294_967_295;
 const INNINGS_OPTIONS: readonly Innings[] = [1, 3, 5, 9];
 
-const NORMAL_SPEED: PlaybackSpeed = { timeScale: 1, cpuWaitMs: 700 };
-const FAST_SPEED: PlaybackSpeed = { timeScale: 8, cpuWaitMs: 20 };
+const NORMAL_SPEED: PlaybackSpeed = { timeScale: 1, cpuWaitMs: 550, humanWindupMs: 280 };
+const FAST_SPEED: PlaybackSpeed = { timeScale: 8, cpuWaitMs: 20, humanWindupMs: 20 };
 
 function parseSeed(raw: string | null): number | null {
   if (raw === null || !SEED_PATTERN.test(raw)) {

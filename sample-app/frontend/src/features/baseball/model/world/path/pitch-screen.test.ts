@@ -44,7 +44,7 @@ type Screen = { readonly x: number; readonly y: number };
 
 function flightOf(kind: PitchKind, landing: ZonePoint): PitchFlight {
   const speedKmh = PITCHER_SPEED_KMH + getPitchSpec(kind).speedOffsetKmh;
-  return { seq: 1, kind, aim: landing, landing, speedKmh, durationMs: Math.round(PITCH_PARAMS.flightMsKmh / speedKmh) };
+  return { seq: 1, kind, aim: landing, landing, speedKmh, durationMs: Math.round(PITCH_PARAMS.flightMsKmh / speedKmh), quality: "normal" };
 }
 
 function screenOf(point: Vec3): Screen {

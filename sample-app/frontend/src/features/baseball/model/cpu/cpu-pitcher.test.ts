@@ -3,9 +3,10 @@ import type { RngState } from "../../types/common";
 import type { Count } from "../../types/game";
 import type { CpuPitchChoice, PitchKind } from "../../types/pitch";
 import type { PitcherProfile } from "../../types/team";
-import { isStrikeCell } from "../pitch/zone";
+import { PITCH_PARAMS } from "../pitch/params";
+import { ALL_CELLS, isStrikeCell } from "../pitch/zone";
 import { createRng, nextFloat } from "../rng/rng";
-import { type ChooseCpuPitchInput, chooseCpuPitch } from "./cpu-pitcher";
+import { type ChooseCpuPitchInput, chooseCpuPitch, commandOfChoice } from "./cpu-pitcher";
 import { getDifficulty } from "./difficulty";
 import { getPitchPlan } from "./pitcher-weights";
 
@@ -150,5 +151,20 @@ describe("chooseCpuPitch", () => {
     const [, afterThird] = nextFloat(afterSecond);
     const [, next] = chooseCpuPitch(rng, inputWith());
     expect(next).toBe(afterThird);
+  });
+});
+
+describe("commandOfChoice", () => {
+  it("セルの中心を aim に、質を normal にして球種を引き継ぐ", () => {
+    expect(commandOfChoice({ kind: "curve", cell: { col: 2, row: 2 } })).toEqual({ kind: "curve", aim: { x: 0, y: 0 }, quality: "normal" });
+    const corner = commandOfChoice({ kind: "straight", cell: { col: 0, row: 4 } });
+    expect(corner.aim.x).toBeCloseTo(-4 / 3, 12);
+    expect(corner.aim.y).toBeCloseTo(-4 / 3, 12);
+    expect(corner.quality).toBe("normal");
+  });
+
+  it("全 25 セルで aim が ±aimLimit に収まる", () => {
+    expect(ALL_CELLS.every((cell) => Math.abs(commandOfChoice({ kind: "straight", cell }).aim.x) <= PITCH_PARAMS.gauge.aimLimit)).toBe(true);
+    expect(ALL_CELLS.every((cell) => Math.abs(commandOfChoice({ kind: "straight", cell }).aim.y) <= PITCH_PARAMS.gauge.aimLimit)).toBe(true);
   });
 });

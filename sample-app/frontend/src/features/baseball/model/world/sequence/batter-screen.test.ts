@@ -35,7 +35,7 @@ const VIEWPORTS: readonly (readonly [number, number, number, number])[] = [
   [360, 640, 489, 365],
 ];
 
-const FLIGHT: PitchFlight = { seq: 1, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 0, y: 0 }, speedKmh: 140, durationMs: 1300 };
+const FLIGHT: PitchFlight = { seq: 1, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 0, y: 0 }, speedKmh: 140, durationMs: 1300, quality: "normal" };
 
 type Layout = { readonly layout: SceneLayout; readonly overlayTop: number };
 type Rect = { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };

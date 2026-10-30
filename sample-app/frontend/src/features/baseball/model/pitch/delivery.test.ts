@@ -9,7 +9,7 @@ import { getPitchSpec } from "./kinds";
 import { PITCH_PARAMS } from "./params";
 import { cellToPoint } from "./zone";
 
-const CENTER_COMMAND: PitchCommand = { kind: "straight", cell: { col: 2, row: 2 } };
+const CENTER_COMMAND: PitchCommand = { kind: "straight", aim: { x: 0, y: 0 }, quality: "normal" };
 
 function pitcherWith(overrides: Partial<PitcherProfile> = {}): PitcherProfile {
   return {
@@ -151,14 +151,14 @@ describe("deliverPitch", () => {
     "%s の球速は 球速 + 球種オフセット、durationMs は round(flightMsKmh / 球速)",
     (kind) => {
       const pitcher = pitcherWith({ speedKmh: 145 });
-      const [flight] = deliverPitch(createRng(1), inputWith({ pitcher, command: { kind, cell: { col: 2, row: 2 } } }));
+      const [flight] = deliverPitch(createRng(1), inputWith({ pitcher, command: { kind, aim: { x: 0, y: 0 }, quality: "normal" } }));
       expect(flight.speedKmh).toBe(145 + getPitchSpec(kind).speedOffsetKmh);
       expect(flight.durationMs).toBe(Math.round(PITCH_PARAMS.flightMsKmh / flight.speedKmh));
     },
   );
 
   it("遅い球ほど飛行時間が長い", () => {
-    const durationOf = (kind: PitchKind): number => deliverPitch(createRng(1), inputWith({ command: { kind, cell: { col: 2, row: 2 } } }))[0].durationMs;
+    const durationOf = (kind: PitchKind): number => deliverPitch(createRng(1), inputWith({ command: { kind, aim: { x: 0, y: 0 }, quality: "normal" } }))[0].durationMs;
     expect(durationOf("curve")).toBeGreaterThan(durationOf("fork"));
     expect(durationOf("fork")).toBeGreaterThan(durationOf("slider"));
     expect(durationOf("slider")).toBeGreaterThan(durationOf("shoot"));

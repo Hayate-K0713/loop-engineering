@@ -52,7 +52,8 @@ export function batterSwingPose(progress: number, height: number, portrait = 0):
     armR: key.armR,
     legL: key.legL,
     legR: key.legR,
-    bat: { visible: true, sweepYaw: key.sweepYaw, tilt: key.tilt, height: batHeightAt(p, height) },
+    // `lengthScale` は標準の長さ 1。縦長の延長(`batLengthScaleFor`)は打者のレイアウトで決まるので、`sequence/frame.ts` が差し替える。
+    bat: { visible: true, sweepYaw: key.sweepYaw, tilt: key.tilt, height: batHeightAt(p, height), lengthScale: 1 },
   };
 }
 

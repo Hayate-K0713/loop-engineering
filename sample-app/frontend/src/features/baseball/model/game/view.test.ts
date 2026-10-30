@@ -3,7 +3,8 @@ import type { BattedBall, InPlayResult, PitchResult, PlateOutcome } from "../../
 import type { Side } from "../../types/common";
 import type { GameConfig, GameState, InPlayRecord } from "../../types/game";
 import type { PitchFlight, PitchKind } from "../../types/pitch";
-import type { BatterProfile } from "../../types/team";
+import type { BatterProfile, Team } from "../../types/team";
+import { assistFor } from "../batting/assist";
 import { computeBattedLanding } from "../batting/batted-landing";
 import { cursorRadii } from "../batting/cursor";
 import { BATTING_PARAMS, LANDING_PARAMS } from "../batting/params";
@@ -19,10 +20,14 @@ const HOME: GameConfig = { innings: 3, humanSide: "home", difficulty: "normal" }
 const CPU_ONLY: GameConfig = { innings: 3, humanSide: null, difficulty: "normal" };
 
 function flight(kind: PitchKind, speedKmh: number, durationMs: number): PitchFlight {
-  return { seq: 1, kind, aim: { x: 0, y: 0 }, landing: { x: 0.2, y: -0.1 }, speedKmh, durationMs };
+  return { seq: 1, kind, aim: { x: 0, y: 0 }, landing: { x: 0.2, y: -0.1 }, speedKmh, durationMs, quality: "normal" };
 }
 
 const RECORD: InPlayRecord = { seq: 17, result: "double", ball: { type: "liner", strength: "strong", direction: "pull" } };
+
+function withRepertoire(team: Team, repertoire: readonly PitchKind[]): Team {
+  return { ...team, pitcher: { ...team.pitcher, repertoire } };
+}
 
 function flightOf(state: GameState): PitchFlight {
   if (state.phase.kind !== "in-flight") {
@@ -232,7 +237,33 @@ describe("toGameView: matchup", () => {
     expect(view.batter.orderLabel).toBe("4番");
     expect(view.pitcher.name).toBe(state.teams.home.pitcher.name);
     expect(view.pitcher.pitchCount).toBe(20);
-    expect(view.pitcher.repertoire).toEqual([{ kind: "straight", label: "ストレート" }]);
+    expect(view.pitcher.repertoire).toEqual([{ kind: "straight", label: "ストレート", speedKmh: 140, arrow: "none" }]);
+  });
+
+  it("gives every pitch chip its speed (rounded, fatigue-aware) and a bend arrow derived from the pitch's bend", () => {
+    const rested = makeState({ teams: { away: FIXTURE_AWAY_TEAM, home: withRepertoire(FIXTURE_HOME_TEAM, ["straight", "slider", "curve", "fork", "shoot"]) } });
+    const chips = toGameView(rested).pitcher.repertoire;
+    expect(chips.map((chip) => [chip.kind, chip.speedKmh, chip.arrow])).toEqual([
+      ["straight", 140, "none"],
+      ["slider", 128, "right"],
+      ["curve", 110, "right-down"],
+      ["fork", 125, "down"],
+      ["shoot", 132, "left"],
+    ]);
+    const tired = makeState({
+      teams: { away: FIXTURE_AWAY_TEAM, home: withRepertoire(FIXTURE_HOME_TEAM, ["straight"]) },
+      pitchCounts: { away: 0, home: 100 * PITCH_PARAMS.pitchesPerStamina },
+    });
+    expect(toGameView(tired).pitcher.repertoire.map((chip) => chip.speedKmh)).toEqual([140 - PITCH_PARAMS.fatigueSlowKmh]);
+  });
+
+  it("exposes the game's difficulty and its assist", () => {
+    expect(toGameView(makeState()).difficulty).toBe("normal");
+    expect(toGameView(makeState()).assist).toEqual(assistFor("normal"));
+    const hard = makeState({ config: { innings: 3, humanSide: "away", difficulty: "hard" } });
+    expect(toGameView(hard).difficulty).toBe("hard");
+    expect(toGameView(hard).assist).toEqual(assistFor("hard"));
+    expect(toGameView(hard).assist).not.toEqual(toGameView(makeState()).assist);
   });
 
   it("switches to the home batter and the away pitcher in the bottom half", () => {

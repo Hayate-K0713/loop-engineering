@@ -176,7 +176,7 @@ describe("placeCharacter / placeBatter", () => {
   });
 
   it("打者はバットを引き継ぐ", () => {
-    const joints: BatterJoints = { ...POSE_B, bat: { visible: true, sweepYaw: 0.3, tilt: -0.2, height: 0.8 } };
+    const joints: BatterJoints = { ...POSE_B, bat: { visible: true, sweepYaw: 0.3, tilt: -0.2, height: 0.8, lengthScale: 1 } };
     const placed = placeBatter(joints, root);
     expect(placed.bat).toEqual(joints.bat);
     expect(placed.torso).toEqual(POSE_B.torso);

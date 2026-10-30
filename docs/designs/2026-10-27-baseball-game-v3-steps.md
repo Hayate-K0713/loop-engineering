@@ -73,7 +73,7 @@
   - 依存: A0。担当ファイル: `model/pitch/{delivery,params}.ts`、新規 `model/pitch/gauge.ts`、`model/game/{reducer,view,test-fixtures,launch-params}.ts`、`model/cpu/cpu-pitcher.ts`、`model/sim/bot-sim.ts`(型の追従だけ)(+test)。
   - やること: `deliverPitch` が `command.aim` と `command.quality` から σ を決める(乱数の消費数は不変)。`gauge.ts` を実装。`chooseCpuPitch` が `CpuPitchChoice` を返し、reducer がセル中心を `aim`・`quality: "normal"` にして `launchPitch`。`view.ts` が `difficulty`・`assist`・チップ用の `speedKmh`/`arrow` を出す。`launch-params.ts` の速度値を更新。
   - 完了条件: 単体テスト — `pitchQualityOf` の境界、`sigmaScaleOf` が単調非減少、`isStopAccepted`、`deliverPitch` の乱数消費が 24 個のまま・CPU の決定論テストが構造を保って通る、失投で着弾が `(0, 0.15)` 側へ寄る、`gaugeRingAt` の端点・単調・`expired`、`aim` が ±1.67 に収まる。
-- [ ] **A4: タップ入力の整理(v2 の操作は維持)**
+- [x] **A4: タップ入力の整理(v2 の操作は維持)**
   - 依存: A0。担当ファイル: `model/world/sequence/input-route.ts`(+test)、`session.ts`(+test)。
   - やること: **v2 の `routeStagePointer`/`routeStageMove`/`routeStageRelease`/`isTapGesture` と定数 `TAP_*`、`arrival.ts` は変更しない**。追加は純関数 `tapReleaseReason(input)`(タップが通らなかった理由を `tap-too-long`/`tap-moved`/`not-ready`/`holding`/`cancel`/`held-release` に分類する。play 分冊 §1-1 の T1)と、その境界テストの強化のみ。
   - 完了条件: `input-route.test.ts` が**全組み合わせを走査** — (1) 2 本目以降の指は `swing-here`/`ignore` のみ、(2) `holding` が真のタッチは必ず `skip`、(3) 1 本目の指は `drag-start`、(4) スキップに使った指の離しは `none`(`held-release`)、(5) `isTapGesture` の境界: 持続 180ms ちょうどは真・181ms は偽・負/NaN は偽、移動 10px ちょうどは真・10.01px は偽、(6) 到達の後(`swingReady` 偽)の押下は `not-ready`(空振りにならない)、到達の前の押下は離しが 200ms 保留内なら押下の時刻で判定、(7) マウス/ペンの離しは `none`、(8) `tapReleaseReason` が全入力で定義される。既存のテストが不変で成功。`isSkipKey` は不変。

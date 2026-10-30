@@ -16,12 +16,12 @@ const SAMPLES: readonly number[] = Array.from({ length: SAMPLE_COUNT + 1 }, (_, 
 const ALL_FLIGHTS: readonly PitchFlight[] = KINDS.flatMap((kind) =>
   ALL_CELLS.map((cell): PitchFlight => {
     const point = cellToPoint(cell);
-    return { seq: 1, kind, aim: point, landing: point, speedKmh: 140, durationMs: DURATION_MS };
+    return { seq: 1, kind, aim: point, landing: point, speedKmh: 140, durationMs: DURATION_MS, quality: "normal" };
   }),
 );
 
 function flightOf(kind: PitchKind, landing = { x: 0.4, y: -0.3 }): PitchFlight {
-  return { seq: 1, kind, aim: landing, landing, speedKmh: 140, durationMs: DURATION_MS };
+  return { seq: 1, kind, aim: landing, landing, speedKmh: 140, durationMs: DURATION_MS, quality: "normal" };
 }
 
 const { breakExponent, bendGain, speedProfile, arcHeight } = WORLD_PARAMS.pitch;

@@ -12,12 +12,13 @@ function boundsOf(geometry: BufferGeometry): Box3 {
 }
 
 describe("buildMarkers", () => {
-  it("ルートの Group に、ゾーン枠・格子・カーソル・狙いセル・ボール・影が入る", () => {
+  it("ルートの Group に、ゾーン枠・格子・カーソル・素のカーソル・予告/照準・ボール・影が入る", () => {
     const markers = buildMarkers(makeGeometry(), createToonGradient());
     expect(markers.group).toBeInstanceOf(Group);
     expect(markers.group.children).toEqual(
-      expect.arrayContaining([markers.zoneFrame, markers.grid, markers.cursor, markers.aim, markers.ball, markers.ballShadow]),
+      expect.arrayContaining([markers.zoneFrame, markers.grid, markers.cursor, markers.cursorRaw, markers.guide.group, markers.ball, markers.ballShadow]),
     );
+    expect("aim" in markers).toBe(false);
     expect(markers.zoneFrame).toBeInstanceOf(LineSegments);
     expect(markers.group.children).toEqual(expect.arrayContaining([markers.zonePulse, markers.landingRing]));
   });
@@ -51,8 +52,7 @@ describe("buildMarkers", () => {
   it("ボールの半径が StageGeometry.ballRadius に追従する", () => {
     const geometry = { ...makeGeometry(), ballRadius: 0.25 };
     const markers = buildMarkers(geometry, createToonGradient());
-    const body = markers.ball.children.find((child): child is Mesh => child instanceof Mesh);
-    expect(body ? boundsOf(body.geometry).max.x : 0).toBeCloseTo(0.25, 6);
+    expect(boundsOf(markers.ballBody.geometry).max.x).toBeCloseTo(0.25, 6);
   });
 
   it("破棄しても例外にならない", () => {
@@ -78,27 +78,42 @@ function meshesOf(root: Group): Mesh[] {
 
 describe("描画順(ボールはカーソルより手前)", () => {
   const markers = buildMarkers(makeGeometry(), createToonGradient());
-  const [body, outline] = (() => {
-    const meshes = meshesOf(markers.ball);
-    return [meshes.find((mesh) => mesh.material instanceof MeshToonMaterial), meshes.find((mesh) => mesh.material instanceof MeshBasicMaterial)] as const;
-  })();
+  const body = markers.ballBody;
+  const outline = markers.ballOutline;
+  const halo = markers.ballHalo;
+  const seamMeshes = meshesOf(markers.ballSeams);
 
-  it("ボール(本体と輪郭)は透明パス・深度なしで、本体がカーソルのどのメッシュよりも後に描かれる", () => {
-    expect(body?.material).toBeInstanceOf(MeshToonMaterial);
-    for (const mesh of [body, outline]) {
-      const material = mesh?.material as Material | undefined;
-      expect(material?.transparent).toBe(true);
-      expect(material?.depthTest).toBe(false);
-      expect(material?.depthWrite).toBe(false);
+  it("ボール(ハロー・輪郭・本体・縫い目)は透明パス・深度なしで、カーソルのどのメッシュよりも後に描かれる", () => {
+    expect(body.material).toBeInstanceOf(MeshToonMaterial);
+    expect(seamMeshes).toHaveLength(2);
+    for (const mesh of [halo, outline, body, ...seamMeshes]) {
+      const material = mesh.material as Material;
+      expect(material.transparent).toBe(true);
+      expect(material.depthTest).toBe(false);
+      expect(material.depthWrite).toBe(false);
     }
-    const cursorOrders = meshesOf(markers.cursor).map((mesh) => mesh.renderOrder);
-    expect(cursorOrders.length).toBeGreaterThanOrEqual(3);
+    const cursorOrders = [...meshesOf(markers.cursor), ...meshesOf(markers.cursorRaw)].map((mesh) => mesh.renderOrder);
+    expect(cursorOrders.length).toBeGreaterThanOrEqual(5);
     for (const order of cursorOrders) {
-      expect(outline?.renderOrder ?? 0).toBeGreaterThan(order);
-      expect(body?.renderOrder ?? 0).toBeGreaterThan(outline?.renderOrder ?? 0);
+      expect(halo.renderOrder).toBeGreaterThan(order);
     }
-    expect(body?.renderOrder).toBe(RENDER_ORDER.ball);
-    expect(outline?.renderOrder).toBe(RENDER_ORDER.ballOutline);
+    expect(outline.renderOrder).toBeGreaterThan(halo.renderOrder);
+    expect(body.renderOrder).toBeGreaterThan(outline.renderOrder);
+    for (const seam of seamMeshes) expect(seam.renderOrder).toBeGreaterThan(body.renderOrder);
+    expect(body.renderOrder).toBe(RENDER_ORDER.ball);
+    expect(outline.renderOrder).toBe(RENDER_ORDER.ballOutline);
+    expect(halo.renderOrder).toBe(RENDER_ORDER.ballHalo);
+  });
+
+  it("予告・照準・リングはゾーン枠より後・カーソルより前に描かれる", () => {
+    const { guide } = markers;
+    const orders = [guide.dot, guide.fade, guide.reticle, guide.ring, guide.spread].flatMap((object) =>
+      object instanceof Mesh ? [object.renderOrder] : meshesOf(object as Group).map((mesh) => mesh.renderOrder),
+    );
+    for (const order of orders) {
+      expect(order).toBeGreaterThan(RENDER_ORDER.overlay);
+      expect(order).toBeLessThan(RENDER_ORDER.cursor);
+    }
   });
 
   it("カーソルの Group の renderOrder は 0(子全体の第1キーにしない)で、メッシュに個別に付く。塗りは深度を書かない", () => {
@@ -110,7 +125,7 @@ describe("描画順(ボールはカーソルより手前)", () => {
   });
 
   it("ボールは影を落とさず(castShadow なし)、地面の円盤(不透明度 0.5・半径 ×1.8)が影になる", () => {
-    expect(body?.castShadow).toBe(false);
+    expect(body.castShadow).toBe(false);
     const material = markers.ballShadow.material as MeshBasicMaterial;
     expect(material.opacity).toBe(0.5);
     expect(material.color.getHex()).toBe(PALETTE.shadow);
@@ -130,8 +145,6 @@ describe("applyMarkers", () => {
     expect(markers.cursor.position.toArray()).toEqual([frame.cursor.position.x, frame.cursor.position.y, frame.cursor.position.z]);
     expect(markers.cursor.scale.x).toBe(frame.cursor.scaleX);
     expect(markers.cursor.scale.y).toBe(frame.cursor.scaleY);
-    expect(markers.aim.scale.x).toBe(frame.aim.width);
-    expect(markers.aim.scale.y).toBe(frame.aim.height);
     expect(markers.ball.position.toArray()).toEqual([frame.ball.position.x, frame.ball.position.y, frame.ball.position.z]);
     expect(markers.ballShadow.position.x).toBe(frame.ball.position.x);
     expect(markers.ballShadow.position.z).toBe(frame.ball.position.z);
@@ -191,7 +204,8 @@ describe("applyMarkers", () => {
 
   it("非表示の指定が反映され、格子はゾーンが見えるときだけ表示される", () => {
     const markers = buildMarkers(makeGeometry(), createToonGradient());
-    applyMarkers(markers, makeFrame({ zone: { visible: false, grid: true, pulse: 0 }, ball: { visible: false, position: { x: 0, y: 0, z: 0 }, scale: 1 } }));
+    const base = makeFrame();
+    applyMarkers(markers, makeFrame({ zone: { visible: false, grid: true, pulse: 0 }, ball: { ...base.ball, visible: false } }));
     expect(markers.zoneFrame.visible).toBe(false);
     expect(markers.grid.visible).toBe(false);
     expect(markers.ball.visible).toBe(false);

@@ -192,14 +192,37 @@ export function chaseCamera(ball: Vec3, aspect: number, lift = 0): CameraPose {
   };
 }
 
+/** カメラから点までの距離での、画面の高さに相当するワールドの長さ(m)= `2 · dist · tan(fov/2)`。 */
+function visibleHeightAt(camera: CameraPose, point: Vec3): number {
+  const dist = Math.hypot(point.x - camera.position.x, point.y - camera.position.y, point.z - camera.position.z);
+  return 2 * dist * Math.tan(camera.fovDeg / RAD_TO_DEG / 2);
+}
+
 /**
- * 中継カメラ中のボールの最小表示径のための倍率: `max(1, minRatio · dist · 2·tan(fov/2) / (2 · ballRadius))`
+ * ボールの最小表示径のための倍率: `max(1, minRatio · 2·dist·tan(fov/2) / (2 · ballRadius))`
  * (`dist` = カメラからボールまでの距離。表示高に対する比 `minRatio` を下回らない最小の倍率)。
+ * `minRatio` は中継カメラ中なら `ball.minScreenDiameterRatio`、飛行中(打撃カメラ)なら `ball.minScreenDiameterRatioFlight`。
  */
-export function ballScaleFor(camera: CameraPose, ball: Vec3): number {
-  const dist = Math.hypot(ball.x - camera.position.x, ball.y - camera.position.y, ball.z - camera.position.z);
-  const visibleHeight = 2 * dist * Math.tan(camera.fovDeg / RAD_TO_DEG / 2);
-  return Math.max(1, (WORLD_PARAMS.ball.minScreenDiameterRatio * visibleHeight) / (2 * WORLD_PARAMS.ballRadius));
+export function ballScaleFor(camera: CameraPose, ball: Vec3, minRatio: number): number {
+  return Math.max(1, (minRatio * visibleHeightAt(camera, ball)) / (2 * WORLD_PARAMS.ballRadius));
+}
+
+/** 縁取りの殻の倍率の下限(v2 の値。`render/look.ts` の `BALL_OUTLINE_SCALE` と同じ)。 */
+const OUTLINE_SCALE_FLOOR = 1.12;
+
+/**
+ * ボールの縁取りの殻の倍率(`SceneFrame.ball.outlineScale`)。殻は本体(`ballScale` 倍)の子として描かれるので、
+ * 殻の太さ(m)= `ballRadius · ballScale · (outlineScale − 1)` が、画面で `shellMinRatio` 以上(`ratio · 2·dist·tan(fov/2)` m)になる最小の倍率。
+ * v2 の 1.12 を下回らない。
+ */
+export function outlineScaleFor(camera: CameraPose, ball: Vec3, ballScale: number): number {
+  const bodyRadius = WORLD_PARAMS.ballRadius * Math.max(1, ballScale);
+  return Math.max(OUTLINE_SCALE_FLOOR, 1 + (WORLD_PARAMS.ball.shellMinRatio * visibleHeightAt(camera, ball)) / bodyRadius);
+}
+
+/** 点 `point` にあるリング・線の太さ(m)= `widthRatio · 2·dist·tan(fov/2)`。`widthRatio` は表示高に対する比(`guide.ringWidthRatio`)。 */
+export function ringWidthFor(camera: CameraPose, point: Vec3, widthRatio: number): number {
+  return widthRatio * visibleHeightAt(camera, point);
 }
 
 /** smoothstep。`x` は 0〜1 にクランプする。 */

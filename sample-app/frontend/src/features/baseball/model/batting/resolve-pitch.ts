@@ -39,7 +39,7 @@ export function resolvePitch(rng: RngState, input: ResolvePitchInput): WithRng<P
   if (swing === null) {
     return [resolveTake(flight), rng];
   }
-  const contact = measureContact({ flight, swing, batter, assist });
+  const contact = measureContact(assist === undefined ? { flight, swing, batter } : { flight, swing, batter, assist });
   if (contact.kind === "miss") {
     return [{ kind: "swinging-strike" }, rng];
   }

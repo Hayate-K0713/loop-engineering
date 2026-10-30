@@ -21,7 +21,7 @@ const BATTER: BatterProfile = { id: "b", name: "テスト打者", meet: 50, powe
 const DURATION_MS = 1300;
 
 function flightWith(overrides: Partial<PitchFlight> = {}): PitchFlight {
-  return { seq: 1, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 0, y: 0 }, speedKmh: 146, durationMs: DURATION_MS, ...overrides };
+  return { seq: 1, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 0, y: 0 }, speedKmh: 146, durationMs: DURATION_MS, quality: "normal", ...overrides };
 }
 
 /** 着弾点にカーソルを置き、ぴったりのタイミングで振るスイング。`dx`・`dy` でカーソルをずらし、`dtMs` でタイミングをずらす。 */
@@ -291,7 +291,8 @@ describe("measureContact: アシストによる質の補正", () => {
   function qualityWith(swingOverrides: Partial<SwingInput>, assist?: AssistParams): number {
     const flight = flightWith();
     const swing = { ...swingFor(flight, { dx: 0.1, dtMs: 30 }), ...swingOverrides };
-    return hitOf(measureContact({ flight, swing, batter: BATTER, assist })).q;
+    const input = assist === undefined ? { flight, swing, batter: BATTER } : { flight, swing, batter: BATTER, assist };
+    return hitOf(measureContact(input)).q;
   }
 
   it("assistK の省略は assist の有無にかかわらず v2 と同じ q", () => {
@@ -316,9 +317,9 @@ describe("measureContact: アシストによる質の補正", () => {
 
   it("補正しても接触の成否・高さ・タイミング誤差は変わらない", () => {
     const flight = flightWith();
-    const swing = { ...swingFor(flight, { dx: 0.1, dtMs: 30 }), assistK: 1 };
-    const plain = hitOf(measureContact({ flight, swing: { ...swing, assistK: undefined }, batter: BATTER }));
-    const assisted = hitOf(measureContact({ flight, swing, batter: BATTER, assist: ASSIST }));
+    const plainSwing = swingFor(flight, { dx: 0.1, dtMs: 30 });
+    const plain = hitOf(measureContact({ flight, swing: plainSwing, batter: BATTER }));
+    const assisted = hitOf(measureContact({ flight, swing: { ...plainSwing, assistK: 1 }, batter: BATTER, assist: ASSIST }));
     expect(assisted.height).toBe(plain.height);
     expect(assisted.dtMs).toBe(plain.dtMs);
     expect(assisted.windowMs).toBe(plain.windowMs);

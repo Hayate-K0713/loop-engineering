@@ -375,7 +375,10 @@ function releaseActionOf(input: TapReleaseInput): ReturnType<typeof routeStageRe
   });
 }
 
-function reasonViolations(inputs: readonly TapReleaseInput[], predicate: (input: TapReleaseInput, reason: IgnoredInputReason | null) => boolean): readonly string[] {
+function reasonViolations(
+  inputs: readonly TapReleaseInput[],
+  predicate: (input: TapReleaseInput, reason: IgnoredInputReason | null) => boolean,
+): readonly string[] {
   return inputs.filter((input) => !predicate(input, tapReleaseReason(input))).map((input) => JSON.stringify(input));
 }
 

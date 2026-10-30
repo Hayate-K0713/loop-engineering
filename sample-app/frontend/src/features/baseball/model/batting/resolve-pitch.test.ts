@@ -16,7 +16,7 @@ const DURATION_MS = 1300;
 const HIT_KINDS = ["single", "double", "triple", "homerun"];
 
 function flightAt(x: number, y: number): PitchFlight {
-  return { seq: 1, kind: "straight", aim: { x, y }, landing: { x, y }, speedKmh: 146, durationMs: DURATION_MS };
+  return { seq: 1, kind: "straight", aim: { x, y }, landing: { x, y }, speedKmh: 146, durationMs: DURATION_MS, quality: "normal" };
 }
 
 /** 着弾点にカーソルを置き、ぴったりのタイミングで強振するスイング。 */

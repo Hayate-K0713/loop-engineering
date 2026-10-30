@@ -8,7 +8,7 @@ import { BATTING_PARAMS } from "../batting/params";
 import { resolvePitch } from "../batting/resolve-pitch";
 import { decideCpuBat } from "../cpu/cpu-batter";
 import { getDifficulty } from "../cpu/difficulty";
-import { chooseCpuPitch } from "../cpu/cpu-pitcher";
+import { chooseCpuPitch, commandOfChoice } from "../cpu/cpu-pitcher";
 import { CPU_TEAM, PLAYER_TEAM } from "../data/teams";
 import { deliverPitch } from "../pitch/delivery";
 import { isStrike } from "../pitch/zone";
@@ -193,9 +193,10 @@ function randomCount(rand: () => number): Count {
 
 /** CPU 投手が次の 1 球を投げる(`state.rng` を進める)。 */
 function nextFlight(state: SimState): PitchFlight {
-  const [command, afterCommand] = chooseCpuPitch(state.rng, { count: randomCount(state.rand), pitcher: PITCHER, lastKind: null, difficulty: NORMAL });
+  const [choice, afterChoice] = chooseCpuPitch(state.rng, { count: randomCount(state.rand), pitcher: PITCHER, lastKind: null, difficulty: NORMAL });
   state.seq += 1;
-  const [flight, afterDeliver] = deliverPitch(afterCommand, { pitcher: PITCHER, command, pitchCount: 20, aimSigmaScale: NORMAL.aimSigmaScale, seq: state.seq });
+  const command = commandOfChoice(choice);
+  const [flight, afterDeliver] = deliverPitch(afterChoice, { pitcher: PITCHER, command, pitchCount: 20, aimSigmaScale: NORMAL.aimSigmaScale, seq: state.seq });
   state.rng = afterDeliver;
   return flight;
 }

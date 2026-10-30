@@ -1,19 +1,23 @@
 import type { Side } from "../../types/common";
 import type { GameState } from "../../types/game";
+import type { PitchKind } from "../../types/pitch";
+import type { PitcherProfile } from "../../types/team";
 import type {
   FieldDiagramGeometry,
   FieldGeometry,
   FieldMarkerView,
   GameView,
+  PitchArrow,
   PitchOutcomeView,
   ResultView,
   ScoreboardView,
   ScoreRowView,
 } from "../../types/view";
+import { assistFor } from "../batting/assist";
 import { computeBattedLanding } from "../batting/batted-landing";
 import { cursorRadii } from "../batting/cursor";
 import { BATTING_PARAMS, LANDING_PARAMS } from "../batting/params";
-import { staminaRatio } from "../pitch/delivery";
+import { fatigueOf, staminaRatio } from "../pitch/delivery";
 import { getPitchSpec } from "../pitch/kinds";
 import { PITCH_PARAMS } from "../pitch/params";
 import { bySide, defenseSide, offenseSide } from "./side";
@@ -91,6 +95,29 @@ function batterViewOf(state: GameState): GameView["batter"] {
   };
 }
 
+/** 曲がり矢印に数えるしきい値(球種の `bend`、ゾーン単位)。横は |x| がこれ以上、縦は y がこれ以下(落ちる)で矢印に含める。 */
+const ARROW_SIDE_MIN = 0.4;
+const ARROW_DOWN_MAX = -0.5;
+
+/** 球種の `bend`(x + = ライト側・右、y − = 落ちる)から球種チップの曲がり矢印を求める。 */
+function arrowOf(kind: PitchKind): PitchArrow {
+  const { x, y } = getPitchSpec(kind).bend;
+  const down = y <= ARROW_DOWN_MAX;
+  if (x >= ARROW_SIDE_MIN) {
+    return down ? "right-down" : "right";
+  }
+  if (x <= -ARROW_SIDE_MIN) {
+    return down ? "left-down" : "left";
+  }
+  return down ? "down" : "none";
+}
+
+/** 球種チップの球速(整数に丸め)。投球で使う値(球速 + 球種の差 − 疲労による低下)と同じ。 */
+function chipSpeedKmh(pitcher: PitcherProfile, kind: PitchKind, pitchCount: number): number {
+  const fatigue = fatigueOf(staminaRatio(pitcher, pitchCount));
+  return Math.round(pitcher.speedKmh + getPitchSpec(kind).speedOffsetKmh - fatigue * PITCH_PARAMS.fatigueSlowKmh);
+}
+
 function pitcherViewOf(state: GameState): GameView["pitcher"] {
   const pitcher = currentPitcher(state);
   const pitchCount = bySide(state.pitchCounts, defenseSide(state.half));
@@ -98,7 +125,12 @@ function pitcherViewOf(state: GameState): GameView["pitcher"] {
     name: pitcher.name,
     pitchCount,
     staminaPercent: Math.round(staminaRatio(pitcher, pitchCount) * 100),
-    repertoire: pitcher.repertoire.map((kind) => ({ kind, label: getPitchSpec(kind).label })),
+    repertoire: pitcher.repertoire.map((kind) => ({
+      kind,
+      label: getPitchSpec(kind).label,
+      speedKmh: chipSpeedKmh(pitcher, kind, pitchCount),
+      arrow: arrowOf(kind),
+    })),
   };
 }
 
@@ -216,6 +248,8 @@ export function toGameView(state: GameState): GameView {
     scoreboard: scoreboardOf(state),
     batter: batterViewOf(state),
     pitcher: pitcherViewOf(state),
+    difficulty: config.difficulty,
+    assist: assistFor(config.difficulty),
     flight: phase.kind === "in-flight" ? phase.flight : null,
     arriveAfterMs: arriveAfterMsOf(state),
     pitchSpeedLabel: pitchSpeedLabelOf(state),

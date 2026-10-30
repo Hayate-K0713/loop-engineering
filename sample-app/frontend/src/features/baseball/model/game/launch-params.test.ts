@@ -71,17 +71,18 @@ describe("parseLaunchParams", () => {
 
 describe("getPlaybackSpeed", () => {
   it("returns the real-time speed when not fast", () => {
-    expect(getPlaybackSpeed(false)).toEqual({ timeScale: 1, cpuWaitMs: 700 });
+    expect(getPlaybackSpeed(false)).toEqual({ timeScale: 1, cpuWaitMs: 550, humanWindupMs: 280 });
   });
 
   it("returns the accelerated speed when fast", () => {
-    expect(getPlaybackSpeed(true)).toEqual({ timeScale: 8, cpuWaitMs: 20 });
+    expect(getPlaybackSpeed(true)).toEqual({ timeScale: 8, cpuWaitMs: 20, humanWindupMs: 20 });
   });
 
-  it("fast shortens both the playback and the CPU wait", () => {
+  it("fast shortens the playback, the CPU wait and the human windup", () => {
     const normal = getPlaybackSpeed(false);
     const fast = getPlaybackSpeed(true);
     expect(fast.timeScale).toBeGreaterThan(normal.timeScale);
     expect(fast.cpuWaitMs).toBeLessThan(normal.cpuWaitMs);
+    expect(fast.humanWindupMs).toBeLessThan(normal.humanWindupMs);
   });
 });

@@ -183,7 +183,7 @@ export function tapReleaseReason(input: TapReleaseInput): IgnoredInputReason | n
   if (!input.tapCandidate || !input.enabled) {
     return "not-ready";
   }
-  if (!(input.movedPx <= TAP_MAX_MOVE_PX)) {
+  if (Number.isNaN(input.movedPx) || input.movedPx > TAP_MAX_MOVE_PX) {
     return "tap-moved";
   }
   return isTapGesture(input) ? null : "tap-too-long";

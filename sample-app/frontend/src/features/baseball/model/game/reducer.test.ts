@@ -6,7 +6,7 @@ import type { PitchCommand, PitchFlight } from "../../types/pitch";
 import { chooseCpuPitch } from "../cpu/cpu-pitcher";
 import { getDifficulty } from "../cpu/difficulty";
 import { deliverPitch } from "../pitch/delivery";
-import { isStrike } from "../pitch/zone";
+import { cellToPoint, isStrike } from "../pitch/zone";
 import { reduce } from "./reducer";
 import { DEFAULT_MAX_ACTIONS, simulateGame } from "./simulate";
 import { createInitialState } from "./state";
@@ -19,12 +19,12 @@ const CPU_ONLY: GameConfig = { innings: 3, humanSide: null, difficulty: "normal"
 
 const CPU_PITCH: GameAction = { type: "CPU_PITCH" };
 const PITCH_ARRIVED: GameAction = { type: "PITCH_ARRIVED" };
-const CENTER_STRAIGHT: PitchCommand = { kind: "straight", cell: { col: 2, row: 2 } };
+const CENTER_STRAIGHT: PitchCommand = { kind: "straight", aim: { x: 0, y: 0 }, quality: "normal" };
 
 const ALL_INNINGS: readonly Innings[] = [1, 3, 5, 9];
 const ALL_DIFFICULTIES: readonly Difficulty[] = ["easy", "normal", "hard"];
 
-const BALL_FLIGHT: PitchFlight = { seq: 5, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 1.6, y: 1.6 }, speedKmh: 140, durationMs: 1357 };
+const BALL_FLIGHT: PitchFlight = { seq: 5, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 1.6, y: 1.6 }, speedKmh: 140, durationMs: 1357, quality: "normal" };
 const STRIKE_FLIGHT: PitchFlight = { ...BALL_FLIGHT, landing: { x: 0, y: 0 } };
 
 function deepFreeze<T>(value: T): T {
@@ -91,16 +91,19 @@ describe("CPU_PITCH", () => {
     expect(next.lastPitchKind).toBe(flightOf(next).kind);
   });
 
-  it("uses chooseCpuPitch, then deliverPitch with the difficulty's aimSigmaScale, the pre-increment pitch count and seq = pitchSeq + 1", () => {
+  it("uses chooseCpuPitch (cell centre as the aim, quality normal), then deliverPitch with the difficulty's aimSigmaScale, the pre-increment pitch count and seq = pitchSeq + 1", () => {
     const base = start({ innings: 3, humanSide: "away", difficulty: "hard" }, 99);
     const state: GameState = { ...base, pitchSeq: 12, pitchCounts: { away: 0, home: 40 }, count: { balls: 1, strikes: 2 }, lastPitchKind: "slider" };
     const next = reduce(state, CPU_PITCH);
 
     const difficulty = getDifficulty("hard");
     const pitcher = state.teams.home.pitcher;
-    const [command, afterChoice] = chooseCpuPitch(state.rng, { count: state.count, pitcher, lastKind: "slider", difficulty });
+    const [choice, afterChoice] = chooseCpuPitch(state.rng, { count: state.count, pitcher, lastKind: "slider", difficulty });
+    const command: PitchCommand = { kind: choice.kind, aim: cellToPoint(choice.cell), quality: "normal" };
     const [flight, rng] = deliverPitch(afterChoice, { pitcher, command, pitchCount: 40, aimSigmaScale: difficulty.aimSigmaScale, seq: 13 });
     expect(next.phase).toEqual({ kind: "in-flight", flight });
+    expect(flight.aim).toEqual(cellToPoint(choice.cell));
+    expect(flight.quality).toBe("normal");
     expect(next.rng).toBe(rng);
     expect(next.pitchCounts).toEqual({ away: 0, home: 41 });
     expect(next.lastPitchKind).toBe(command.kind);
@@ -121,11 +124,13 @@ describe("THROW", () => {
   it("delivers the human's command with aimSigmaScale 1, the pre-increment pitch count and seq = pitchSeq + 1", () => {
     const base = start(HUMAN_HOME, 7);
     const state: GameState = { ...base, pitchSeq: 30, pitchCounts: { away: 0, home: 25 } };
-    const command: PitchCommand = { kind: "curve", cell: { col: 0, row: 4 } };
+    const command: PitchCommand = { kind: "curve", aim: { x: -1.2, y: -0.8 }, quality: "good" };
     const next = reduce(state, { type: "THROW", command });
 
     const [flight, rng] = deliverPitch(state.rng, { pitcher: state.teams.home.pitcher, command, pitchCount: 25, aimSigmaScale: 1, seq: 31 });
     expect(next.phase).toEqual({ kind: "in-flight", flight });
+    expect(flight.aim).toEqual({ x: -1.2, y: -0.8 });
+    expect(flight.quality).toBe("good");
     expect(next.rng).toBe(rng);
     expect(next.pitchSeq).toBe(31);
     expect(next.pitchCounts).toEqual({ away: 0, home: 26 });
