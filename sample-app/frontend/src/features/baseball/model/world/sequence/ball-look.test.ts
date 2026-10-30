@@ -6,6 +6,14 @@ import { ballHaloAt, ballSpinAt } from "./ball-look";
 
 const KINDS: readonly PitchKind[] = ["straight", "slider", "curve", "fork", "shoot"];
 
+const SPIN_TABLE: readonly (readonly [PitchKind, Rot3])[] = [
+  ["straight", WORLD_PARAMS.ball.spin.straight],
+  ["slider", WORLD_PARAMS.ball.spin.slider],
+  ["curve", WORLD_PARAMS.ball.spin.curve],
+  ["fork", WORLD_PARAMS.ball.spin.fork],
+  ["shoot", WORLD_PARAMS.ball.spin.shoot],
+];
+
 function magnitudeOf(rotation: Rot3): number {
   return Math.hypot(rotation.x, rotation.y, rotation.z);
 }
@@ -18,8 +26,7 @@ describe("ballSpinAt", () => {
   });
 
   it("球種ごとの角速度 × 経過秒(rad)になる", () => {
-    for (const kind of KINDS) {
-      const spin = WORLD_PARAMS.ball.spin[kind];
+    for (const [kind, spin] of SPIN_TABLE) {
       const rotation = ballSpinAt(kind, 500);
       expect(rotation.x).toBeCloseTo(spin.x * 0.5, 9);
       expect(rotation.y).toBeCloseTo(spin.y * 0.5, 9);

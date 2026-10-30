@@ -1,6 +1,7 @@
 import { Box3, BufferGeometry, Group, LineSegments, Mesh, MeshBasicMaterial, MeshToonMaterial } from "three";
 import type { Material } from "three";
 import { describe, expect, it } from "vitest";
+import type { SceneFrame } from "../types/scene";
 import { disposeObject3D } from "./dispose";
 import { PALETTE, createToonGradient } from "./look";
 import { RENDER_ORDER, applyMarkers, buildMarkers } from "./markers";
@@ -222,8 +223,173 @@ describe("applyMarkers", () => {
     const rest = markers.cursorFill.opacity;
     applyMarkers(markers, { ...base, cursor: { ...base.cursor, flash: true } });
     expect(markers.cursorFill.opacity).toBeGreaterThan(rest);
-    applyMarkers(markers, { ...base, cursor: { ...base.cursor, visible: false }, aim: { ...base.aim, visible: false } });
+    applyMarkers(markers, { ...base, cursor: { ...base.cursor, visible: false } });
     expect(markers.cursor.visible).toBe(false);
-    expect(markers.aim.visible).toBe(false);
+    expect(markers.cursorRaw.visible).toBe(false);
+  });
+
+  it("素のカーソルは cursor.raw に従って位置・可視が変わる", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    const base = makeFrame();
+    applyMarkers(markers, base);
+    expect(markers.cursorRaw.visible).toBe(true);
+    expect(markers.cursorRaw.position.toArray()).toEqual([base.cursor.raw.position.x, base.cursor.raw.position.y, base.cursor.raw.position.z]);
+    applyMarkers(markers, { ...base, cursor: { ...base.cursor, raw: { ...base.cursor.raw, visible: false } } });
+    expect(markers.cursorRaw.visible).toBe(false);
+  });
+});
+
+function withGuide(overrides: Partial<SceneFrame["guide"]>): SceneFrame {
+  const base = makeFrame();
+  return { ...base, guide: { ...base.guide, ...overrides } };
+}
+
+describe("予告・照準・縮むリング(guide)", () => {
+  it("リングの半径・線幅が guide.ring に一致し、値が変わると頂点が追従する", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    for (const [radius, width] of [
+      [0.3, 0.012],
+      [0.125, 0.006],
+    ] as const) {
+      const base = makeFrame();
+      applyMarkers(markers, withGuide({ ring: { ...base.guide.ring, radius, width } }));
+      expect(markers.guide.ring.visible).toBe(true);
+      const box = boundsOf(markers.guide.ring.geometry);
+      expect(box.max.x).toBeCloseTo(radius + width / 2, 6);
+      expect(box.min.x).toBeCloseTo(-(radius + width / 2), 6);
+      expect(box.max.y).toBeCloseTo(radius + width / 2, 2);
+      const position = markers.guide.ring.geometry.getAttribute("position");
+      const innerX = position.getX(0);
+      const outerX = position.getX(1);
+      expect(innerX).toBeCloseTo(radius - width / 2, 6);
+      expect(outerX - innerX).toBeCloseTo(width, 6);
+    }
+  });
+
+  it("リングは guide.position に置かれ、ring.visible が偽・半径 0 なら隠れる", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    const base = makeFrame();
+    applyMarkers(markers, withGuide({ position: { x: 0.2, y: 0.8, z: 0.03 } }));
+    expect(markers.guide.group.position.toArray()).toEqual([0.2, 0.8, 0.03]);
+    expect(markers.guide.ring.visible).toBe(true);
+    applyMarkers(markers, withGuide({ ring: { ...base.guide.ring, visible: false } }));
+    expect(markers.guide.ring.visible).toBe(false);
+    applyMarkers(markers, withGuide({ ring: { ...base.guide.ring, radius: 0 } }));
+    expect(markers.guide.ring.visible).toBe(false);
+  });
+
+  it("リングの色は tone と glow で変わる(glow 1 で金色)", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    const base = makeFrame();
+    applyMarkers(markers, withGuide({ ring: { ...base.guide.ring, tone: "gauge", glow: 0 } }));
+    expect(markers.guide.ringMaterial.color.getHex()).toBe(PALETTE.white);
+    applyMarkers(markers, withGuide({ ring: { ...base.guide.ring, tone: "preview", glow: 0 } }));
+    expect(markers.guide.ringMaterial.color.getHex()).not.toBe(PALETTE.white);
+    applyMarkers(markers, withGuide({ ring: { ...base.guide.ring, tone: "preview", glow: 1 } }));
+    expect(markers.guide.ringMaterial.color.getHex()).toBe(PALETTE.accent);
+  });
+
+  it("mode ごとに点・フェードの円・照準だけが出る。none では点も円も出ずリングは残る", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    const visibleModes = (): string[] =>
+      [
+        ["dot", markers.guide.dot],
+        ["fade", markers.guide.fade],
+        ["reticle", markers.guide.reticle],
+      ].flatMap(([name, object]) => ((object as Group).visible ? [name as string] : []));
+    applyMarkers(markers, withGuide({ mode: "exact" }));
+    expect(visibleModes()).toEqual(["dot"]);
+    expect(markers.guide.dot.scale.x).toBe(0.04);
+    applyMarkers(markers, withGuide({ mode: "fade", fadeRadius: 0.1 }));
+    expect(visibleModes()).toEqual(["fade"]);
+    expect(markers.guide.fade.scale.x).toBe(0.1);
+    applyMarkers(markers, withGuide({ mode: "reticle", markerRadius: 0.05 }));
+    expect(visibleModes()).toEqual(["reticle"]);
+    applyMarkers(markers, withGuide({ mode: "none" }));
+    expect(visibleModes()).toEqual([]);
+    expect(markers.guide.group.visible).toBe(true);
+    expect(markers.guide.ring.visible).toBe(true);
+  });
+
+  it("guide.visible が偽、または alpha が 0 なら全部隠れる。alpha が材質の不透明度に掛かる", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    applyMarkers(markers, withGuide({ visible: false }));
+    expect(markers.guide.group.visible).toBe(false);
+    applyMarkers(markers, withGuide({ alpha: 0 }));
+    expect(markers.guide.group.visible).toBe(false);
+    applyMarkers(markers, withGuide({ alpha: 1 }));
+    const full = markers.guide.ringMaterial.opacity;
+    applyMarkers(markers, withGuide({ alpha: 0.5 }));
+    expect(markers.guide.group.visible).toBe(true);
+    expect(markers.guide.ringMaterial.opacity).toBeCloseTo(full / 2, 6);
+    expect(markers.guide.dotMaterial.opacity).toBeCloseTo(0.5, 6);
+  });
+
+  it("守備の散布円は reticle のときだけ guide.spread に従って出る", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    applyMarkers(markers, withGuide({ mode: "reticle", spread: { visible: true, radius: 0.2 } }));
+    expect(markers.guide.spread.visible).toBe(true);
+    expect(markers.guide.spread.scale.x).toBe(0.2);
+    applyMarkers(markers, withGuide({ mode: "reticle", spread: { visible: false, radius: 0.2 } }));
+    expect(markers.guide.spread.visible).toBe(false);
+    applyMarkers(markers, withGuide({ mode: "exact", spread: { visible: true, radius: 0.2 } }));
+    expect(markers.guide.spread.visible).toBe(false);
+  });
+});
+
+describe("ボールの視認性(ハロー・縫い目・輪郭)", () => {
+  it("ハローは常に生成され、暖色で、球より大きく、ball.halo が不透明度になる", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    expect(markers.ball.children).toContain(markers.ballHalo);
+    expect(markers.ballHaloMaterial.color.getHex()).toBe(0xffd9a0);
+    expect(boundsOf(markers.ballHalo.geometry).max.x).toBeGreaterThan(boundsOf(markers.ballBody.geometry).max.x * 1.5);
+    const base = makeFrame();
+    applyMarkers(markers, { ...base, ball: { ...base.ball, halo: 0.35 } });
+    expect(markers.ballHaloMaterial.opacity).toBeCloseTo(0.35, 6);
+    applyMarkers(markers, { ...base, ball: { ...base.ball, halo: 0.5 } });
+    expect(markers.ballHaloMaterial.opacity).toBeCloseTo(0.5, 6);
+    expect(markers.ballHalo.visible).toBe(true);
+  });
+
+  it("縫い目は赤い帯の弧 2 本で、ball.rotation に従って回り、本体は回らない", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    expect(markers.ballSeams.children).toHaveLength(2);
+    const base = makeFrame();
+    applyMarkers(markers, base);
+    expect(markers.ballSeams.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    applyMarkers(markers, { ...base, ball: { ...base.ball, rotation: { x: 1.1, y: -0.4, z: 2.5 } } });
+    expect(markers.ballSeams.rotation.toArray().slice(0, 3)).toEqual([1.1, -0.4, 2.5]);
+    expect(markers.ballBody.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    for (const seam of meshesOf(markers.ballSeams)) {
+      expect((seam.material as MeshBasicMaterial).color.getHex()).toBe(0xd62f2f);
+    }
+  });
+
+  it("縫い目の帯は球面に沿い(半径 ≈ ballRadius)、帯の幅が球の径の 18% に当たる", () => {
+    const radius = makeGeometry().ballRadius;
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    for (const seam of meshesOf(markers.ballSeams)) {
+      const position = seam.geometry.getAttribute("position");
+      expect(position.count).toBeGreaterThan(0);
+      for (const k of Array.from({ length: position.count }, (_, index) => index)) {
+        const length = Math.hypot(position.getX(k), position.getY(k), position.getZ(k));
+        expect(length).toBeGreaterThanOrEqual(radius);
+        expect(length).toBeLessThanOrEqual(radius * 1.02);
+      }
+    }
+    const first = meshesOf(markers.ballSeams).at(0);
+    const position = first?.geometry.getAttribute("position");
+    const thetas = Array.from({ length: position?.count ?? 0 }, (_, k) => Math.acos((position?.getY(k) ?? 0) / (radius * 1.008)));
+    const width = (Math.max(...thetas) - Math.min(...thetas)) * radius;
+    expect(width / (radius * 2)).toBeCloseTo(0.18, 2);
+  });
+
+  it("ball.outlineScale が輪郭の殻の倍率になる(不正な値は既定の 1.12)", () => {
+    const markers = buildMarkers(makeGeometry(), createToonGradient());
+    const base = makeFrame();
+    applyMarkers(markers, { ...base, ball: { ...base.ball, outlineScale: 1.6 } });
+    expect(markers.ballOutline.scale.x).toBe(1.6);
+    applyMarkers(markers, { ...base, ball: { ...base.ball, outlineScale: Number.NaN } });
+    expect(markers.ballOutline.scale.x).toBe(1.12);
   });
 });

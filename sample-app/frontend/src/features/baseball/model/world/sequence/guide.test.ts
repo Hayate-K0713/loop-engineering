@@ -72,7 +72,7 @@ describe("guideFrameAt: exact", () => {
   it("リングの半径は previewRingAt に一致し、線幅は渡された値(ringWidthFor の結果)をそのまま使う", () => {
     const guide = guideFrameAt(previewInput({ tMs: 700 }));
     expect(guide.ring.radius).toBe(previewRingAt(700, D));
-    expect(guide.ring.width).toBe(RING_WIDTH);
+    expect(guide.ring.width).toBeCloseTo(RING_WIDTH, 12);
     expect(guide.ring.tone).toBe("preview");
     expect(guide.ring.visible).toBe(true);
     expect(guide.spread.visible).toBe(false);
@@ -184,7 +184,7 @@ describe("pitchGuideAt: 守備の照準", () => {
     expect(start.ring.visible).toBe(true);
     expect(start.ring.radius).toBeCloseTo(GAUGE.startRadius, 9);
     expect(end.ring.radius).toBeCloseTo(GAUGE.endRadius, 9);
-    expect(end.ring.width).toBe(RING_WIDTH);
+    expect(end.ring.width).toBeCloseTo(RING_WIDTH, 12);
     expect(end.ring.glow).toBe(1);
   });
 

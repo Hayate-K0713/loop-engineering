@@ -61,7 +61,7 @@
 
 ### ウェーブ A-2(純粋ロジック・部品。8 並列)
 
-- [ ] **A1: アシスト(ロックオン・予告・質の補正)**
+- [x] **A1: アシスト(ロックオン・予告・質の補正)**
   - 依存: A0。担当ファイル: `model/batting/assist.ts`、`contact.ts`、`resolve-pitch.ts`(+test)。
   - やること: `lockOnCursor`・`previewCenterOf`・`qualityScaleOf` を実装。`measureContact` が `swing.assistK` で `q` を `qualityScaleOf` 倍する(省略は 0 で v2 と同値)。
   - 完了条件: 単体テスト — `lockStrength 0` で恒等、`progress < rampStart` で素、`k ∈ [0,1]`・単調、`captureRadius` の外で `k = 0`、有効カーソルは raw と landing の線分上、`fade` の中心が決定論かつ `|ずれ| ≤ fadeJitter` で円が着弾を含む、`preview: "none"`、`assistK` 省略時に v2 と同じ結果。

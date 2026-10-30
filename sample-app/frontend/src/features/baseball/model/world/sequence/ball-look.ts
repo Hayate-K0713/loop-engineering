@@ -12,8 +12,24 @@ const BALL = WORLD_PARAMS.ball;
  */
 export function ballSpinAt(kind: PitchKind, tMs: number): Rot3 {
   const seconds = Number.isFinite(tMs) ? Math.max(0, tMs) / 1000 : 0;
-  const spin = BALL.spin[kind];
-  return { x: spin.x * seconds, y: spin.y * seconds, z: spin.z * seconds };
+  const spin = spinOf(kind);
+  // `0 +` で −0 を +0 にそろえる(角速度が負で t = 0 のとき)。
+  return { x: 0 + spin.x * seconds, y: 0 + spin.y * seconds, z: 0 + spin.z * seconds };
+}
+
+function spinOf(kind: PitchKind): Rot3 {
+  switch (kind) {
+    case "straight":
+      return BALL.spin.straight;
+    case "slider":
+      return BALL.spin.slider;
+    case "curve":
+      return BALL.spin.curve;
+    case "fork":
+      return BALL.spin.fork;
+    case "shoot":
+      return BALL.spin.shoot;
+  }
 }
 
 /** 球の後ろに敷く暖色のハローの不透明度。ハローは必須なので常に 0 より大きい(背景によらずボールを見えるようにする)。 */

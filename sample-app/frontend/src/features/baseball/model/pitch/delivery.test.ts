@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RngState } from "../../types/common";
-import type { PitchCommand, PitchFlight, PitchKind } from "../../types/pitch";
+import type { PitchCommand, PitchFlight, PitchKind, PitchQuality } from "../../types/pitch";
 import type { PitcherProfile } from "../../types/team";
 import { createRng } from "../rng/rng";
 import { nextGaussian } from "../rng/sampling";
@@ -10,6 +10,8 @@ import { PITCH_PARAMS } from "./params";
 import { cellToPoint } from "./zone";
 
 const CENTER_COMMAND: PitchCommand = { kind: "straight", aim: { x: 0, y: 0 }, quality: "normal" };
+
+const QUALITIES: readonly PitchQuality[] = ["nice", "good", "normal", "miss"];
 
 function pitcherWith(overrides: Partial<PitcherProfile> = {}): PitcherProfile {
   return {
@@ -88,11 +90,49 @@ describe("deliverPitch", () => {
   });
 
   it("seq・kind・aim を引き継ぐ", () => {
-    const command: PitchCommand = { kind: "curve", cell: { col: 1, row: 3 } };
+    const command: PitchCommand = { kind: "curve", aim: cellToPoint({ col: 1, row: 3 }), quality: "good" };
     const [flight] = deliverPitch(createRng(1), inputWith({ command, seq: 42 }));
     expect(flight.seq).toBe(42);
     expect(flight.kind).toBe("curve");
-    expect(flight.aim).toEqual(cellToPoint(command.cell));
+    expect(flight.aim).toEqual(command.aim);
+    expect(flight.quality).toBe("good");
+  });
+
+  it("連続座標の狙いを使い、±aimLimit に収める", () => {
+    const limit = PITCH_PARAMS.gauge.aimLimit;
+    const [inside] = deliverPitch(createRng(1), inputWith({ command: { ...CENTER_COMMAND, aim: { x: 0.37, y: -1.21 } } }));
+    expect(inside.aim).toEqual({ x: 0.37, y: -1.21 });
+    const [outside] = deliverPitch(createRng(1), inputWith({ command: { ...CENTER_COMMAND, aim: { x: 9, y: -9 } } }));
+    expect(outside.aim).toEqual({ x: limit, y: -limit });
+  });
+
+  it("乱数の消費は質・狙いによらず同じ(ガウス 2 回)で、同じ rng なら次の rng が一致する", () => {
+    const rng = createRng(21);
+    const [, expected] = deliverPitch(rng, inputWith());
+    for (const quality of QUALITIES) {
+      const [, next] = deliverPitch(rng, inputWith({ command: { kind: "slider", aim: { x: 1.3, y: -0.4 }, quality } }));
+      expect(next).toBe(expected);
+    }
+  });
+
+  it("質が良いほど着弾のばらつきが小さく、倍率は sigmaScale に近い(中央狙い・4,000 球)", () => {
+    const spreads = QUALITIES.map((quality) => spreadOf(throwMany(2, 4000, inputWith({ command: { ...CENTER_COMMAND, quality } }))));
+    const [nice, good, normal] = spreads;
+    expect(spreads.every((spread, index) => index === 0 || spread > (spreads.at(index - 1) ?? 0))).toBe(true);
+    expect(Math.abs(nice / normal - PITCH_PARAMS.gauge.sigmaScale.nice)).toBeLessThan(0.05);
+    expect(Math.abs(good / normal - PITCH_PARAMS.gauge.sigmaScale.good)).toBeLessThan(0.05);
+  });
+
+  it("失投(miss)は着弾の中心が狙いから (0, 0.15) 側へ 60% 寄り、他の質は狙いのまま", () => {
+    const command: PitchCommand = { kind: "straight", aim: { x: 1.5, y: -1.5 }, quality: "miss" };
+    const miss = throwMany(3, 4000, inputWith({ pitcher: pitcherWith({ control: 100 }), command }));
+    const mean = (values: readonly number[]): number => values.reduce((sum, value) => sum + value, 0) / values.length;
+    expect(mean(miss.map((flight) => flight.landing.x))).toBeCloseTo(1.5 * 0.4, 1);
+    expect(mean(miss.map((flight) => flight.landing.y))).toBeCloseTo(-1.5 * 0.4 + 0.15 * 0.6, 1);
+    const normal = throwMany(3, 4000, inputWith({ pitcher: pitcherWith({ control: 100 }), command: { ...command, quality: "normal" } }));
+    expect(mean(normal.map((flight) => flight.landing.x))).toBeCloseTo(1.5, 1);
+    expect(mean(normal.map((flight) => flight.landing.y))).toBeCloseTo(-1.5, 1);
+    expect(miss.every((flight) => flight.aim.x === 1.5 && flight.aim.y === -1.5)).toBe(true);
   });
 
   it("乱数は x → y の順にガウス 2 回ぶん消費し、着弾は狙い + gauss × σ になる(コントロール 100・疲労なし)", () => {
