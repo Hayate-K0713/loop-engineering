@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { CameraPose } from "../../../types/scene";
+import { batterRootFor } from "../motion/batter-layout";
 import { WORLD_PARAMS } from "../space/params";
 import { projectPoint, zoneRectOf, type ViewSize, type ZoneBox } from "./project";
 import { battingCamera, battingCameraFor, fovForAspect } from "./rig";
 
 const ZONE: ZoneBox = WORLD_PARAMS.zone;
-const BATTER = WORLD_PARAMS.actors.batter;
 
-/** 下のオーバーレイの上端 y(px): 打撃はティッカーが下から 181px、守備は高さ 800px 未満で 300px・以上で 368px のバー。 */
+/** 下のオーバーレイの上端 y(px): 打撃はティッカーが下から 181px、守備(v3)は操作バーが約 130px(球種チップ 52 + 余白 + ティッカー 52)。 */
 function overlayTop(height: number, layout: "batting" | "pitching"): number {
-  if (layout === "batting") return height - 181;
-  return height - (height < 800 ? 300 : 368);
+  return height - (layout === "batting" ? 181 : 130);
 }
 
 function sizeOf(width: number, height: number): ViewSize {
@@ -146,19 +145,24 @@ describe("縦長・打撃のゾーン", () => {
     expect(margins.every((margin) => margin >= 40)).toBe(true);
   });
 
-  it("390×844 の既定の空き領域では、ゾーンが設計値(154×174px 前後)に近い", () => {
+  it("390×844 の既定の空き領域では、ゾーンが設計値(x 117.7〜272.3・y 410〜585、±3px。155×175px 前後)に近く、画面中央(x 195)に並ぶ", () => {
     const rect = zoneRectOf(battingCameraFor(390 / 844, "batting", null), sizeOf(390, 844), ZONE);
-    expect(Math.abs(rect.width - 154)).toBeLessThanOrEqual(3);
-    expect(Math.abs(rect.height - 174)).toBeLessThanOrEqual(4);
+    expect(Math.abs(rect.left - 117.7)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.left + rect.width - 272.3)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.top - 410)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.top + rect.height - 585)).toBeLessThanOrEqual(3);
+    expect(rect.width).toBeGreaterThanOrEqual(150);
+    expect(rect.height).toBeGreaterThanOrEqual(170);
+    expect(rect.left + rect.width / 2).toBeCloseTo(195, 6);
   });
 });
 
-describe("縦長・守備のゾーンと格子", () => {
+describe("縦長・守備のゾーンと格子(v3: 打撃と同じ構図。操作バー約 130px)", () => {
   it.each([
-    { width: 390, height: 844, minWidth: 85 },
-    { width: 390, height: 745, minWidth: 85 },
-    { width: 390, height: 664, minWidth: 60 },
-    { width: 360, height: 640, minWidth: 52 },
+    { width: 390, height: 844, minWidth: 150 },
+    { width: 390, height: 745, minWidth: 140 },
+    { width: 390, height: 664, minWidth: 115 },
+    { width: 360, height: 640, minWidth: 105 },
   ])("$width×$height: ゾーン幅 ≥ $minWidth、格子の下端が操作バー(ティッカー)の上端より上", ({ width, height, minWidth }) => {
     const size = sizeOf(width, height);
     const pose = battingCameraFor(width / height, "pitching", safeAreaFor(height, "pitching"));
@@ -167,21 +171,92 @@ describe("縦長・守備のゾーンと格子", () => {
     expect(zone.width).toBeGreaterThanOrEqual(minWidth);
     expect(grid.top + grid.height).toBeLessThanOrEqual(overlayTop(height, "pitching"));
   });
-});
 
-describe("打者の頭の位置(縦長・打撃)", () => {
-  it("390×844 で頭の中心 x が 60px 以上(設計値は約 73px)", () => {
+  it("390×844: 格子の下端が空き領域の下端(0.846)から 8px 以上上、守備のゾーンは打撃と同じ矩形(155×175px)", () => {
     const size = sizeOf(390, 844);
-    const pose = battingCameraFor(390 / 844, "batting", null);
-    const headY = BATTER.position.y + 0.55 + 0.98;
-    const head = projectPoint(pose, size, { x: BATTER.portraitX, y: headY, z: BATTER.position.z });
-    expect(head.x).toBeGreaterThanOrEqual(60);
-    expect(Math.abs(head.x - 73)).toBeLessThanOrEqual(6);
+    const pose = battingCameraFor(390 / 844, "pitching", safeAreaFor(844, "pitching"));
+    const grid = zoneRectOf(pose, size, gridZone());
+    expect(grid.top + grid.height).toBeLessThanOrEqual(0.846 * 844 - 8);
+    const batting = zoneRectOf(battingCameraFor(390 / 844, "batting", safeAreaFor(844, "batting")), size, ZONE);
+    const pitching = zoneRectOf(pose, size, ZONE);
+    expect(pitching.width).toBeCloseTo(batting.width, 1);
+    expect(pitching.height).toBeCloseTo(batting.height, 1);
   });
 
-  it("390×664(ツールバーあり)でも頭の中心 x が 60px 以上", () => {
-    const pose = battingCameraFor(390 / 664, "batting", safeAreaFor(664, "batting"));
-    const head = projectPoint(pose, sizeOf(390, 664), { x: BATTER.portraitX, y: 1.6, z: BATTER.position.z });
-    expect(head.x).toBeGreaterThanOrEqual(60);
+  it("390×664: 守備のゾーン幅は打撃以上(半イニングの切替でゾーンが小さく見えない)", () => {
+    const size = sizeOf(390, 664);
+    const batting = zoneRectOf(battingCameraFor(390 / 664, "batting", safeAreaFor(664, "batting")), size, ZONE);
+    const pitching = zoneRectOf(battingCameraFor(390 / 664, "pitching", safeAreaFor(664, "pitching")), size, ZONE);
+    expect(pitching.width).toBeGreaterThanOrEqual(batting.width);
+  });
+});
+
+// 打者(縦長・打撃)。中心 y は打者の root の拡大率 × 1.53(頭の付け根 torsoY 0.55 + headY 0.98。足元 y = 0)。
+// 半径は contract §7 の手計算と同じ: 素の頭 0.50 × scale(帽子の頂点・輪郭を含む)、ヘルメット込み = 素の頭の +4.5%(外径 +約 4〜5%)、胴 0.31 × 1.05 × scale。
+const HEAD_CENTER_LOCAL_Y = 1.53;
+const HEAD_RADIUS_LOCAL = 0.5;
+const HELMET_FACTOR = 1.045;
+const TORSO_RADIUS_LOCAL = 0.31 * 1.05;
+const TORSO_CENTER_LOCAL_Y = 0.8;
+
+type BatterRightEdges = { readonly headCenterX: number; readonly headRight: number; readonly helmetRight: number; readonly torsoRight: number };
+
+/** 縦長の打者(`batterRootFor`)の、頭の中心 x と、素の頭・ヘルメット込みの頭・胴の画面上の右端(px)。 */
+function batterRightEdges(width: number, height: number, layout: "batting" | "pitching", useSafeArea: boolean): BatterRightEdges {
+  const size = sizeOf(width, height);
+  const pose = battingCameraFor(width / height, layout, useSafeArea ? safeAreaFor(height, layout) : null);
+  const root = batterRootFor(width / height);
+  const at = (localY: number, radius: number): { readonly center: number; readonly right: number } => {
+    const y = root.position.y + root.scale * localY;
+    const center = projectPoint(pose, size, { x: root.position.x, y, z: root.position.z }).x;
+    const right = projectPoint(pose, size, { x: root.position.x + root.scale * radius, y, z: root.position.z }).x;
+    return { center, right };
+  };
+  const head = at(HEAD_CENTER_LOCAL_Y, HEAD_RADIUS_LOCAL);
+  const helmet = at(HEAD_CENTER_LOCAL_Y, HEAD_RADIUS_LOCAL * HELMET_FACTOR);
+  const torso = at(TORSO_CENTER_LOCAL_Y, TORSO_RADIUS_LOCAL);
+  return { headCenterX: head.center, headRight: head.right, helmetRight: helmet.right, torsoRight: torso.right };
+}
+
+describe("打者の頭・胴の位置(縦長・打撃。v3: scale 0.70・x −0.65)", () => {
+  it("390×844: 頭の中心 x ≈ −1px(設計値)、素の頭の右端 ≤ 110px(設計値 約 104)、ヘルメット込みの右端 ≤ 115px(設計値 109)、胴の右端 ≤ 75px(設計値 約 68)", () => {
+    const edges = batterRightEdges(390, 844, "batting", false);
+    expect(Math.abs(edges.headCenterX - -1.1)).toBeLessThanOrEqual(3);
+    expect(edges.headRight).toBeLessThanOrEqual(110);
+    expect(Math.abs(edges.headRight - 104)).toBeLessThanOrEqual(3);
+    expect(edges.helmetRight).toBeLessThanOrEqual(115);
+    expect(Math.abs(edges.helmetRight - 109)).toBeLessThanOrEqual(3);
+    expect(edges.torsoRight).toBeLessThanOrEqual(75);
+    expect(Math.abs(edges.torsoRight - 68)).toBeLessThanOrEqual(3);
+  });
+
+  it("390×844: 守備のレイアウトでも打撃と同じ構図なので、同じ位置", () => {
+    const batting = batterRightEdges(390, 844, "batting", true);
+    const pitching = batterRightEdges(390, 844, "pitching", true);
+    expect(pitching.helmetRight).toBeCloseTo(batting.helmetRight, 6);
+    expect(pitching.torsoRight).toBeCloseTo(batting.torsoRight, 6);
+  });
+
+  it("390×844: ヘルメット込みの頭の右端とゾーン枠の左端(117.7px)の間が 5px 以上(設計値 約 9px)", () => {
+    const rect = zoneRectOf(battingCameraFor(390 / 844, "batting", null), sizeOf(390, 844), ZONE);
+    expect(rect.left - batterRightEdges(390, 844, "batting", false).helmetRight).toBeGreaterThanOrEqual(5);
+  });
+
+  it.each([
+    { width: 390, height: 745 },
+    { width: 390, height: 664 },
+    { width: 375, height: 667 },
+    { width: 360, height: 640 },
+  ])("$width×$height: 打撃・守備とも、頭(ヘルメット込み)・胴の右端がゾーン枠の左端より左(重ならない)", ({ width, height }) => {
+    for (const layout of ["batting", "pitching"] as const) {
+      const rect = zoneRectOf(battingCameraFor(width / height, layout, safeAreaFor(height, layout)), sizeOf(width, height), ZONE);
+      const edges = batterRightEdges(width, height, layout, true);
+      expect(edges.helmetRight, layout).toBeLessThan(rect.left);
+      expect(edges.torsoRight, layout).toBeLessThan(rect.left);
+    }
+  });
+
+  it("390×664(ツールバーあり)でも頭の中心 x が 0 以上(画面の左端で頭が切れすぎない)", () => {
+    expect(batterRightEdges(390, 664, "batting", true).headCenterX).toBeGreaterThanOrEqual(0);
   });
 });

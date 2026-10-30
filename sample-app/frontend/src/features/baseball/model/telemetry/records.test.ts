@@ -52,7 +52,16 @@ describe("records", () => {
   });
 
   it("buildBatRecord は inZone を着弾点から決め、見逃しは swing が null", () => {
-    const base = { atMs: 10, seq: 3, pitchKind: "curve", durationMs: 1652, preview: "exact", difficulty: "normal", swing: null, result: { kind: "called-strike" } } as const;
+    const base = {
+      atMs: 10,
+      seq: 3,
+      pitchKind: "curve",
+      durationMs: 1652,
+      preview: "exact",
+      difficulty: "normal",
+      swing: null,
+      result: { kind: "called-strike" },
+    } as const;
     const inside = buildBatRecord({ ...base, landing: { x: 1, y: -1 } });
     const outside = buildBatRecord({ ...base, landing: { x: 1.2, y: 0 } });
     expect(inside.inZone).toBe(true);

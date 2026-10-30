@@ -37,7 +37,12 @@ describe("ring-buffer", () => {
 
   it("JSON 往復で同じ記録に戻る(全種類)", () => {
     const records: readonly PlaytestRecord[] = [
-      { type: "session", atMs: 0, sessionId: "s1", device: { innerWidth: 390, innerHeight: 844, devicePixelRatio: 3, pointerCoarse: true, visualViewportScale: 1, userAgent: "ua" } },
+      {
+        type: "session",
+        atMs: 0,
+        sessionId: "s1",
+        device: { innerWidth: 390, innerHeight: 844, devicePixelRatio: 3, pointerCoarse: true, visualViewportScale: 1, userAgent: "ua" },
+      },
       { type: "stage", atMs: 10, drawCalls: 120, triangles: 50000 },
       makeBat({ swing: null, result: "called-strike" }),
       makeBat({ seq: 2 }),
@@ -61,7 +66,15 @@ describe("ring-buffer", () => {
 
   it("配列の中の壊れた要素だけが捨てられる", () => {
     const good = makeBat({ seq: 7 });
-    const json = JSON.stringify([good, null, 3, { type: "unknown", atMs: 1 }, { type: "bat", atMs: 1 }, { type: "ignored", atMs: 2, reason: "nope" }, makeIgnored("cancel")]);
+    const json = JSON.stringify([
+      good,
+      null,
+      3,
+      { type: "unknown", atMs: 1 },
+      { type: "bat", atMs: 1 },
+      { type: "ignored", atMs: 2, reason: "nope" },
+      makeIgnored("cancel"),
+    ]);
     const parsed = parseRecords(json);
     expect(parsed).toHaveLength(2);
     expect(parsed.at(0)).toEqual(good);

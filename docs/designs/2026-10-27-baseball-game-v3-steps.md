@@ -81,7 +81,7 @@
   - 依存: A0。担当ファイル: 新規 `model/world/sequence/{guide,ball-look,contact-feedback}.ts`(+test)。
   - やること: `guideFrameAt`・`previewRingAt`、`pitchGuideAt`(守備。段階 B で使う)、`ballSpinAt`・`ballHaloAt`、**`zoneFeedbackOfSwing`・`zoneFeedbackOfPitch`**(`ZoneFeedbackView` をゾーン単位で返す)。リングの線幅は `ringWidthFor` の結果を受ける。
   - 完了条件: 単体テスト — リング半径が `t = 0` で startRadius・`t = D` で endRadius(±1e-9)・単調減少・D 以降は保持、`exact` の点が `flight.landing` に厳密一致、`fade` が着弾を含む、`none`、`ballSpinAt` が球種ごとに異なりフォークが最小、`zoneFeedbackOfSwing` の from が判定に使った有効カーソル・to が着弾点に厳密一致し alpha が単調減少して `swingMs` で 0、`zoneFeedbackOfPitch` は `pitchMs` で 0、`pitchGuideAt` のリングが `gaugeRingAt` に一致。
-- [ ] **A6: telemetry・prefs・tutorial の純粋ロジック**
+- [x] **A6: telemetry・prefs・tutorial の純粋ロジック**
   - 依存: A0。担当ファイル: 新規 `model/telemetry/*`、`model/prefs/{prefs,safe-store}.ts`、`model/tutorial/steps.ts`(+test)。
   - やること: 記録の組み立て・リングバッファ(最大 600、JSON 往復)・`summarize`(**タップが通らなかった理由の件数を含む**)・`toCsv`・`fitBotParams`・`parsePrefs`・**`createSafeStore(getStorage)`**・チュートリアルのカード(**タップ方式の文言**。play 分冊 §1-5)。
   - 完了条件: 単体テスト — 600 件超で先頭が落ちる・JSON 往復・不正 JSON は空、`summarize` が手計算と一致、`fitBotParams` が既知の分布を ±5% で復元、`parsePrefs` が欠損を既定値で補う、`getStorage`/`setItem` が例外を投げる偽のストレージでも例外を出さない。

@@ -46,7 +46,10 @@ function syntheticLog(): readonly PlaytestRecord[] {
     const raw = { x: landing.x + dxZ * sigmaZone, y: landing.y + dyZ * sigmaZone };
     const effective = { x: raw.x + (landing.x - raw.x) * LOCK_K, y: raw.y + (landing.y - raw.y) * LOCK_K };
     const distanceZone = Math.hypot(effective.x - landing.x, effective.y - landing.y);
-    const dtMs = TRUE_BIAS + (DEFAULT_FIT_OPTIONS.latencyMs + latencyZ * DEFAULT_FIT_OPTIONS.latencySdMs - DEFAULT_FIT_OPTIONS.compensationMs) + timingZ * TRUE_TIMING_SIGMA;
+    const dtMs =
+      TRUE_BIAS +
+      (DEFAULT_FIT_OPTIONS.latencyMs + latencyZ * DEFAULT_FIT_OPTIONS.latencySdMs - DEFAULT_FIT_OPTIONS.compensationMs) +
+      timingZ * TRUE_TIMING_SIGMA;
     return makeBat({
       seq: index,
       landing,

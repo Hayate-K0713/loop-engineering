@@ -54,7 +54,14 @@ describe("toCsv", () => {
   });
 
   it("カンマや引用符を含む値は二重引用符で囲む", () => {
-    const csv = toCsv([{ type: "session", atMs: 0, sessionId: 'a,"b"', device: { innerWidth: 1, innerHeight: 1, devicePixelRatio: 1, pointerCoarse: false, visualViewportScale: 1, userAgent: "" } }]);
+    const csv = toCsv([
+      {
+        type: "session",
+        atMs: 0,
+        sessionId: 'a,"b"',
+        device: { innerWidth: 1, innerHeight: 1, devicePixelRatio: 1, pointerCoarse: false, visualViewportScale: 1, userAgent: "" },
+      },
+    ]);
     expect(csv).toContain('"a,""b"""');
   });
 });

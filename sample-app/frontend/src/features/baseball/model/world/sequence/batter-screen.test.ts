@@ -4,10 +4,12 @@ import type { PitchFlight } from "../../../types/pitch";
 import type { BatterPose, SafeArea, SceneFrame, SceneLayout, Vec3 } from "../../../types/scene";
 import type { PitchOutcomeView } from "../../../types/view";
 import { projectPoint, zoneRectOf, type ViewSize, type ZoneBox } from "../camera/project";
+import { portraitBlendAt } from "../camera/rig";
 import { handPosition, rotateEuler } from "../motion/fk";
-import { batterStancePose } from "../motion/batter";
+import { batterStancePose, batterSwingPose } from "../motion/batter";
+import { batLengthScaleFor, batTipX, batterRootFor } from "../motion/batter-layout";
 import { placeBatter } from "../motion/pose";
-import { CHARACTER_RIG } from "../motion/rig";
+import { CHARACTER_RIG, SWING_CONTACT_PROGRESS } from "../motion/rig";
 import { zoneToWorld } from "../space/coords";
 import { WORLD_PARAMS } from "../space/params";
 import { sceneFrameAt } from "./frame";
@@ -24,15 +26,16 @@ const SLEEVE_RADIUS = 0.075;
 const CLEARANCE_PX = 4;
 
 /**
- * 実画面(DOM)で測った、ステージの [幅, 高さ, 打撃の下のオーバーレイの上端 y, 守備の下のオーバーレイの上端 y]。HUD の下端は上から 155px。
- * (H12 の計測値。高さ 800px 未満では下のオーバーレイの見た目の上端はさらに 10px 下になるが、空き領域としてはこの値を使う)
+ * ステージの [幅, 高さ, 打撃の下のオーバーレイの上端 y, 守備の下のオーバーレイの上端 y]。HUD の下端は上から 155px。
+ * 打撃は v2 の実画面(DOM)の計測値(H12。ティッカーが下から 181px)。守備は v3 の設計値で、操作バーが約 130px(球種チップ 52 + 余白 + ティッカー 52)なので
+ * `高さ − 130`(v2 は 275〜368px のバーだった。contract §7 の「守備の操作バー」。A12 の実装後に実画面で確かめる)。
  */
 const VIEWPORTS: readonly (readonly [number, number, number, number])[] = [
-  [390, 844, 663, 476],
-  [390, 745, 594, 470],
-  [390, 664, 513, 389],
-  [375, 667, 516, 392],
-  [360, 640, 489, 365],
+  [390, 844, 663, 714],
+  [390, 745, 594, 615],
+  [390, 664, 513, 534],
+  [375, 667, 516, 537],
+  [360, 640, 489, 510],
 ];
 
 const FLIGHT: PitchFlight = { seq: 1, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 0, y: 0 }, speedKmh: 140, durationMs: 1300, quality: "normal" };
@@ -48,7 +51,7 @@ function frameFor(
   overrides: { readonly plan?: PlayPlan; readonly tMs?: number; readonly flight?: PitchFlight } = {},
 ): SceneFrame {
   const safeArea: SafeArea = { top: 155 / height, bottom: overlayTop / height };
-  return sceneFrameAt({
+  const frame = sceneFrameAt({
     phase: overrides.plan === undefined ? "flight" : "play",
     tMs: overrides.tMs ?? 300,
     windupU: 1,
@@ -62,6 +65,20 @@ function frameFor(
     aim: null,
     grid: layout === "pitching",
   });
+  return { ...frame, batter: v3Batter(width / height, overrides.plan?.swing ?? null) };
+}
+
+/**
+ * v3 の打者(`batterRootFor` の足元と拡大率・`batLengthScaleFor` のバット軸の長さ)。`sceneFrameAt` の打者は A11 が `batterRootFor` に結線するまで
+ * v2 の拡大率 0.92 のままなので、この検証では A2 の純関数から直接組み立てる(構えは `batterStancePose`、スイングは接触の瞬間の姿勢。バット高さは打者ローカルへ直す)。
+ * A11 が結線したら、この上書きは外して `sceneFrameAt` の打者をそのまま使ってよい。
+ */
+function v3Batter(aspect: number, swing: { readonly height: number } | null): BatterPose {
+  const root = batterRootFor(aspect);
+  const k = portraitBlendAt(aspect);
+  const joints = swing === null ? batterStancePose(k) : batterSwingPose(SWING_CONTACT_PROGRESS, swing.height, k);
+  const height = (joints.bat.height - root.position.y) / root.scale;
+  return placeBatter({ ...joints, bat: { ...joints.bat, height, lengthScale: batLengthScaleFor(aspect) } }, root);
 }
 
 /** 打撃はゾーン枠、守備は 5×5 格子(ゾーンの中心から 5/3 倍)の画面矩形。 */
@@ -99,9 +116,9 @@ function batterBlobs(frame: SceneFrame, size: ViewSize): readonly Blob[] {
   return [...arms, ...bats];
 }
 
-/** バットの軸上の点(根元から s m)のワールド座標。バットは打者の root の子で、スイングのグループ(位置 (0, height, 0.05)・y 回転 sweepYaw)の中の傾き(x 回転 tilt)の先に +z 方向へ伸びる。 */
+/** バットの軸上の点(標準の長さで根元から s m。`lengthScale` 倍に伸びる)のワールド座標。バットは打者の root の子で、スイングのグループ(位置 (0, height, 0.05)・y 回転 sweepYaw)の中の傾き(x 回転 tilt)の先に +z 方向へ伸びる。 */
 function batPoint(batter: BatterPose, s: number): Vec3 {
-  const tilted = rotateEuler({ x: 0, y: 0, z: s }, { x: batter.bat.tilt, y: 0, z: 0 });
+  const tilted = rotateEuler({ x: 0, y: 0, z: s * batter.bat.lengthScale }, { x: batter.bat.tilt, y: 0, z: 0 });
   const swung = rotateEuler(tilted, { x: 0, y: batter.bat.sweepYaw, z: 0 });
   const local = rotateEuler({ x: swung.x, y: swung.y + batter.bat.height, z: swung.z + 0.05 }, { x: 0, y: batter.yaw, z: 0 });
   return { x: local.x * batter.scale + batter.position.x, y: local.y * batter.scale + batter.position.y, z: local.z * batter.scale + batter.position.z };
@@ -208,5 +225,19 @@ describe("接触の瞬間のバットとボールの縦のずれ(縦長 390×844
 
   it.each(POINTS)("%s", (_name, landing) => {
     expect(contactOffsetPx(390, 844, 663, landing)).toBeLessThanOrEqual(20);
+  });
+});
+
+describe("接触の瞬間のバット先端(縦長 390×844。v3: バット軸 1.35 倍)", () => {
+  it("先端のワールド x が batTipX に一致し、+0.28m 以上(ゾーン右端 0.26m の外)、画面では x 270px 以上でゾーン枠の右端の外側まで届く", () => {
+    const aspect = 390 / 844;
+    const size = { width: 390, height: 844 };
+    const batter = v3Batter(aspect, { height: 0.72 });
+    const tip = batPoint(batter, 0.975);
+    expect(tip.x).toBeCloseTo(batTipX(aspect), 9);
+    expect(tip.x).toBeGreaterThanOrEqual(0.28);
+    const frame = frameFor(390, 844, "batting", 663);
+    const zone = targetRect(frame, size, "batting");
+    expect(projectPoint(frame.camera, size, tip).x).toBeGreaterThanOrEqual(zone.right - 3);
   });
 });

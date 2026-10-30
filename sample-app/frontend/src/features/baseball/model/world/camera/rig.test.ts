@@ -341,7 +341,7 @@ describe("v3 の構図の数値(390×844。contract §7 の「段階 A 完了時
     expect(pitching.width).toBeGreaterThanOrEqual(batting.width);
   });
 
-  it("高さ 560〜900px(幅 390、20px 刻み)で、守備のゾーン幅は打撃以上、どちらも下のオーバーレイに掛からない", () => {
+  it("高さ 560〜900px(幅 390、20px 刻み)で、どちらも下のオーバーレイに掛からず、守備のゾーン幅は打撃の 85% 以上(半イニングの切替の見た目の差が 15% 以内。play 分冊 §3-1)。高さ 600〜720 では打撃以上", () => {
     const heights = Array.from({ length: 18 }, (_, i) => 560 + i * 20);
     for (const height of heights) {
       const widths = LAYOUTS.map((layout) => {
@@ -350,7 +350,12 @@ describe("v3 の構図の数値(390×844。contract §7 の「段階 A 完了時
         expect(bottomEdgeOf(pose, { width: 390, height }, layout)).toBeLessThanOrEqual((safeArea.bottom - FIT.marginRatio) * height + 0.5);
         return zoneRectOf(pose, { width: 390, height }, ZONE).width;
       });
-      expect(widths.at(1) ?? 0, `高さ ${height}`).toBeGreaterThanOrEqual((widths.at(0) ?? 0) - 1e-9);
+      const batting = widths.at(0) ?? 0;
+      const pitching = widths.at(1) ?? 0;
+      expect(pitching, `高さ ${height}`).toBeGreaterThanOrEqual(batting * 0.85);
+      if (height >= 600 && height <= 720) {
+        expect(pitching, `高さ ${height}`).toBeGreaterThanOrEqual(batting - 1e-9);
+      }
     }
   });
 });

@@ -20,7 +20,7 @@ export function serializeRecords(records: readonly PlaytestRecord[]): string {
 }
 
 // 語彙は `types/batting.ts`・`types/telemetry.ts` と同じ(JSON から来る未検証の文字列と比べるので string[] で持つ)。
-const RECORD_TYPES: readonly string[] =["session", "stage", "bat", "ignored", "pointercancel", "pitch", "perf"];
+const RECORD_TYPES: readonly string[] = ["session", "stage", "bat", "ignored", "pointercancel", "pitch", "perf"];
 const IGNORED_REASONS: readonly string[] = ["not-ready", "holding", "tap-too-long", "tap-moved", "cancel", "held-release"];
 const SWING_SOURCES: readonly string[] = ["tap", "touch-second", "button", "key", "mouse"];
 
