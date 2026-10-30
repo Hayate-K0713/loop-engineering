@@ -85,7 +85,7 @@
   - 依存: A0。担当ファイル: 新規 `model/telemetry/*`、`model/prefs/{prefs,safe-store}.ts`、`model/tutorial/steps.ts`(+test)。
   - やること: 記録の組み立て・リングバッファ(最大 600、JSON 往復)・`summarize`(**タップが通らなかった理由の件数を含む**)・`toCsv`・`fitBotParams`・`parsePrefs`・**`createSafeStore(getStorage)`**・チュートリアルのカード(**タップ方式の文言**。play 分冊 §1-5)。
   - 完了条件: 単体テスト — 600 件超で先頭が落ちる・JSON 往復・不正 JSON は空、`summarize` が手計算と一致、`fitBotParams` が既知の分布を ±5% で復元、`parsePrefs` が欠損を既定値で補う、`getStorage`/`setItem` が例外を投げる偽のストレージでも例外を出さない。
-- [ ] **A7: render — マーカー(予告・リング・照準・ボール)**
+- [x] **A7: render — マーカー(予告・リング・照準・ボール)**
   - 依存: A0。担当ファイル: `render/{markers,look}.ts`、`render/dispose.test.ts`(+test)。
   - やること: `guide`・`cursor.raw`・`ball.rotation`/`halo`(**必須**・暖色)/`outlineScale`・縫い目(太い赤い帯の弧 2 本)・旧 `aim` の削除。描画順は v2 の規則に新要素を割り当てる。**3D の位置ずれ表示(`feedback`)は作らない**(DOM。A12)。
   - 完了条件: 単体テスト(smoke)— 生成・可視・破棄(リークなし)、縫い目が `rotation` に従う、リングの半径・線幅が `guide.ring` に一致、ボールが `transparent`/`depthTest false`、ハローが常に生成される。`import * as THREE`・`document`・`window` が無い。

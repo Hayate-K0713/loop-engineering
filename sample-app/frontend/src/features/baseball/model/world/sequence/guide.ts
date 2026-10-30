@@ -2,7 +2,7 @@ import type { PreviewMode } from "../../../types/batting";
 import type { ZonePoint } from "../../../types/common";
 import type { SceneGuide } from "../../../types/scene";
 import { clamp } from "../../pitch/zone";
-import { PITCH_PARAMS } from "../../pitch/params";
+import { gaugeRingAt, gaugeTimingsOf } from "../../pitch/gauge";
 import { ZONE_HALF_HEIGHT, zoneToWorld } from "../space/coords";
 import { WORLD_PARAMS } from "../space/params";
 
@@ -12,7 +12,6 @@ import { WORLD_PARAMS } from "../space/params";
 const GUIDE = WORLD_PARAMS.guide;
 const RING_END_RADIUS = WORLD_PARAMS.ballRadius * GUIDE.previewRing.endRadiusRatio;
 const GAUGE_RING = GUIDE.gaugeRing;
-const GAUGE_RING_MS = PITCH_PARAMS.gauge.ringMs;
 
 /** 守備の照準の半径(m)。ゲージのリングの終点(`gaugeRing.endRadius`)より小さく、リングが重なる先になる。390 幅で外周約 44px。 */
 const RETICLE_RADIUS = 0.07;
@@ -120,17 +119,6 @@ export function guideFrameAt(input: PreviewGuideInput): SceneGuide {
   };
 }
 
-/**
- * ゲージのリングの半径(m)。ゲージ開始(経過 0)で `startRadius`、`ringMs` で `endRadius` へ線形に縮み、
- * 終点を過ぎても `afterRatio × ringMs` は縮み続ける(戻らない)。それ以降は保持する。
- * 注: `model/pitch/gauge.ts` の `gaugeRingAt`(A3)と同じ式。A3 完了後は `gaugeRingAt` を直接呼ぶ形に一致させる。
- */
-function gaugeRingRadiusAt(elapsedMs: number): number {
-  const e = clamp(finiteOr(elapsedMs, 0), 0, GAUGE_RING_MS * (1 + GAUGE_RING.afterRatio));
-  const k = e / GAUGE_RING_MS;
-  return GAUGE_RING.startRadius + (GAUGE_RING.endRadius - GAUGE_RING.startRadius) * k;
-}
-
 export type PitchGuideInput = {
   /** 照準を出す区間か(人間守備の狙い・ゲージ・投球の飛行中。それ以外は非表示)。 */
   readonly visible: boolean;
@@ -142,17 +130,20 @@ export type PitchGuideInput = {
   readonly spreadRadiusZone: number | null;
   /** リングの線幅(m。`ringWidthFor` の結果)。 */
   readonly ringWidth: number;
+  /** 再生速度(ゲージの長さに反映。省略は 1)。 */
+  readonly timeScale?: number;
 };
 
-/** 守備の狙いの照準(`reticle`)。ゲージ中は照準の周りに縮むリング(`tone: "gauge"`)を出す。 */
+/** 守備の狙いの照準(`reticle`)。ゲージ中は照準の周りに縮むリング(`tone: "gauge"`。半径は `gaugeRingAt`)を出す。 */
 export function pitchGuideAt(input: PitchGuideInput): SceneGuide {
   if (!input.visible) {
     return HIDDEN_GUIDE;
   }
   const { gaugeElapsedMs, spreadRadiusZone } = input;
   const gauging = gaugeElapsedMs !== null;
-  const radius = gauging ? gaugeRingRadiusAt(gaugeElapsedMs) : GAUGE_RING.startRadius;
-  const progress = gauging ? clamp(gaugeElapsedMs / GAUGE_RING_MS, 0, 1) : 0;
+  const timeScale = input.timeScale ?? 1;
+  const radius = gauging ? gaugeRingAt(gaugeElapsedMs, timeScale).radius : GAUGE_RING.startRadius;
+  const progress = gauging ? clamp(finiteOr(gaugeElapsedMs, 0) / gaugeTimingsOf(timeScale).ringMs, 0, 1) : 0;
   return {
     visible: true,
     mode: "reticle",

@@ -24,7 +24,15 @@ const CENTER_STRAIGHT: PitchCommand = { kind: "straight", aim: { x: 0, y: 0 }, q
 const ALL_INNINGS: readonly Innings[] = [1, 3, 5, 9];
 const ALL_DIFFICULTIES: readonly Difficulty[] = ["easy", "normal", "hard"];
 
-const BALL_FLIGHT: PitchFlight = { seq: 5, kind: "straight", aim: { x: 0, y: 0 }, landing: { x: 1.6, y: 1.6 }, speedKmh: 140, durationMs: 1357, quality: "normal" };
+const BALL_FLIGHT: PitchFlight = {
+  seq: 5,
+  kind: "straight",
+  aim: { x: 0, y: 0 },
+  landing: { x: 1.6, y: 1.6 },
+  speedKmh: 140,
+  durationMs: 1357,
+  quality: "normal",
+};
 const STRIKE_FLIGHT: PitchFlight = { ...BALL_FLIGHT, landing: { x: 0, y: 0 } };
 
 function deepFreeze<T>(value: T): T {

@@ -41,7 +41,19 @@ export function gaugeErrorMs(input: {
   readonly timeScale: number;
 }): number {
   const { stopMs, startMs, inputKind, timeScale } = input;
-  return stopMs - BATTING_PARAMS.inputLatencyMs[inputKind] - (startMs + gaugeTimingsOf(timeScale).ringMs);
+  return stopMs - latencyOf(inputKind) - (startMs + gaugeTimingsOf(timeScale).ringMs);
+}
+
+/** 入力の種類別の遅延補正(ms。タッチ 70・マウス/キー 20)。打撃と同じ値。 */
+function latencyOf(inputKind: PitchInputKind): number {
+  switch (inputKind) {
+    case "touch":
+      return BATTING_PARAMS.inputLatencyMs.touch;
+    case "mouse":
+      return BATTING_PARAMS.inputLatencyMs.mouse;
+    case "key":
+      return BATTING_PARAMS.inputLatencyMs.key;
+  }
 }
 
 /** 誤差から質を決める。窓の境界は含む(`|e| ≤ 40` = ナイス)。窓の外・`null`(タップなしの自動投球)・非有限は失投。 */

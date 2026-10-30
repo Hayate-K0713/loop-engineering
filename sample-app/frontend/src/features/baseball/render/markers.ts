@@ -247,7 +247,10 @@ function buildDot(): { dot: Group; fill: MeshBasicMaterial; edge: MeshBasicMater
   const fill = overlayFillMaterial(GUIDE_LOOK.preview, 1);
   const edge = overlayFillMaterial(GUIDE_LOOK.edge, 1);
   const dot = new Group();
-  dot.add(overlayMesh(new CircleGeometry(GUIDE_LOOK.dotEdge, 24), edge, RENDER_ORDER.guide), overlayMesh(new CircleGeometry(1, 24), fill, RENDER_ORDER.guide + 0.01));
+  dot.add(
+    overlayMesh(new CircleGeometry(GUIDE_LOOK.dotEdge, 24), edge, RENDER_ORDER.guide),
+    overlayMesh(new CircleGeometry(1, 24), fill, RENDER_ORDER.guide + 0.01),
+  );
   dot.visible = false;
   return { dot, fill, edge };
 }
@@ -297,7 +300,21 @@ function buildGuide(): GuideMarkers {
   ring.visible = false;
   group.add(spread, fade, dot, reticle, ring);
   group.visible = false;
-  return { group, dot, dotMaterial, dotEdgeMaterial, fade, fadeFillMaterial, fadeEdgeMaterial, reticle, reticleMaterial, spread, spreadMaterial, ring, ringMaterial };
+  return {
+    group,
+    dot,
+    dotMaterial,
+    dotEdgeMaterial,
+    fade,
+    fadeFillMaterial,
+    fadeEdgeMaterial,
+    reticle,
+    reticleMaterial,
+    spread,
+    spreadMaterial,
+    ring,
+    ringMaterial,
+  };
 }
 
 /** 縫い目の帯: 球面の部分(極角 ±`widthRatio` rad = 球の径の `widthRatio` 倍の幅)を弧 2 本、反対側に置く。 */

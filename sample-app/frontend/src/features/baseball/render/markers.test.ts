@@ -299,10 +299,10 @@ describe("予告・照準・縮むリング(guide)", () => {
       ].flatMap(([name, object]) => ((object as Group).visible ? [name as string] : []));
     applyMarkers(markers, withGuide({ mode: "exact" }));
     expect(visibleModes()).toEqual(["dot"]);
-    expect(markers.guide.dot.scale.x).toBe(0.04);
+    expect(markers.guide.dot.scale.x).toBeCloseTo(0.04, 9);
     applyMarkers(markers, withGuide({ mode: "fade", fadeRadius: 0.1 }));
     expect(visibleModes()).toEqual(["fade"]);
-    expect(markers.guide.fade.scale.x).toBe(0.1);
+    expect(markers.guide.fade.scale.x).toBeCloseTo(0.1, 9);
     applyMarkers(markers, withGuide({ mode: "reticle", markerRadius: 0.05 }));
     expect(visibleModes()).toEqual(["reticle"]);
     applyMarkers(markers, withGuide({ mode: "none" }));
@@ -329,7 +329,7 @@ describe("予告・照準・縮むリング(guide)", () => {
     const markers = buildMarkers(makeGeometry(), createToonGradient());
     applyMarkers(markers, withGuide({ mode: "reticle", spread: { visible: true, radius: 0.2 } }));
     expect(markers.guide.spread.visible).toBe(true);
-    expect(markers.guide.spread.scale.x).toBe(0.2);
+    expect(markers.guide.spread.scale.x).toBeCloseTo(0.2, 9);
     applyMarkers(markers, withGuide({ mode: "reticle", spread: { visible: false, radius: 0.2 } }));
     expect(markers.guide.spread.visible).toBe(false);
     applyMarkers(markers, withGuide({ mode: "exact", spread: { visible: true, radius: 0.2 } }));
@@ -388,8 +388,8 @@ describe("ボールの視認性(ハロー・縫い目・輪郭)", () => {
     const markers = buildMarkers(makeGeometry(), createToonGradient());
     const base = makeFrame();
     applyMarkers(markers, { ...base, ball: { ...base.ball, outlineScale: 1.6 } });
-    expect(markers.ballOutline.scale.x).toBe(1.6);
+    expect(markers.ballOutline.scale.x).toBeCloseTo(1.6, 9);
     applyMarkers(markers, { ...base, ball: { ...base.ball, outlineScale: Number.NaN } });
-    expect(markers.ballOutline.scale.x).toBe(1.12);
+    expect(markers.ballOutline.scale.x).toBeCloseTo(1.12, 9);
   });
 });

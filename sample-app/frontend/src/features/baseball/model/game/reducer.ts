@@ -3,6 +3,7 @@ import type { SwingInput } from "../../types/batting";
 import type { RngState, Side } from "../../types/common";
 import type { GameState, LineScore, LogEntry } from "../../types/game";
 import type { PitchCommand, PitchFlight } from "../../types/pitch";
+import { assistFor } from "../batting/assist";
 import { resolvePitch } from "../batting/resolve-pitch";
 import { decideCpuBat } from "../cpu/cpu-batter";
 import { chooseCpuPitch, commandOfChoice } from "../cpu/cpu-pitcher";
@@ -86,7 +87,14 @@ function appendLog(log: readonly LogEntry[], seq: number, lines: readonly string
  */
 function resolveFlight(state: GameState, flight: PitchFlight, swing: SwingInput | null): GameState {
   const offense = offenseSide(state.half);
-  const [result, rng] = resolvePitch(state.rng, { flight, swing, batter: currentBatter(state), outs: state.outs, bases: state.bases });
+  const [result, rng] = resolvePitch(state.rng, {
+    flight,
+    swing,
+    batter: currentBatter(state),
+    outs: state.outs,
+    bases: state.bases,
+    assist: assistFor(state.config.difficulty),
+  });
   const applied = applyPitchResult({ ...state, rng }, result);
   const settled = settleInning(applied);
   const summary: ResolutionSummary = {

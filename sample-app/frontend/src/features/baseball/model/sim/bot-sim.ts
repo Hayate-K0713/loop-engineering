@@ -3,6 +3,7 @@ import type { RngState, ZonePoint } from "../../types/common";
 import type { Count } from "../../types/game";
 import type { PitchFlight } from "../../types/pitch";
 import type { BatterProfile } from "../../types/team";
+import { assistFor } from "../batting/assist";
 import { clampCursor } from "../batting/cursor";
 import { BATTING_PARAMS } from "../batting/params";
 import { resolvePitch } from "../batting/resolve-pitch";
@@ -246,7 +247,7 @@ function swingAtStrike(spec: BotSpec, flight: PitchFlight, state: SimState): voi
   const cursor = botCursor(spec, flight, eventMs, state);
   const swing = { kind: spec.swingKind, cursor, atMs: judgeTimeOf(eventMs, spec.input) };
   const batter = batterOf(state.tally.swings);
-  const [result, next] = resolvePitch(state.rng, { flight, swing, batter, outs: 0, bases: EMPTY_BASES });
+  const [result, next] = resolvePitch(state.rng, { flight, swing, batter, outs: 0, bases: EMPTY_BASES, assist: assistFor("normal") });
   state.rng = next;
   state.tally = tallyResult(state.tally, result);
 }
@@ -274,7 +275,7 @@ export function runCpuNormal(trials: number, seed: number): BotTally {
       const [decision, afterDecision] = decideCpuBat(state.rng, { flight, count, batter, pitcher: PITCHER, difficulty: NORMAL });
       state.rng = afterDecision;
       if (decision.type === "swing") {
-        const [result, next] = resolvePitch(state.rng, { flight, swing: decision.input, batter, outs: 0, bases: EMPTY_BASES });
+        const [result, next] = resolvePitch(state.rng, { flight, swing: decision.input, batter, outs: 0, bases: EMPTY_BASES, assist: assistFor("normal") });
         state.rng = next;
         state.tally = tallyResult(state.tally, result);
       }

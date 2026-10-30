@@ -1,6 +1,9 @@
 // 試遊ログのリングバッファ(最大 600 件)と JSON の往復。不変な配列を返す純粋関数。
 import type { PlaytestRecord } from "../../types/telemetry";
 
+/** 任意の保存(`createSafeStore` 経由)に使うキー。メモリが主で、保存できなくても動く。 */
+export const PLAYTEST_STORAGE_KEY = "bb-playtest-v1";
+
 /** 保持する記録の最大件数。超えたら古いほうから落とす。 */
 export const RING_CAPACITY = 600;
 

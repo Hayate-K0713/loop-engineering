@@ -117,10 +117,10 @@ describe("deliverPitch", () => {
 
   it("質が良いほど着弾のばらつきが小さく、倍率は sigmaScale に近い(中央狙い・4,000 球)", () => {
     const spreads = QUALITIES.map((quality) => spreadOf(throwMany(2, 4000, inputWith({ command: { ...CENTER_COMMAND, quality } }))));
-    const [nice, good, normal] = spreads;
+    const normal = spreads.at(2) ?? 1;
     expect(spreads.every((spread, index) => index === 0 || spread > (spreads.at(index - 1) ?? 0))).toBe(true);
-    expect(Math.abs(nice / normal - PITCH_PARAMS.gauge.sigmaScale.nice)).toBeLessThan(0.05);
-    expect(Math.abs(good / normal - PITCH_PARAMS.gauge.sigmaScale.good)).toBeLessThan(0.05);
+    expect(Math.abs((spreads.at(0) ?? 0) / normal - PITCH_PARAMS.gauge.sigmaScale.nice)).toBeLessThan(0.05);
+    expect(Math.abs((spreads.at(1) ?? 0) / normal - PITCH_PARAMS.gauge.sigmaScale.good)).toBeLessThan(0.05);
   });
 
   it("失投(miss)は着弾の中心が狙いから (0, 0.15) 側へ 60% 寄り、他の質は狙いのまま", () => {
@@ -198,7 +198,8 @@ describe("deliverPitch", () => {
   );
 
   it("遅い球ほど飛行時間が長い", () => {
-    const durationOf = (kind: PitchKind): number => deliverPitch(createRng(1), inputWith({ command: { kind, aim: { x: 0, y: 0 }, quality: "normal" } }))[0].durationMs;
+    const durationOf = (kind: PitchKind): number =>
+      deliverPitch(createRng(1), inputWith({ command: { kind, aim: { x: 0, y: 0 }, quality: "normal" } }))[0].durationMs;
     expect(durationOf("curve")).toBeGreaterThan(durationOf("fork"));
     expect(durationOf("fork")).toBeGreaterThan(durationOf("slider"));
     expect(durationOf("slider")).toBeGreaterThan(durationOf("shoot"));

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ZonePoint } from "../../../types/common";
+import { gaugeRingAt } from "../../pitch/gauge";
 import { PITCH_PARAMS } from "../../pitch/params";
 import { ZONE_HALF_HEIGHT, zoneToWorld } from "../space/coords";
 import { WORLD_PARAMS } from "../space/params";
@@ -197,6 +198,13 @@ describe("pitchGuideAt: 守備の照準", () => {
     });
     expect(radii.at(-1)).toBeLessThan(GAUGE.endRadius);
     expect(pitchGuideAt(pitchInput({ gaugeElapsedMs: last + 500 })).ring.radius).toBeCloseTo(radii.at(-1) ?? 0, 9);
+  });
+
+  it("ゲージ中のリングの半径は gaugeRingAt に一致する(全区間・timeScale を含む)", () => {
+    for (const gaugeElapsedMs of [0, 123, 450, 900, 1100, 1260, 2000]) {
+      expect(pitchGuideAt(pitchInput({ gaugeElapsedMs })).ring.radius).toBe(gaugeRingAt(gaugeElapsedMs).radius);
+      expect(pitchGuideAt(pitchInput({ gaugeElapsedMs, timeScale: 8 })).ring.radius).toBe(gaugeRingAt(gaugeElapsedMs, 8).radius);
+    }
   });
 
   it("ゲージ中は散布円を出さず、ゲージ前で spreadRadiusZone があれば出す(ゾーン単位 → m)", () => {
