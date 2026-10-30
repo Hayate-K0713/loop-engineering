@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RngState } from "../../types/common";
 import type { Count } from "../../types/game";
-import type { PitchCommand, PitchKind } from "../../types/pitch";
+import type { CpuPitchChoice, PitchKind } from "../../types/pitch";
 import type { PitcherProfile } from "../../types/team";
 import { isStrikeCell } from "../pitch/zone";
 import { createRng, nextFloat } from "../rng/rng";
@@ -28,8 +28,8 @@ function inputWith(overrides: Partial<ChooseCpuPitchInput> = {}): ChooseCpuPitch
 }
 
 /** 同じ入力で `times` 球選び、状態を引き回して結果の列を返す(`lastKind` は固定)。 */
-function chooseMany(seed: number, times: number, input: ChooseCpuPitchInput): PitchCommand[] {
-  const commands: PitchCommand[] = [];
+function chooseMany(seed: number, times: number, input: ChooseCpuPitchInput): CpuPitchChoice[] {
+  const commands: CpuPitchChoice[] = [];
   let rng: RngState = createRng(seed);
   for (let i = 0; i < times; i += 1) {
     const [command, next] = chooseCpuPitch(rng, input);
@@ -39,7 +39,7 @@ function chooseMany(seed: number, times: number, input: ChooseCpuPitchInput): Pi
   return commands;
 }
 
-function ratioOf(commands: readonly PitchCommand[], predicate: (command: PitchCommand) => boolean): number {
+function ratioOf(commands: readonly CpuPitchChoice[], predicate: (command: CpuPitchChoice) => boolean): number {
   return commands.filter(predicate).length / commands.length;
 }
 
@@ -128,7 +128,7 @@ describe("chooseCpuPitch", () => {
     const commands = chooseMany(10, DRAWS * 2, inputWith({ count: { balls: 0, strikes: 2 }, difficulty: getDifficulty("hard") })).filter(
       (command) => !isStrikeCell(command.cell),
     );
-    const isCorner = (command: PitchCommand): boolean =>
+    const isCorner = (command: CpuPitchChoice): boolean =>
       (command.cell.col === 0 || command.cell.col === 4) && (command.cell.row === 0 || command.cell.row === 4);
     const perCorner = commands.filter(isCorner).length / 4;
     const perEdge = commands.filter((command) => !isCorner(command)).length / 12;

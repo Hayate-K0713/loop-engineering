@@ -7,7 +7,7 @@
 import { PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from "three";
 import type { DataTexture } from "three";
 import type { CameraPose, SafeArea, SceneFrame, SceneLayout, UniformColors, Vec3 } from "../types/scene";
-import type { ScreenRect, StageGeometry, StageHandle, StageOptions } from "../types/stage";
+import type { ScreenRect, StageGeometry, StageHandle, StageOptions, StageStats } from "../types/stage";
 import { applyUniforms, buildCharacter, createTeamMaterials } from "./character";
 import type { CharacterParts, TeamMaterials } from "./character";
 import { disposeObject3D } from "./dispose";
@@ -208,6 +208,22 @@ function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, rendere
   return rt;
 }
 
+/** `renderer.info` のうち `stats()` が読む部分(テストで偽物を渡せるよう構造型で受ける)。 */
+export type RendererInfoLike = {
+  readonly render: { readonly calls: number; readonly triangles: number };
+  readonly memory: { readonly geometries: number; readonly textures: number };
+};
+
+/** 描画負荷の実測。`render` は `autoReset`(既定)により直近の 1 フレーム分、`memory` は生成済みの総数。 */
+export function readStageStats(info: RendererInfoLike): StageStats {
+  return {
+    drawCalls: info.render.calls,
+    triangles: info.render.triangles,
+    geometries: info.memory.geometries,
+    textures: info.memory.textures,
+  };
+}
+
 function renderFrame(rt: Runtime): void {
   if (rt.hasFrame) rt.renderer.render(rt.world.scene, rt.camera);
 }
@@ -331,6 +347,7 @@ function wireStage(rt: Runtime): StageHandle {
   rt.canvas.addEventListener("webglcontextrestored", listeners.restored);
   return {
     apply: (frame) => applyStage(rt, frame),
+    stats: () => (rt.disposed ? null : readStageStats(rt.renderer.info)),
     resize: (width, height) => resizeStage(rt, width, height),
     pickPlane: (clientX, clientY) => pickPlane(rt, clientX, clientY),
     zoneScreenRect: () => (rt.disposed ? null : rt.zoneRect),

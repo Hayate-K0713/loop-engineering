@@ -21,6 +21,33 @@ export const OUTLINE_SCALE = 1.07;
 export const BALL_OUTLINE_SCALE = 1.12;
 export const OUTLINE_COLOR = 0x1b1b1b;
 
+/**
+ * ボールの視認性(v3)。`halo` = 球の後ろに敷く暖色のハロー(必須。常に生成する。不透明度は `SceneFrame.ball.halo`)。
+ * `seam` = 縫い目の太い赤い帯(弧 2 本。`widthRatio` は球の径に対する帯の幅)。`outlineScale` の既定は `BALL_OUTLINE_SCALE`。
+ */
+export const BALL_LOOK = {
+  halo: { scale: 1.9, color: 0xffd9a0 },
+  seam: { widthRatio: 0.18, color: 0xd62f2f, lift: 1.008 },
+} as const;
+
+/**
+ * 着弾点の予告(打撃)・照準(守備)の見た目。色は黄色のカーソルと区別するシアン。リング・点の位置と寸法は `SceneFrame.guide` から受ける。
+ * `dotEdge` = 点の黒縁の外径(点の半径に対する倍率)、`fadeFill` = `fade` の円の塗りの不透明度、`ringOpacity` = リングの不透明度。
+ */
+export const GUIDE_LOOK = {
+  preview: 0x5ce1ff,
+  edge: 0x101820,
+  dotEdge: 1.5,
+  fadeFill: 0.28,
+  fadeEdge: 0.7,
+  ringOpacity: 0.95,
+  reticleOpacity: 0.95,
+  spreadOpacity: 0.5,
+} as const;
+
+/** 素のカーソル(指の位置)の薄い印。半径は m、不透明度は塗り・縁。 */
+export const CURSOR_RAW_LOOK = { radius: 0.02, fillOpacity: 0.65, edgeOpacity: 0.5 } as const;
+
 /** カメラのクリップ面(モック)。 */
 export const CAMERA_NEAR = 0.1;
 export const CAMERA_FAR = 800;

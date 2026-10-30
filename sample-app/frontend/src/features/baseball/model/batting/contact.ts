@@ -1,8 +1,9 @@
-import type { CursorRadii, SwingInput, SwingKind } from "../../types/batting";
+import type { AssistParams, CursorRadii, SwingInput, SwingKind } from "../../types/batting";
 import type { ZonePoint } from "../../types/common";
 import type { PitchFlight, PitchKind } from "../../types/pitch";
 import type { BatterProfile } from "../../types/team";
 import { getPitchSpec } from "../pitch/kinds";
+import { qualityScaleOf } from "./assist";
 import { cursorRadii } from "./cursor";
 import { BATTING_PARAMS } from "./params";
 
@@ -24,6 +25,11 @@ export type MeasureContactInput = {
   readonly flight: PitchFlight;
   readonly swing: SwingInput;
   readonly batter: BatterProfile;
+  /**
+   * 難易度のアシスト。あれば `swing.assistK` に応じて質 q を `qualityScaleOf` 倍する(引き寄せが強いほど弱い当たり)。
+   * 省略(または `swing.assistK` の省略)は補正なしで v2 と同じ結果。
+   */
+  readonly assist?: AssistParams;
 };
 
 /**
@@ -72,7 +78,7 @@ function reachRadii(radii: CursorRadii): CursorRadii {
  * タイミング誤差 Δt は判定時刻 `swing.atMs` から求める(演出の受付時刻ではない)。乱数は使わない。
  */
 export function measureContact(input: MeasureContactInput): ContactMeasure {
-  const { flight, swing, batter } = input;
+  const { flight, swing, batter, assist } = input;
   const radii = effectiveRadii(batter, swing.kind, flight.kind);
   const windowMs = swingWindowMs(swing.kind);
   const dtMs = swing.atMs - flight.durationMs;
@@ -81,7 +87,8 @@ export function measureContact(input: MeasureContactInput): ContactMeasure {
 
   if (reach <= 1 && timingRatio <= 1) {
     const d = ellipseDistance(flight.landing, swing.cursor, radii);
-    const q = Math.max(0, 1 - d) * (1 - timingRatio) * edgeFactor(flight.landing);
+    const rawQ = Math.max(0, 1 - d) * (1 - timingRatio) * edgeFactor(flight.landing);
+    const q = assist === undefined ? rawQ : rawQ * qualityScaleOf(assist, swing.assistK);
     return { kind: "contact", hit: { q, height: (flight.landing.y - swing.cursor.y) / radii.ry, dtMs, windowMs } };
   }
   return { kind: "miss" };

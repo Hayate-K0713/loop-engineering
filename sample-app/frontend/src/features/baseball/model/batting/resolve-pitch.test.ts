@@ -5,6 +5,7 @@ import type { Bases } from "../../types/game";
 import type { PitchFlight } from "../../types/pitch";
 import type { BatterProfile } from "../../types/team";
 import { createRng, nextFloat } from "../rng/rng";
+import { ASSIST_TABLE } from "./assist";
 import { effectiveRadii } from "./contact";
 import { type ResolvePitchInput, resolvePitch } from "./resolve-pitch";
 
@@ -160,5 +161,37 @@ describe("resolvePitch: 併殺の可否", () => {
 
   it("2 アウトでは併殺は出ない", () => {
     expect(countDoublePlays(2000, 2, FIRST_BASE)).toBe(0);
+  });
+});
+
+describe("resolvePitch: アシスト", () => {
+  it("assistK を省略した swing は assist の有無にかかわらず v2 と同じ結果・同じ乱数消費", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const plain = resolvePitch(createRng(seed), inputWith());
+      const assisted = resolvePitch(createRng(seed), inputWith({ assist: ASSIST_TABLE.normal }));
+      expect(assisted).toEqual(plain);
+    }
+  });
+
+  it("assistK があっても見送り・空振りの結果は変わらず、乱数を消費しない", () => {
+    const flight = flightAt(0, 0);
+    const rng = createRng(3);
+    const [taken, afterTake] = resolvePitch(rng, inputWith({ flight, swing: null, assist: ASSIST_TABLE.easy }));
+    expect(taken).toEqual({ kind: "called-strike" });
+    expect(afterTake).toBe(rng);
+    const late = perfectSwing(flight, { atMs: flight.durationMs + 500, assistK: 1 });
+    const [missed, afterMiss] = resolvePitch(rng, inputWith({ flight, swing: late, assist: ASSIST_TABLE.easy }));
+    expect(missed).toEqual({ kind: "swinging-strike" });
+    expect(afterMiss).toBe(rng);
+  });
+
+  it("assistK 1 のスイングでも乱数の消費はインプレーで 1 個のまま", () => {
+    const flight = flightAt(0, 0);
+    const swing = perfectSwing(flight, { assistK: 1 });
+    const [result, next] = resolvePitch(createRng(5), inputWith({ flight, swing, assist: ASSIST_TABLE.easy }));
+    expect(["in-play", "foul"]).toContain(result.kind);
+    if (result.kind === "in-play") {
+      expect(next).toBe(nextFloat(createRng(5))[1]);
+    }
   });
 });

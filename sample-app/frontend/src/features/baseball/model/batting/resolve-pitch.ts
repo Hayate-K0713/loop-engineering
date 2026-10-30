@@ -1,4 +1,4 @@
-import type { PitchResult, SwingInput } from "../../types/batting";
+import type { AssistParams, PitchResult, SwingInput } from "../../types/batting";
 import type { RngState, WithRng } from "../../types/common";
 import type { Bases } from "../../types/game";
 import type { PitchFlight } from "../../types/pitch";
@@ -16,6 +16,8 @@ export type ResolvePitchInput = {
   /** 解決前のアウト数(併殺の可否の判定に使う)。 */
   readonly outs: number;
   readonly bases: Bases;
+  /** 難易度のアシスト(`assistFor(difficulty)`)。あれば `swing.assistK` で接触の質を下げる。省略は補正なし(v2 と同じ)。 */
+  readonly assist?: AssistParams;
 };
 
 /** 見送りの判定。ゾーン内なら見逃しストライク、外ならボール。 */
@@ -33,11 +35,11 @@ function isDoublePlayPossible(outs: number, bases: Bases): boolean {
  * 見送り(`swing: null`)・空振り・ファウルでは乱数を消費せず、インプレーのときだけ結果表の抽選で乱数を 1 個消費する。
  */
 export function resolvePitch(rng: RngState, input: ResolvePitchInput): WithRng<PitchResult> {
-  const { flight, swing, batter, outs, bases } = input;
+  const { flight, swing, batter, outs, bases, assist } = input;
   if (swing === null) {
     return [resolveTake(flight), rng];
   }
-  const contact = measureContact({ flight, swing, batter });
+  const contact = measureContact({ flight, swing, batter, assist });
   if (contact.kind === "miss") {
     return [{ kind: "swinging-strike" }, rng];
   }

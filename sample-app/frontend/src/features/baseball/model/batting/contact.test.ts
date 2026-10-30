@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { SwingInput, SwingKind } from "../../types/batting";
+import type { AssistParams, SwingInput, SwingKind } from "../../types/batting";
 import type { PitchFlight, PitchKind } from "../../types/pitch";
 import type { BatterProfile } from "../../types/team";
 import { getPitchSpec } from "../pitch/kinds";
+import { ASSIST_TABLE, qualityScaleOf } from "./assist";
 import {
   type ContactHit,
   type ContactMeasure,
@@ -281,5 +282,45 @@ describe("ellipseDistance / effectiveRadii", () => {
     expect(straight).toEqual(base);
     expect(fork?.rx).toBeCloseTo(base.rx * 0.95, 12);
     expect(fork?.ry).toBeCloseTo(base.ry * 0.8, 12);
+  });
+});
+
+describe("measureContact: アシストによる質の補正", () => {
+  const ASSIST = ASSIST_TABLE.normal;
+
+  function qualityWith(swingOverrides: Partial<SwingInput>, assist?: AssistParams): number {
+    const flight = flightWith();
+    const swing = { ...swingFor(flight, { dx: 0.1, dtMs: 30 }), ...swingOverrides };
+    return hitOf(measureContact({ flight, swing, batter: BATTER, assist })).q;
+  }
+
+  it("assistK の省略は assist の有無にかかわらず v2 と同じ q", () => {
+    const base = qualityWith({});
+    expect(qualityWith({}, ASSIST)).toBe(base);
+    expect(qualityWith({ assistK: 0 }, ASSIST)).toBe(base);
+  });
+
+  it("assist を渡さなければ assistK があっても補正しない(v2 と同じ)", () => {
+    expect(qualityWith({ assistK: 0.8 })).toBe(qualityWith({}));
+  });
+
+  it("assistK があると q が qualityScaleOf 倍になり、k が大きいほど小さい", () => {
+    const base = qualityWith({});
+    const half = qualityWith({ assistK: 0.5 }, ASSIST);
+    const full = qualityWith({ assistK: 1 }, ASSIST);
+    expect(half).toBeCloseTo(base * qualityScaleOf(ASSIST, 0.5), 12);
+    expect(full).toBeCloseTo(base * (1 - ASSIST.qualityPenalty), 12);
+    expect(full).toBeLessThan(half);
+    expect(half).toBeLessThan(base);
+  });
+
+  it("補正しても接触の成否・高さ・タイミング誤差は変わらない", () => {
+    const flight = flightWith();
+    const swing = { ...swingFor(flight, { dx: 0.1, dtMs: 30 }), assistK: 1 };
+    const plain = hitOf(measureContact({ flight, swing: { ...swing, assistK: undefined }, batter: BATTER }));
+    const assisted = hitOf(measureContact({ flight, swing, batter: BATTER, assist: ASSIST }));
+    expect(assisted.height).toBe(plain.height);
+    expect(assisted.dtMs).toBe(plain.dtMs);
+    expect(assisted.windowMs).toBe(plain.windowMs);
   });
 });

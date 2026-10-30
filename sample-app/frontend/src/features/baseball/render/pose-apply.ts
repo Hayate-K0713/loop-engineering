@@ -26,7 +26,15 @@ export function applyPose(parts: CharacterParts, pose: CharacterPose): void {
   setRotation(joints.legR, pose.legR);
 }
 
-/** 打者のポーズ。体に加えて、バットの回転・傾き・高さ・可視を適用する(バットを持たないキャラクターでは体のみ)。 */
+/** `BatPose.lengthScale` として使える値(有限の正数)か。0・負・NaN だとバットの行列が縮退するので 1(標準の長さ)に戻す。 */
+function usableLengthScale(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+/**
+ * 打者のポーズ。体に加えて、バットの回転・傾き・高さ・長さ・可視を適用する(バットを持たないキャラクターでは体のみ)。
+ * 長さ(`lengthScale`)はチルトグループの z 方向(バット軸)だけを拡大する。スインググループの位置オフセット(握りの位置)は伸ばさない。
+ */
 export function applyBatterPose(parts: CharacterParts, pose: BatterPose): void {
   applyPose(parts, pose);
   if (!parts.bat) return;
@@ -34,4 +42,5 @@ export function applyBatterPose(parts: CharacterParts, pose: BatterPose): void {
   parts.bat.swing.rotation.y = pose.bat.sweepYaw;
   parts.bat.swing.position.y = pose.bat.height;
   parts.bat.tilt.rotation.x = pose.bat.tilt;
+  parts.bat.tilt.scale.z = usableLengthScale(pose.bat.lengthScale);
 }

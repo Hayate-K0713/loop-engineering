@@ -1,3 +1,4 @@
+import { Box3, Group, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { buildCharacter, createTeamMaterials } from "./character";
 import type { CharacterStyle } from "./character";
@@ -49,6 +50,39 @@ describe("applyBatterPose", () => {
     expect(parts.bat?.swing.visible).toBe(true);
     applyBatterPose(parts, { ...pose, bat: { ...pose.bat, visible: false } });
     expect(parts.bat?.swing.visible).toBe(false);
+  });
+
+  it("lengthScale はチルトグループの z 方向だけを拡大し、スインググループの位置オフセットは伸ばさない", () => {
+    const parts = build({ bat: true });
+    const pose = makeBatterPose();
+    applyBatterPose(parts, { ...pose, bat: { ...pose.bat, lengthScale: 1.4 } });
+    expect(parts.bat?.tilt.scale.toArray()).toEqual([1, 1, 1.4]);
+    expect(parts.bat?.swing.scale.toArray()).toEqual([1, 1, 1]);
+    expect(parts.bat?.swing.position.z).toBeCloseTo(0.05, 9);
+  });
+
+  it("バットの軸方向の長さが lengthScale 倍になり、太さは変わらない", () => {
+    const parts = build({ bat: true });
+    const pose = makeBatterPose();
+    const measure = (lengthScale: number): Vector3 => {
+      applyBatterPose(parts, { ...pose, bat: { ...pose.bat, tilt: 0, sweepYaw: 0, lengthScale } });
+      parts.bat?.swing.updateMatrixWorld(true);
+      return new Box3().setFromObject(parts.bat?.swing ?? new Group()).getSize(new Vector3());
+    };
+    const base = measure(1);
+    const longer = measure(1.6);
+    expect(longer.z / base.z).toBeCloseTo(1.6, 6);
+    expect(longer.x).toBeCloseTo(base.x, 6);
+    expect(longer.y).toBeCloseTo(base.y, 6);
+  });
+
+  it("lengthScale が 0・負・NaN のときは標準の長さ(1)に戻す", () => {
+    const parts = build({ bat: true });
+    const pose = makeBatterPose();
+    for (const lengthScale of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      applyBatterPose(parts, { ...pose, bat: { ...pose.bat, lengthScale } });
+      expect(parts.bat?.tilt.scale.z).toBe(1);
+    }
   });
 
   it("バットを持たないキャラクターでも体だけ適用して例外にならない", () => {

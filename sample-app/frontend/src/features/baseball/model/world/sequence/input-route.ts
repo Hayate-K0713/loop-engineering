@@ -1,6 +1,8 @@
 // ステージ入力面の入力の振り分け(純関数)。演出のスキップ(N14)とスイング・ドラッグ・タップが衝突しないことを、判定表の全組み合わせのテストで保証する。
 // hooks はこの戻り値で分岐するだけで、`holding` を自分で見て分岐しない。
 
+import type { IgnoredInputReason } from "../../../types/batting";
+
 /** タップとみなす指の持続の上限(ms。2 つのイベントの `timeStamp` の差)。 */
 export const TAP_MAX_DURATION_MS = 180;
 
@@ -133,6 +135,58 @@ export type StageReleaseInput = {
 export function routeStageRelease(input: StageReleaseInput): StageReleaseAction {
   const swings = input.pointerType === "touch" && input.tapCandidate && input.tapOk && input.enabled && !input.holding;
   return swings ? "swing-here" : "none";
+}
+
+export type TapReleaseInput = {
+  /** `PointerEvent.pointerType`。 */
+  readonly pointerType: string;
+  /** この指が `pointercancel` で終わった(離したのではない)。 */
+  readonly cancelled: boolean;
+  /** この指の pointerdown が `skip` だった(演出のスキップに使った指)。 */
+  readonly held: boolean;
+  /** この指の pointerdown が `drag-start` で、そのとき `swingReady` が真だった(タップ候補)。 */
+  readonly tapCandidate: boolean;
+  /** pointerdown の `event.timeStamp`(ms)。 */
+  readonly downTimeStamp: number;
+  /** pointerup の `event.timeStamp`(ms)。 */
+  readonly upTimeStamp: number;
+  /** 押下位置からの最大の移動量(CSS px)。 */
+  readonly movedPx: number;
+  /** 離した時点で演出中。 */
+  readonly holding: boolean;
+  /** 離した時点で人間打撃中。 */
+  readonly enabled: boolean;
+};
+
+/**
+ * タッチの指がスイングにならなかった理由の分類(押したのに振れなかったときのヒント・試遊ログ用)。`routeStageRelease` が `none` のとき、
+ * 結果が `null` でない理由になる。優先順は `cancel` > `held-release` > `holding` > `not-ready` > `tap-moved` > `tap-too-long`。
+ * - `cancel`: `pointercancel`。 `held-release`: スキップに使った指の離し(仕様として振れない)。 `holding`: 離した時点で演出中。
+ * - `not-ready`: タップ候補でない(押下が到達の後で `swingReady` が偽だった)、または打撃中でない。 `tap-moved`: 移動が `TAP_MAX_MOVE_PX` 超(`NaN` を含む)。
+ * - `tap-too-long`: 持続が `TAP_MAX_DURATION_MS` 超、または負・`NaN`(`isTapGesture` が偽になる残り)。
+ * `null` = 理由なし(タップが通る = `routeStageRelease` が `swing-here`、またはマウス/ペンの離し。マウス/ペンは押下でスイングするので離しは無視された入力ではない)。
+ * 閾値は `isTapGesture` と共有し、`null` ⇔ `swing-here` が崩れないようにしている。
+ */
+export function tapReleaseReason(input: TapReleaseInput): IgnoredInputReason | null {
+  if (input.pointerType !== "touch") {
+    return null;
+  }
+  if (input.cancelled) {
+    return "cancel";
+  }
+  if (input.held) {
+    return "held-release";
+  }
+  if (input.holding) {
+    return "holding";
+  }
+  if (!input.tapCandidate || !input.enabled) {
+    return "not-ready";
+  }
+  if (!(input.movedPx <= TAP_MAX_MOVE_PX)) {
+    return "tap-moved";
+  }
+  return isTapGesture(input) ? null : "tap-too-long";
 }
 
 export type SkipKeyInput = {
