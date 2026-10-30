@@ -1,6 +1,6 @@
-import type { BattedBall, CursorRadii, InPlayResult, PlateOutcome } from "./batting";
-import type { Side } from "./common";
-import type { Bases, LogEntry } from "./game";
+import type { AssistParams, BattedBall, CursorRadii, InPlayResult, PlateOutcome } from "./batting";
+import type { Side, ZonePoint } from "./common";
+import type { Bases, Difficulty, LogEntry } from "./game";
 import type { PitchFlight, PitchKind } from "./pitch";
 import type { UniformColors } from "./scene";
 
@@ -72,6 +72,46 @@ export type PitchOutcomeView = {
   readonly plate: PlateOutcome | null;
 };
 
+/** 球種チップの曲がり矢印(球種の `bend` から導く。x + = 右(ライト側)、y − = 落ちる)。 */
+export type PitchArrow = "none" | "right" | "left" | "down" | "right-down" | "left-down";
+
+/** 演出バナーの種類。ボール/ストライク/空振り/ファウルは v2 のテロップのまま(バナーにしない)。 */
+export type BannerKind = "just" | "hit" | "homerun" | "strikeout" | "walk" | "out" | "nice-pitch";
+
+/**
+ * 演出バナー(DOM+CSS)の表示内容。`bannerFor` が文言・種類・色・表示区間を決める。`seq` = その球の通し番号(アニメーションのキー)、
+ * `color` = CSS の色、`durationMs` = 表示区間(`WORLD_PARAMS.banner` の種類別の値)。バナーが出る間はテロップを出さない。
+ */
+export type BannerView = {
+  readonly kind: BannerKind;
+  readonly text: string;
+  readonly color: string;
+  readonly seq: number;
+  readonly durationMs: number;
+};
+
+/**
+ * ゾーン単位の位置ずれ表示(`ui/ZoneFeedback.tsx` が `zoneRect` で px に換算する)。
+ * `swing` = from が判定に使った有効カーソル・to がボールの着弾点、`pitch` = from が狙い・to が着弾。
+ * `ringRadiusZone` = 着弾の輪の半径(ゾーン単位)、`alpha` = フェードアウトの不透明度(0〜1)、`label` = 「ズレ 0.2」などの添え字。
+ */
+export type ZoneFeedbackView = {
+  readonly tone: "swing" | "pitch";
+  readonly from: ZonePoint;
+  readonly to: ZonePoint;
+  readonly ringRadiusZone: number;
+  readonly alpha: number;
+  readonly label: string | null;
+};
+
+/** 説明(チュートリアル)の 1 ページ。絵は CSS だけで描く(`illustration` は CSS のクラスの選択キー)。 */
+export type TutorialStep = {
+  readonly id: string;
+  readonly title: string;
+  readonly body: string;
+  readonly illustration: "drag" | "preview" | "tap" | "select" | "aim" | "gauge";
+};
+
 /** ui 向けの表示データ。ui はこれだけを見る。 */
 export type GameView = {
   readonly status: "playing" | "game-over";
@@ -93,8 +133,13 @@ export type GameView = {
     readonly name: string;
     readonly pitchCount: number;
     readonly staminaPercent: number;
-    readonly repertoire: readonly { readonly kind: PitchKind; readonly label: string }[];
+    /** 球種チップ用。`speedKmh` はその球種の球速(整数に丸め)、`arrow` は曲がり矢印。 */
+    readonly repertoire: readonly { readonly kind: PitchKind; readonly label: string; readonly speedKmh: number; readonly arrow: PitchArrow }[];
   };
+  /** 試合の難易度(アシストの強さを決める)。 */
+  readonly difficulty: Difficulty;
+  /** 難易度に連動するアシスト(ロックオン・予告・質の補正)。 */
+  readonly assist: AssistParams;
   readonly flight: PitchFlight | null;
   /** `PITCH_ARRIVED` を送るまでの経過ゲーム時間(ms)。 */
   readonly arriveAfterMs: number;

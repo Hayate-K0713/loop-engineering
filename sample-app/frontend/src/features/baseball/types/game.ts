@@ -91,8 +91,12 @@ export type LaunchParams = {
   readonly fast: boolean;
 };
 
-/** 再生速度。`timeScale` は壁時計の再生だけを速める倍率、`cpuWaitMs` は CPU 手番の待機時間。 */
+/**
+ * 再生速度。`timeScale` は壁時計の再生だけを速める倍率、`cpuWaitMs` は CPU 手番の待機時間(windup。通常 550)、
+ * `humanWindupMs` は人間守備の windup(通常 280 / fast 20)。
+ */
 export type PlaybackSpeed = {
   readonly timeScale: number;
   readonly cpuWaitMs: number;
+  readonly humanWindupMs: number;
 };

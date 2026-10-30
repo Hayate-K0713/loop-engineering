@@ -54,7 +54,7 @@
 
 ## 段階 A: 打撃の骨格
 
-- [ ] **A0: 契約と定数の凍結(段階 A・B・C の分)**(直列)
+- [x] **A0: 契約と定数の凍結(段階 A・B・C の分)**(直列)
   - 依存: なし。担当ファイル: `types/{batting,pitch,game,scene,stage,view}.ts`、新規 `types/{sound,telemetry}.ts`、`hooks/useGameStage.ts`(`GameStageViewProps` の型だけ)、`render/test-fixtures.ts`(`makeFrame` の新フィールドの既定値)、`model/world/space/params.ts`、`model/batting/params.ts`(**v2 の値は変更しない**)、`model/pitch/params.ts`、新規 `model/batting/assist.ts`(型・`ASSIST_TABLE`・`assistFor` だけ)。
   - やること: contract 分冊 §5-1 のとおり、**段階 A・B・C の分の型だけ**を定義し(`IgnoredInputReason` はタップ方式用の `not-ready`/`holding`/`tap-too-long`/`tap-moved`/`cancel`/`held-release`、`ZoneFeedbackView`、`zoneFeedback` と `tapHint` の props を含む。**段階 E・M の型は触らない**)、`WORLD_PARAMS`・`PITCH_PARAMS` に値まで入れる(`actors.pitcher.scale`・`RELEASE_POINT` は v2 の値のまま)。**`BATTING_PARAMS` に `aimGraceMs`・`regripBeforeMs` は追加しない**。`launch-params.ts` の速度値は A3。型の変更で壊れる箇所を完了報告に一覧する。
   - 完了条件: 担当ファイルの lint 0 件・typecheck 起因 0 件。`types/` が他セグメントを import していない。値を参照する既存テストがリテラルで固定されていないことを確認し、落ちるものを担当ステップに申し送る。
@@ -66,7 +66,7 @@
   - やること: `lockOnCursor`・`previewCenterOf`・`qualityScaleOf` を実装。`measureContact` が `swing.assistK` で `q` を `qualityScaleOf` 倍する(省略は 0 で v2 と同値)。
   - 完了条件: 単体テスト — `lockStrength 0` で恒等、`progress < rampStart` で素、`k ∈ [0,1]`・単調、`captureRadius` の外で `k = 0`、有効カーソルは raw と landing の線分上、`fade` の中心が決定論かつ `|ずれ| ≤ fadeJitter` で円が着弾を含む、`preview: "none"`、`assistK` 省略時に v2 と同じ結果。
 - [ ] **A2: 構図・カメラ関数・打者のレイアウト**
-  - 依存: A0。担当ファイル: `model/world/camera/{rig,project}.ts`(+test)、新規 `model/world/motion/batter-layout.ts`(+test)、`model/world/path/{pitch-path,pitch-screen}.test.ts`(カメラ x 0 で変わる S300 と画面上の前提値)。
+  - 依存: A0。担当ファイル: `model/world/camera/{rig,project}.ts`(+test)、新規 `model/world/motion/batter-layout.ts`(+test)、`model/world/motion/{batter.ts,pose.test.ts}`(A0 の `BatPose.lengthScale` の追従だけ。A0 完了報告の申し送りで A2 に割り当て)、`model/world/path/{pitch-path,pitch-screen}.test.ts`(カメラ x 0 で変わる S300 と画面上の前提値)、`model/world/camera/project.test.ts`・`model/world/sequence/batter-screen.test.ts` のうち構図の数値に依存する箇所(A0 後に落ちる: project.test の打者の頭の x、batter-screen.test の守備 390×664・375×667・360×640 と構えの重なり)。
   - やること: `rig.ts` の式・定数参照を v3 の姿勢・`fit.pitching` に合わせる。**`ballScaleFor(camera, ball, minRatio)` のシグネチャ変更**と `outlineScaleFor`・`ringWidthFor` を追加。`batter-layout.ts`: `batterRootFor(aspect)`・`batLengthScaleFor`・`batTipX`(play 分冊 §3-1 の式)。テストを v3 の数値(段階 A 完了時の列)に更新する。S300 と `pitch-screen.test` の前提値を v3 の姿勢で再計算して更新する。
   - 完了条件: 単体テスト — 390×844 の打撃・守備でゾーン矩形が x 117.7〜272.3・y 410〜585(±3px)、幅×高 ≥ 150×170。**打者の頭の右端(ヘルメット込み)≤ 115px(設計値 109)**・素の頭の右端 ≤ 110px・胴の右端 ≤ 75px。接触時のバット先端 x ≥ +0.28(縦長)・横長は v2 と同値。守備の格子の下端が空き領域の下端(0.846)から 8px 以上上。高さ 560〜900px の走査でゾーン/格子が下のオーバーレイに掛からない。390×664 で打撃のゾーンが ≥ 115×130、守備のゾーン幅が打撃以上。`aspect ≥ 1.0` の横長の姿勢は v2 と厳密に一致。`ballScaleFor`・`outlineScaleFor`・`ringWidthFor` が `ratio × 2 × dist × tan(fov/2)` の式と一致。`pitch-path.test`・`pitch-screen.test`(S300 を含む)が v3 の姿勢で成功。
 - [ ] **A3: 投球コマンドの移行(CPU は変換)・ゲージの純関数**
@@ -255,7 +255,7 @@
 **規模**: 14 ステップ・4 ウェーブ(M0 直列 → M1〜M7 の 7 並列 → M8〜M12 の 5 並列 → M13 直列)。新規ファイル約 45。**描画予算**: T0 で +約 10 draw call・+約 21k 三角形(シーン全体 T0 ≤ 215・T1 ≤ 205・T2 ≤ 166・T3 ≤ 113。max 分冊 §3-5-10)。
 
 - [ ] **M0: 段階 M の契約と定数の凍結**(直列。C7 の後)
-  - 依存: C7。担当ファイル: `types/{team,scene,view}.ts`(M の分)、新規 `types/replay.ts`、新規 `render/stadium/parts.ts`(型と定数のみ)、`render/test-fixtures.ts`、`model/world/space/params.ts`(M の分)。
+  - 依存: C7。担当ファイル: `types/{team,scene,view,sound}.ts`(M の分。**`sound.ts` は A0 完了報告の申し送りで追加**: M12 が足す `slide`/`crowd-swell`/`replay-start` の `SfxCue` は M0 で型に入れる)、新規 `types/replay.ts`、**v2 の `types/view.ts` に既存の `ScoreboardView`(行・列)があるので、M の新しいスコアボードの型は `StadiumScoreboardView` に改名する(A0 完了報告の申し送り)**、新規 `render/stadium/parts.ts`(型と定数のみ)、`render/test-fixtures.ts`、`model/world/space/params.ts`(M の分)。
   - やること: contract 分冊 §5-4 のとおり、`SignatureForm`・`TimeOfDay`・`SceneFrame.stadium`・`SceneFrame.fx`・`ScoreboardView`・`ReplayView`・`ReplayRecord`・`GameStageViewProps` の追加・`StadiumParts`/`CrowdParts`/`DustParts` 契約と定数を定義し、`WORLD_PARAMS` に `stadiumMax`・`replay`・`slide`・`cover` と更新後の `budget` を入れる。`motion/*`・`render/stadium.ts` などの実装には触れない。壊れる箇所を完了報告に一覧する。
   - 完了条件: 担当ファイルの lint 0 件・typecheck 起因 0 件。`types/` が他セグメントを import していない。`render/stadium/parts.ts` が型と定数だけで `render/` 以外から import されない。M6・M7・M8 が `parts.ts` だけを見て並列に作業できる。
 

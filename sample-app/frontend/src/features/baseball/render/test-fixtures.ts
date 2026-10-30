@@ -59,7 +59,10 @@ export function makePose(overrides: Partial<CharacterPose> = {}): CharacterPose 
 }
 
 export function makeBatterPose(): BatterPose {
-  return { ...makePose({ position: { x: -0.85, y: 0, z: 0.05 }, yaw: Math.PI / 2 }), bat: { visible: true, sweepYaw: -1.9, tilt: -1.05, height: 1.1 } };
+  return {
+    ...makePose({ position: { x: -0.85, y: 0, z: 0.05 }, yaw: Math.PI / 2 }),
+    bat: { visible: true, sweepYaw: -1.9, tilt: -1.05, height: 1.1, lengthScale: 1 },
+  };
 }
 
 export function makeFrame(overrides: Partial<SceneFrame> = {}): SceneFrame {
@@ -68,15 +71,31 @@ export function makeFrame(overrides: Partial<SceneFrame> = {}): SceneFrame {
     layout: "batting",
     safeArea: { top: 0.1837, bottom: 0.7855 },
     uniforms: { offense: 0x2f63c8, defense: 0xe8473c },
-    ball: { visible: true, position: { x: 0.1, y: 1, z: -5 }, scale: 1 },
+    ball: { visible: true, position: { x: 0.1, y: 1, z: -5 }, scale: 1, rotation: { x: 0, y: 0, z: 0 }, halo: 0.35, outlineScale: 1.12 },
     pitcher: makePose(),
     catcher: makePose({ visible: false }),
     batter: makeBatterPose(),
     fielders: Array.from({ length: 7 }, () => makePose()),
     zone: { visible: true, grid: true, pulse: 0 },
     landingMark: { visible: false, position: { x: 0, y: 0.07, z: -60 }, radius: 2 },
-    cursor: { visible: true, position: { x: 0.08, y: 0.72, z: 0.03 }, scaleX: 0.05, scaleY: 0.03, flash: false },
-    aim: { visible: true, position: { x: -0.1, y: 0.9, z: 0.03 }, width: 0.173, height: 0.2 },
+    cursor: {
+      visible: true,
+      position: { x: 0.08, y: 0.72, z: 0.03 },
+      scaleX: 0.05,
+      scaleY: 0.03,
+      flash: false,
+      raw: { visible: true, position: { x: 0.05, y: 0.7, z: 0.03 } },
+    },
+    guide: {
+      visible: true,
+      mode: "exact",
+      position: { x: -0.1, y: 0.9, z: 0.03 },
+      markerRadius: 0.04,
+      fadeRadius: 0.1,
+      alpha: 1,
+      ring: { visible: true, radius: 0.2, width: 0.01, tone: "preview", glow: 0 },
+      spread: { visible: false, radius: 0.1 },
+    },
     ...overrides,
   };
 }

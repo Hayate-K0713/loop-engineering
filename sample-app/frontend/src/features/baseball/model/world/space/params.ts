@@ -22,7 +22,25 @@ const PARAMS = {
   /** ボール半径(m)。 */
   ballRadius: 0.1,
   /** ボールの見え方。`minScreenDiameterRatio` は中継カメラ中のボールの最小表示径(表示高に対する比。844px で約 8px)。 */
-  ball: { minScreenDiameterRatio: 0.0095 },
+  ball: {
+    minScreenDiameterRatio: 0.0095,
+    /** 飛行中の最小表示径(表示高に対する比。390×844 で約 14.8px)。リリース直後は約 2.0 倍、D−730ms 付近で 1 倍に戻る。 */
+    minScreenDiameterRatioFlight: 0.0175,
+    /** 縁取りの殻の最小の太さ(表示高に対する比。844px で約 2px)。 */
+    shellMinRatio: 0.0024,
+    /** 球の後ろに敷く暖色のハロー(必須)。`scale` は球に対する倍率、`opacity` は 0.35(足りなければ D3 が 0.5 まで上げてよい)。 */
+    halo: { scale: 1.9, opacity: 0.35, color: 0xffd9a0 },
+    /** 球種ごとの回転の角速度(rad/s。x/y/z 軸まわり)。大きさの順: フォークが最小、変化球は軸が傾く。出発値(D3 が調整)。 */
+    spin: {
+      straight: { x: -18, y: 0, z: 0 },
+      slider: { x: -6, y: 0, z: 20 },
+      curve: { x: 14, y: 0, z: 8 },
+      fork: { x: -3, y: 0, z: 0 },
+      shoot: { x: -8, y: 0, z: -18 },
+    },
+    /** 縫い目(太い赤い帯の弧 2 本)。`widthRatio` は球の径に対する帯の幅。 */
+    seam: { widthRatio: 0.18 },
+  },
   /**
    * 投球の軌道: `pos(p) = lerp(release, landing, g(p)) + break·(pⁿ − p) + (0, 4·arcHeight·p(1−p), 0)`、`g(p) = p + speedProfile·p(1−p)`。
    * `breakExponent` = n、`bendGain` = `PitchSpec.bend`(ゾーン単位、終盤の曲がり量)をワールドへ換算するときの倍率(1.0 = 誇張なし。ゲート1の決定)、
@@ -38,7 +56,17 @@ const PARAMS = {
     pitcher: { position: { x: 0, y: 0.25, z: -18.4 }, yaw: 0, scale: 1 },
     catcher: { position: { x: 0, y: -0.25, z: 1.3 }, yaw: Math.PI, scale: 1 },
     // `portraitX` は縦長(アスペクト ≤ 0.7)での打者の x。横長は `position.x`、その間は縦横比の補間で混ぜる(z は不変)。
-    batter: { position: { x: -0.8, y: 0, z: 0.05 }, portraitX: -0.65, yaw: Math.PI / 2, scale: 0.92 },
+    // v3: 縦長は `portraitScale`(構図の倍率。接触後に 1.0 へ戻す)・`portraitBatLength`(バット軸の長さの倍率)、横長は `scale`・`position.x`・`batLength`(v2 と同値)。
+    // `portraitScale`/`portraitX`/`portraitBatLength` は A14・E11・D3 が実測で確定する出発値。
+    batter: {
+      position: { x: -0.8, y: 0, z: 0.05 },
+      portraitX: -0.65,
+      yaw: Math.PI / 2,
+      scale: 0.92,
+      portraitScale: 0.7,
+      batLength: 1.0,
+      portraitBatLength: 1.35,
+    },
     fielderScale: 1.15,
   },
   /** 野手7人の守備位置(固定順: 一塁・二塁・遊撃・三塁・左・中・右。`FIELDER_SLOTS` が順序を決める)。 */
@@ -55,8 +83,8 @@ const PARAMS = {
   fielderRun: { runFactor: 1.15, stopRatio: 0.9 },
   /** 横長の打撃カメラ(固定)。 */
   battingCamera: { position: { x: 0, y: 1.25, z: 3.4 }, target: { x: 0, y: 1.0, z: -18 }, fovDeg: 34 },
-  /** 縦長(アスペクト ≤ 0.7)の打撃・守備カメラの姿勢(両レイアウト共通)。水平半幅 tan と lift は `framing` の式が空き領域から決める。 */
-  battingCameraPortrait: { position: { x: -0.25, y: 1.75, z: 2.6 }, target: { x: -0.25, y: 0.55, z: -18 } },
+  /** 縦長(アスペクト ≤ 0.7)の打撃・守備カメラの姿勢(両レイアウト共通)。v3 で x = 0(ゾーンと投手が画面中央に縦に並ぶ)。水平半幅 tan と lift は `framing` の式が空き領域から決める。 */
+  battingCameraPortrait: { position: { x: 0, y: 1.75, z: 2.6 }, target: { x: 0, y: 0.55, z: -18 } },
   /**
    * 構図。水平半幅 tan(= `tan(fov/2) × aspect`)の下限は、横長・中継カメラとも 0.37(従来の値)。
    * 縦横比の補間は `aspect ≤ portraitFullAspect` で縦長 100%、`aspect ≥ landscapeFullAspect` で横長 100%(smoothstep)。
@@ -72,16 +100,42 @@ const PARAMS = {
     legacyLift: { fullAspect: 0.6, zeroAspect: 1.2, value: 0.2 },
     fit: {
       batting: { defaultHalfWidthTan: 0.25, maxHalfWidthTan: 0.4 },
-      pitching: { defaultHalfWidthTan: 0.38, maxHalfWidthTan: 0.65 },
+      // v3: 守備(`pitching`)も打撃と同じ構図(既定の水平半幅 tan 0.25。ゾーン 155×175px)。操作バーが約 130px に縮むので空き領域の下端が大きく下がる。
+      pitching: { defaultHalfWidthTan: 0.25, maxHalfWidthTan: 0.65 },
       marginRatio: 0.008,
       headGapRatio: 0.019,
       minBandRatio: 0.2,
       defaultSafeArea: {
         batting: { top: 0.1837, bottom: 0.7855 },
-        pitching: { top: 0.1837, bottom: 0.564 },
+        pitching: { top: 0.1837, bottom: 0.846 },
       },
     },
   },
+  /**
+   * 着弾点の予告と縮むリング(打撃)、守備の照準・ゲージのリング。半径は m(ゾーン平面上)。
+   * `previewRing`: 半径が t = 0 で `startRadius`、t = D で `endRadius = ballRadius × endRadiusRatio`(ボールの縁のすぐ外)になる線形の縮小(D 以降は保持)。
+   * `ringWidthRatio`: 線幅(表示高に対する比。844px で約 3px)。`dot.radius`: `exact` の点の半径(m)。`fadeInMs`: 出現のフェードイン。
+   * `gaugeRing`: 守備のゲージのリング。`startRadius` から `endRadius` へ縮み、終点を過ぎても `afterRatio × (縮む時間)` は縮み続ける。
+   */
+  guide: {
+    previewRing: { startRadius: 0.3, endRadiusRatio: 1.25 },
+    ringWidthRatio: 0.0036,
+    dot: { radius: 0.04 },
+    fadeInMs: 120,
+    gaugeRing: { startRadius: 0.4, endRadius: 0.12, afterRatio: 0.4 },
+  },
+  /**
+   * スイング後・投球後の位置ずれ表示(DOM。`ui/ZoneFeedback.tsx`)。`swingMs`/`pitchMs`: 表示時間(フェードアウト)、
+   * `lineWidthPx`: 2 点を結ぶ線の幅、`crossPx`: 十字の径、`ringPx`: 着弾の輪の径、`frameAlpha`: ゾーン枠の不透明度。
+   */
+  zoneFeedback: { swingMs: 900, pitchMs: 700, lineWidthPx: 3, crossPx: 16, ringPx: 30, frameAlpha: 0.35 },
+  /**
+   * 接触演出。`contactPunch`: 接触後 `ms` で FOV を `fovScale` 倍に狭めて戻す・シェイク振幅 `shake`(m)。
+   * `hitStop`: ジャスト/強い当たりの停止時間(ms)。`prefers-reduced-motion` では無効。
+   */
+  fx: { contactPunch: { ms: 140, fovScale: 0.96, shake: 0.012 }, hitStop: { justMs: 60, strongMs: 40 } },
+  /** 演出バナー(DOM+CSS)。種類別の表示時間(ms)、帯の上端(画面高に対する比)、帯の高さ(px)。 */
+  banner: { hitMs: 900, homerunMs: 1600, strikeoutMs: 1000, walkMs: 900, justMs: 700, bandTopRatio: 0.37, bandHeightPx: 96 },
   /**
    * 中継カメラ。位置 = (ball.x × kx, baseY + ball.y × ky, baseZ + ball.z × kz)、注視 = (ball.x, max(0, ball.y × kLook), ball.z)。
    * `kLook` は横長の値、`portraitKLook` は縦長(縦横比の補間で混ぜる)。
@@ -152,7 +206,7 @@ const PARAMS = {
     lineRatio: { min: 1.2, max: 3 },
   },
   /** テロップの表示時間(ms)と、その後の余韻(ms)。 */
-  telop: { inPlayMs: 1100, foulMs: 700, swingMissMs: 700, takeMs: 500, afterglowMs: 200 },
+  telop: { inPlayMs: 900, foulMs: 520, swingMissMs: 520, takeMs: 380, afterglowMs: 120 },
   /** 球場の寸法(m)。フェンス半径・塁間は `LANDING_PARAMS` から `buildStageGeometry` が導く。 */
   stadium: {
     groundSize: 700,

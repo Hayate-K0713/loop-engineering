@@ -4,10 +4,10 @@ import { isHolding, recordSwing, type SwingRecord } from "../model/world/sequenc
 import { CPU_SWING_LEAD_MS } from "../model/world/space/params";
 import type { SwingInput, SwingKind, TimingCue } from "../types/batting";
 import type { PlaybackSpeed } from "../types/game";
-import type { PitchCommand, PitchFlight } from "../types/pitch";
-import type { ScenePhase } from "../types/scene";
+import type { PitchCommand, PitchFlight, PitchInputView, PitchQuality } from "../types/pitch";
+import type { GuideMode, ScenePhase } from "../types/scene";
 import type { ScreenRect, StageStatus } from "../types/stage";
-import type { FieldMarkerView, GameView, PitchOutcomeView } from "../types/view";
+import type { BannerView, FieldMarkerView, GameView, PitchOutcomeView, ZoneFeedbackView } from "../types/view";
 import { useBattingControls, type BattingControls, type CursorView } from "./useBattingControls";
 import { useCpuTurn } from "./useCpuTurn";
 import type { UseGameResult } from "./useGame";
@@ -52,6 +52,20 @@ export type GameStageViewProps = {
   readonly lastTiming: TimingCue | null;
   /** 捨てたスイングの回数(`data-swing-dropped` ミラー用。開発・E2E の観測用)。入力されたのに、見逃しが先に確定していたスイングの累計。 */
   readonly droppedSwings: number;
+  /** 演出バナー(区間外は `null`)。バナーが出る間はテロップを出さない。 */
+  readonly banner: BannerView | null;
+  /** 現在の着弾点の予告・照準の見せ方(`data-guide-mode` ミラー用)。 */
+  readonly guideMode: GuideMode;
+  /** 人間守備の投球入力の公開ビュー(`data-input-state` 用)。人間守備でなければ `null`。 */
+  readonly inputState: PitchInputView | null;
+  /** 直近の投球の質(「ナイス」等の表示用)。なければ `null`。 */
+  readonly pitchQuality: PitchQuality | null;
+  /** 最初の数球の 1 行ヒント。なければ `null`。 */
+  readonly hint: string | null;
+  /** タップが通らなかったときの短いヒント(「ポンと おす」)。なければ `null`。 */
+  readonly tapHint: string | null;
+  /** 位置ずれ表示(DOM のミニ図)。なければ `null`。 */
+  readonly zoneFeedback: ZoneFeedbackView | null;
 };
 
 type UseGameStageResult = {

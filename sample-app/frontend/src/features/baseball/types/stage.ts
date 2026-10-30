@@ -191,9 +191,19 @@ export type StageOptions = {
   readonly onResize: (size: { readonly width: number; readonly height: number }) => void;
 };
 
+/** 描画負荷の実測(試遊ログ用)。`drawCalls`/`triangles` は直近の 1 フレームの `renderer.info.render`、`geometries`/`textures` は `renderer.info.memory`。 */
+export type StageStats = {
+  readonly drawCalls: number;
+  readonly triangles: number;
+  readonly geometries: number;
+  readonly textures: number;
+};
+
 export type StageHandle = {
   /** 1フレーム分の状態を three に適用して描画する。 */
   apply(frame: SceneFrame): void;
+  /** 描画負荷の実測。破棄後は `null`。 */
+  stats(): StageStats | null;
   resize(width: number, height: number): void;
   /** 画面座標(client)から、最後に `apply` したカメラでゾーン平面に当てた点。当たらない・破棄後は `null`。 */
   pickPlane(clientX: number, clientY: number): Vec3 | null;
