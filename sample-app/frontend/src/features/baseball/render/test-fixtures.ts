@@ -1,9 +1,36 @@
 // render/ のテスト用フィクスチャ。render/ は model/ を import しないため、寸法・色・フレームはここで持つ(値は設計書の初期値)。
-import type { BatterPose, CharacterPose, SceneFrame } from "../types/scene";
+import type { BatterPose, CharacterLookData, CharacterPose, SceneFrame } from "../types/scene";
 import type { CharacterRig, CrowdCell, StageGeometry } from "../types/stage";
 
 export function makeRig(): CharacterRig {
-  return { hipX: 0.14, hipY: 0.5, torsoY: 0.55, shoulderX: 0.36, shoulderY: 0.48, headY: 0.98, armLength: 0.38 };
+  return {
+    hipX: 0.14,
+    hipY: 0.5,
+    torsoY: 0.55,
+    shoulderX: 0.36,
+    shoulderY: 0.48,
+    headY: 0.98,
+    armLength: 0.38,
+    upperArm: 0.19,
+    foreArm: 0.19,
+    thigh: 0.25,
+    shin: 0.25,
+  };
+}
+
+/** `CharacterLookData` の既定値(顔アトラスは 384×192 の無地、背番号は 64×48 の無地。E5・E6 のテスト用)。 */
+export function makeLookData(overrides: Partial<CharacterLookData> = {}): CharacterLookData {
+  return {
+    slot: "pitcher",
+    skin: 1,
+    build: "normal",
+    hair: { style: "short", color: 0x2a1c14 },
+    eyes: "round",
+    faceAtlas: { width: 384, height: 192, cell: 96, rgba: new Uint8Array(384 * 192 * 4).fill(255) },
+    numberDecal: { width: 64, height: 48, rgba: new Uint8Array(64 * 48 * 4).fill(255) },
+    uniform: { base: 0xe8473c, pants: 0xf2f2f2, accent: 0xffffff, socks: 0xe8473c, cap: 0xe8473c, helmet: 0x2f63c8, pattern: null },
+    ...overrides,
+  };
 }
 
 export function makeGeometry(zone: StageGeometry["zone"] = { halfWidth: 0.26, bottom: 0.42, top: 1.02, planeZ: 0.03 }): StageGeometry {
@@ -48,12 +75,17 @@ export function makePose(overrides: Partial<CharacterPose> = {}): CharacterPose 
     position: { x: 1, y: 0.25, z: -18.4 },
     yaw: 0.5,
     scale: 1.15,
+    expression: "neutral",
     torso: { x: 0.1, y: 0.2, z: 0.3 },
     head: { x: -0.1, y: 0.4, z: 0 },
     armL: { x: -1.1, y: 0, z: 0.5 },
     armR: { x: -1.2, y: 0.1, z: -0.5 },
+    elbowL: { x: -0.4, y: 0, z: 0 },
+    elbowR: { x: -0.5, y: 0, z: 0 },
     legL: { x: 0.8, y: 0, z: 0 },
     legR: { x: -0.8, y: 0, z: 0.1 },
+    kneeL: { x: 0.3, y: 0, z: 0 },
+    kneeR: { x: 0.2, y: 0, z: 0 },
     ...overrides,
   };
 }
@@ -76,6 +108,14 @@ export function makeFrame(overrides: Partial<SceneFrame> = {}): SceneFrame {
     catcher: makePose({ visible: false }),
     batter: makeBatterPose(),
     fielders: Array.from({ length: 7 }, () => makePose()),
+    runners: Array.from({ length: 4 }, () => makePose({ visible: false })),
+    wipe: {
+      visible: false,
+      target: "batter",
+      camera: { position: { x: -2.2, y: 1.2, z: -0.5 }, target: { x: -0.8, y: 1.2, z: 0.05 }, fovDeg: 30, lift: 0 },
+      rect: { x: 290, y: 175, width: 94, height: 94 },
+      alpha: 1,
+    },
     zone: { visible: true, grid: true, pulse: 0 },
     landingMark: { visible: false, position: { x: 0, y: 0.07, z: -60 }, radius: 2 },
     cursor: {

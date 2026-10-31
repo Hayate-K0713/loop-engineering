@@ -3,6 +3,9 @@ import type { BattedType, InPlayResult, Strength } from "../../types/batting";
 // 打撃判定の定数。数値はすべて仮値で、balance.test.ts とプレイで調整する。
 // 操作性の修正(H0)で `lateCutoffMs`〜`maxTapSpanMs` を足し、`linerHalfBand`・`mediumFrom`・`strongFrom` を出発値に変えた。
 // H3b で人間代理ボット(sim/bot-balance.test.ts)の試算に合わせて `foulRatio`(0.7 → 0.61)・`mediumFrom`(0.38 → 0.32)・`strongFrom`(0.62 → 0.68)を調整した。
+// v3 の A14 で人間代理ボット v2(sim/human-bot.test.ts)の受け入れ帯(E 群)に合わせて `linerHalfBand`(0.14 → 0.10)・`mediumFrom`(0.32 → 0.45)・
+// `strongFrom`(0.68 → 0.60)・`foulRatio`(0.61 → 0.67)を調整した(`ASSIST_TABLE` と結果表の弱い当たりの行も。旧ボット A〜E の帯 = bot-balance.test.ts は、B・B@664 のファウル率の下限だけ 6% → 4%)。
+// 補助(ロックオン)の質の低下で接触の質 q が全体に下がるため、`mediumFrom` を上げて強さの段階を弱い側へ寄せ、`strongFrom` を下げて補助なしの上手い人の強い当たりを保っている。
 // 入力座標はすべてゾーン単位(ストライクゾーン = [-1, 1]²)。
 
 /** 打撃判定(接触・打球形成)の定数。 */
@@ -76,18 +79,18 @@ export const BATTING_PARAMS: BattingParams = {
   keyboardSpeed: 3.0,
   contactWindowMs: 150,
   powerWindowScale: 0.75,
-  foulRatio: 0.61,
+  foulRatio: 0.67,
   centerRatio: 0.25,
   edgePenaltyStart: 0.6,
   edgePenaltyPerUnit: 0.4,
-  linerHalfBand: 0.14,
+  linerHalfBand: 0.1,
   trajectoryShiftPerLevel: 0.1,
   powerBase: 0.6,
   powerPerAbility: 0.008,
   kindFactor: { meet: 1.0, power: 1.5 },
   directionFactor: { pull: 1.15, center: 1.0, opposite: 0.9 },
-  mediumFrom: 0.32,
-  strongFrom: 0.68,
+  mediumFrom: 0.45,
+  strongFrom: 0.6,
   lateCutoffMs: 250,
   ballReachX: 0.23,
   ballReachY: 0.2,

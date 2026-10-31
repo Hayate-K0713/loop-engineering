@@ -6,9 +6,9 @@ import { CPU_SWING_LEAD_MS } from "../model/world/space/params";
 import type { ContactQuality, IgnoredInputReason, SwingInput, SwingKind, SwingMeta, TimingCue } from "../types/batting";
 import type { PlaybackSpeed } from "../types/game";
 import type { CourseCell, PitchFlight, PitchInputView, PitchKind, PitchQuality } from "../types/pitch";
-import type { GuideMode, ScenePhase } from "../types/scene";
+import type { GuideMode, QualityTier, ScenePhase } from "../types/scene";
 import type { ScreenRect, StageStatus } from "../types/stage";
-import type { BannerView, FieldMarkerView, GameView, PitchOutcomeView, TutorialStep, ZoneFeedbackView } from "../types/view";
+import type { BannerView, FieldMarkerView, GameView, PitchOutcomeView, TutorialStep, WipeView, ZoneFeedbackView } from "../types/view";
 import { useBattingControls, type BattingControls, type CursorView } from "./useBattingControls";
 import { useCpuTurn } from "./useCpuTurn";
 import type { UseGameResult } from "./useGame";
@@ -83,6 +83,10 @@ export type GameStageViewProps = {
   readonly tapHint: string | null;
   /** 位置ずれ表示(DOM のミニ図)。なければ `null`。 */
   readonly zoneFeedback: ZoneFeedbackView | null;
+  /** ワイプ(顔アップ)の DOM 側の表示。出さないときは `null`。 */
+  readonly wipe: WipeView | null;
+  /** 現在の描画の品質ティア。 */
+  readonly qualityTier: QualityTier;
 };
 
 type UseGameStageResult = {

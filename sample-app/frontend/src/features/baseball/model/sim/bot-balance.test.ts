@@ -19,6 +19,13 @@ const SEED = 20261013;
  */
 const NEGLIGIBLE = 0.005;
 
+/**
+ * B・B@664 のファウル率の下限。v2 の帯は 6% だったが、v3 の A14 で人間代理ボット v2(human-bot.test.ts)の下位 10% の初心者の打率(E2 の P10 ≥ .13)を保つために
+ * `foulRatio` を 0.61 → 0.67 に上げた(フェアになるタイミングの幅が広がり、旧ボットのファウルが 7% → 4.5% に減る)ので 4% にした。
+ * 「補助なし・理想知覚」の参照としての上限・他の帯(空振り・安打)は v2 のまま。
+ */
+const FOUL_MIN = 0.04;
+
 type Band = { readonly min: number; readonly max: number };
 
 function inBand(value: number, band: Band): boolean {
@@ -75,19 +82,19 @@ describe("人間代理ボットの試算(§10 の帯)", () => {
     expect(inBand(rateOf(tally, "hit"), { min: 0.38, max: 0.55 })).toBe(true);
   });
 
-  it("B スマホ標準(390×844): 無効 ≤ 0.5%、空振り ≤ 8%、ファウル 6〜20%、安打 30〜35%", () => {
+  it("B スマホ標準(390×844): 無効 ≤ 0.5%、空振り ≤ 8%、ファウル 4〜20%、安打 30〜35%", () => {
     const tally = tallyOf(BOTS.B);
     expect(rateOf(tally, "ignored")).toBeLessThanOrEqual(NEGLIGIBLE);
     expect(rateOf(tally, "miss")).toBeLessThanOrEqual(0.08);
-    expect(inBand(rateOf(tally, "foul"), { min: 0.06, max: 0.2 })).toBe(true);
+    expect(inBand(rateOf(tally, "foul"), { min: FOUL_MIN, max: 0.2 })).toBe(true);
     expect(inBand(rateOf(tally, "hit"), { min: 0.3, max: 0.35 })).toBe(true);
   });
 
-  it("B@664(390×664): 無効 0%、空振り ≤ 10%、ファウル 6〜22%、安打 26〜35%", () => {
+  it("B@664(390×664): 無効 0%、空振り ≤ 10%、ファウル 4〜22%、安打 26〜35%", () => {
     const tally = tallyOf(BOTS.B664);
     expect(rateOf(tally, "ignored")).toBeLessThanOrEqual(NEGLIGIBLE);
     expect(rateOf(tally, "miss")).toBeLessThanOrEqual(0.1);
-    expect(inBand(rateOf(tally, "foul"), { min: 0.06, max: 0.22 })).toBe(true);
+    expect(inBand(rateOf(tally, "foul"), { min: FOUL_MIN, max: 0.22 })).toBe(true);
     expect(inBand(rateOf(tally, "hit"), { min: 0.26, max: 0.35 })).toBe(true);
   });
 

@@ -27,17 +27,6 @@
   --bb-outline-lg:
     4px 0 0 var(--bb-ink), -4px 0 0 var(--bb-ink), 0 -4px 0 var(--bb-ink), 3px 3px 0 var(--bb-ink), -3px 3px 0 var(--bb-ink), 3px -3px 0 var(--bb-ink),
     -3px -3px 0 var(--bb-ink), 0 4px 0 var(--bb-ink), 0 7px 0 var(--bb-ink), 3px 7px 0 var(--bb-ink), -3px 7px 0 var(--bb-ink);
-
-  /* 通常フローの 5×5 コースグリッド(スマホ縦・タッチは 44px、細かいポインタの広い画面は 36px) */
-  --bb-cell: 44px;
-  --bb-cell-gap: 2px;
-  --bb-grid-size: calc(var(--bb-cell) * 5 + var(--bb-cell-gap) * 4);
-}
-
-@media (min-width: 641px) and (hover: hover) and (pointer: fine) {
-  :root {
-    --bb-cell: 36px;
-  }
 }
 
 /* ページ全体のダーク化。ホーム(/)へ漏らさないよう、ゲームのページがあるときだけ付ける */
@@ -109,7 +98,6 @@ body:has(.bb-page) {
 
 .bb-button:focus-visible,
 .bb-toggle:focus-visible,
-.bb-course-cell:focus-visible,
 .bb-start:focus-visible {
   outline: 3px solid var(--bb-accent);
   outline-offset: 3px;
@@ -750,83 +738,84 @@ body:has(.bb-page) {
   transform: translateY(3px);
 }
 
-/* ---- PitchingControls / PitchKindButtons ---- */
+/* ---- PitchingControls / PitchKindButtons(守備の操作バー: 球種チップ+操作ボタンの 1 行。高さは 52px) ----
+   チップは 44〜76px 幅×52px(幅は残りを均等に分ける)、操作ボタンは 84〜96px 幅×52px。バーの余白・ティッカーとの並びは baseball-stage.css が持つ。 */
 
+/* container-type: inline-size は、(1) 文字の大きさをバーの幅(cqw)に合わせるため、(2) 中身の幅をバーの最小幅に数えさせず、
+   狭いバー(横長の狭いウィンドウ・幅 360px のスマホ)でチップが外にはみ出さないようにするためのもの */
 .bb-pitching {
-  display: grid;
-  gap: 8px;
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .bb-pitch-kinds {
   display: flex;
-  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 4px;
 }
 
+/* .bb-toggle(同じ詳細度、後勝ち)の寸法を上書きして、2 行(球種名・球速+矢印)のチップにする */
 .bb-pitch-kind {
-  flex: 1 1 auto;
-  padding: 0 clamp(3px, 1.6vw, 8px);
-  font-size: clamp(0.75rem, 3.6vw, 0.9375rem);
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 44px;
+  max-width: 76px;
+  height: 52px;
+  min-height: 52px;
+  padding: 2px 0;
+  overflow: hidden;
+  border-width: 2px;
   letter-spacing: 0;
   white-space: nowrap;
 }
 
-.bb-pitching__throw {
-  min-height: 56px;
-  font-size: 1.5rem;
-  letter-spacing: 0.2em;
+.bb-pitch-kind__label {
+  font-size: clamp(0.625rem, 2.8cqw, 0.75rem);
+  line-height: 1.1;
 }
 
-/* 操作バー(守備)の並べ方(チップ・グリッド・「投げる」の配置と「投げる」の大きさ)は baseball-stage.css の .bb-bar--pitch が持つ。
-   ここには部品の中のスタイル(球種チップ・「投げる」の基本の寸法)だけを置く。 */
-
-/* ---- CourseGrid(通常フローの 5×5) ---- */
-
-.bb-course-grid {
-  display: grid;
-  grid-template-columns: repeat(5, var(--bb-cell));
-  grid-template-rows: repeat(5, var(--bb-cell));
-  gap: var(--bb-cell-gap);
-  width: max-content;
-  padding: 0;
+.bb-pitch-kind__meta {
+  color: var(--bb-muted);
+  font-size: clamp(0.5625rem, 2.5cqw, 0.6875rem);
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: none;
 }
 
-.bb-course-cell {
-  position: relative;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  border: 2px solid rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
-  background: rgba(8, 20, 34, 0.72);
-  cursor: pointer;
-  touch-action: manipulation;
+.bb-pitch-kind[aria-pressed="true"] .bb-pitch-kind__meta {
+  color: var(--bb-accent);
 }
 
-.bb-course-cell--zone {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(241, 245, 249, 0.2);
+.bb-pitch-kind__arrow {
+  margin-left: 2px;
 }
 
-.bb-course-cell:hover {
-  background: rgba(255, 255, 255, 0.3);
+/* 操作ボタン(投げる/とめる!)。ゲージ中は橙にして「いま押す」と分かるようにする */
+.bb-pitching__button {
+  flex: none;
+  width: clamp(84px, 24vw, 96px);
+  height: 52px;
+  min-height: 52px;
+  padding: 0 2px;
+  font-size: 1.125rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  -webkit-touch-callout: none;
 }
 
-.bb-course-cell[aria-pressed="true"] {
-  border-color: var(--bb-ink);
-  background: var(--bb-accent);
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55);
+.bb-pitching__button--stop {
+  background: #ffa726;
 }
 
-/* 選択中のセルに「狙い」の黒い点 */
-.bb-course-cell[aria-pressed="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 34%;
-  height: 34%;
-  margin: auto;
-  border-radius: 50%;
-  background: var(--bb-ink);
+.bb-pitching__button--stop:hover:not(:disabled) {
+  background: #ffb74d;
 }
 
 /* ---- 広い画面(デスクトップ) ---- */

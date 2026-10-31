@@ -1,7 +1,7 @@
 // ステージ(render/)の契約。types/ は実行時コードを持たない葉で、他セグメントを import しない(DOM 型は使ってよい)。
 // `createStage(options: StageOptions): StageHandle | null` は render/stage.ts が実装する。WebGL2 が取れない・
 // `WebGLRenderer` の生成に失敗したときは `null` を返す(関数そのものは実行時コードなので types/ には置かない)。
-import type { CameraPose, SafeArea, SceneFrame, SceneLayout, Vec3 } from "./scene";
+import type { CameraPose, CharacterLookData, CharacterSlot, QualityTier, SafeArea, SceneFrame, SceneLayout, Vec3 } from "./scene";
 
 /** 地面(XZ 平面)上の点。ワールド座標の m。 */
 export type GroundPoint = {
@@ -160,6 +160,14 @@ export type CharacterRig = {
   readonly headY: number;
   /** 肩から手先までの長さ。 */
   readonly armLength: number;
+  /** 上腕(肩から肘)の長さ。`upperArm + foreArm = armLength`。 */
+  readonly upperArm: number;
+  /** 前腕(肘から手先)の長さ。 */
+  readonly foreArm: number;
+  /** 大腿(股関節から膝)の長さ。`thigh + shin = hipY`。 */
+  readonly thigh: number;
+  /** 下腿(膝から足元)の長さ。 */
+  readonly shin: number;
 };
 
 /** キャンバス左上基準の CSS px。 */
@@ -204,6 +212,10 @@ export type StageHandle = {
   apply(frame: SceneFrame): void;
   /** 描画負荷の実測。破棄後は `null`。 */
   stats(): StageStats | null;
+  /** キャラクターの見た目(顔・髪・ユニフォーム・背番号)を差し替える。破棄後は何もしない。 */
+  setLook(slot: CharacterSlot, data: CharacterLookData): void;
+  /** 品質ティアを切り替える。飛行中は保留し、`idle`/`holding` で適用する(再コンパイルを伴うため)。破棄後は何もしない。 */
+  setQualityTier(tier: QualityTier): void;
   resize(width: number, height: number): void;
   /** 画面座標(client)から、最後に `apply` したカメラでゾーン平面に当てた点。当たらない・破棄後は `null`。 */
   pickPlane(clientX: number, clientY: number): Vec3 | null;

@@ -22,14 +22,14 @@ export type ResultRow = {
 };
 
 /**
- * インプレー結果の重み表(仮値。各行の合計は 100)。タイプと矛盾する結果の重みは 0 で、`doublePlay` は ground 行のみ。
+ * インプレー結果の重み表(仮値。各行の合計は 100)。A14 で、補助つきの打者(接触の質が下がり、弱い当たりが多い)の打率を E 群の帯に合わせるため、弱い当たり 3 行の安打を +4(アウトを −4)した。タイプと矛盾する結果の重みは 0 で、`doublePlay` は ground 行のみ。
  * 打球が決まったあと、この表から 1 回だけ抽選する(乱数を消費するのはここだけ)。
  */
 export const RESULT_TABLE: readonly ResultRow[] = [
   {
     type: "ground",
     strength: "weak",
-    weights: { groundout: 50, doublePlay: 38, flyout: 0, lineout: 0, single: 12, double: 0, triple: 0, homerun: 0, error: 0 },
+    weights: { groundout: 46, doublePlay: 38, flyout: 0, lineout: 0, single: 16, double: 0, triple: 0, homerun: 0, error: 0 },
   },
   {
     type: "ground",
@@ -41,7 +41,7 @@ export const RESULT_TABLE: readonly ResultRow[] = [
     strength: "strong",
     weights: { groundout: 34, doublePlay: 25, flyout: 0, lineout: 0, single: 34, double: 5, triple: 0, homerun: 0, error: 2 },
   },
-  { type: "liner", strength: "weak", weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 56, single: 38, double: 6, triple: 0, homerun: 0, error: 0 } },
+  { type: "liner", strength: "weak", weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 52, single: 42, double: 6, triple: 0, homerun: 0, error: 0 } },
   {
     type: "liner",
     strength: "medium",
@@ -52,7 +52,7 @@ export const RESULT_TABLE: readonly ResultRow[] = [
     strength: "strong",
     weights: { groundout: 0, doublePlay: 0, flyout: 0, lineout: 30, single: 37, double: 25, triple: 4, homerun: 4, error: 0 },
   },
-  { type: "fly", strength: "weak", weights: { groundout: 0, doublePlay: 0, flyout: 95, lineout: 0, single: 5, double: 0, triple: 0, homerun: 0, error: 0 } },
+  { type: "fly", strength: "weak", weights: { groundout: 0, doublePlay: 0, flyout: 91, lineout: 0, single: 9, double: 0, triple: 0, homerun: 0, error: 0 } },
   { type: "fly", strength: "medium", weights: { groundout: 0, doublePlay: 0, flyout: 78, lineout: 0, single: 8, double: 9, triple: 1, homerun: 4, error: 0 } },
   {
     type: "fly",

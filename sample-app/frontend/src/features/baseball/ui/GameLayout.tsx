@@ -1,11 +1,10 @@
 import type { PointerEventHandler, ReactNode } from "react";
 import type { GameStageViewProps, PitchSelection } from "../hooks/useGameStage";
 import type { ContactQuality, SwingKind } from "../types/batting";
-import type { CourseCell, PitchKind } from "../types/pitch";
+import type { CourseCell, PitchInputPhase, PitchKind } from "../types/pitch";
 import type { GameView } from "../types/view";
-import { CourseGrid } from "./CourseGrid";
 import { NamePlates } from "./NamePlates";
-import { PitchingControls } from "./PitchingControls";
+import { PitchingControls, type StopHandler } from "./PitchingControls";
 import { ScoreHud } from "./ScoreHud";
 import { StageView } from "./StageView";
 import { SwingControls } from "./SwingControls";
@@ -19,11 +18,20 @@ type ActionBarProps = {
   readonly pitchReady: boolean;
   /** `SwingControls` の `ready`(最新の view に基づく。`holding` 中は偽)。 */
   readonly swingReady: boolean;
-  /** 投球の選択状態(`GameScreen` が持つ)。 */
-  readonly selection: PitchSelection;
+  /** 選択中の球種(守備の球種チップ)。省略時は `selection.kind`、それも無ければ `straight`。 */
+  readonly selectedKind?: PitchKind;
+  /**
+   * 旧 UI の投球の選択状態(球種+コースのセル)。**暫定(B6 が結線するまでの互換用)**: `GameScreen` が段階 A の呼び出しのまま渡してきても型エラーにしないための optional。
+   * 使うのは `kind` だけで、`cell` は使わない(コース選択の格子は無い)。B6 で `GameScreen` から削除し、`selectedKind` に置き換える。
+   */
+  readonly selection?: PitchSelection;
   readonly onSelectKind: (kind: PitchKind) => void;
-  readonly onSelectCell: (cell: CourseCell) => void;
+  /** **暫定(互換用・未使用)**: 旧格子のセル選択。B6 で `GameScreen` の呼び出しから削除する。 */
+  readonly onSelectCell?: (cell: CourseCell) => void;
+  /** 守備の操作ボタンの「投げる」(待機・狙い中)。 */
   readonly onThrow: () => void;
+  /** 守備の操作ボタンの「とめる!」(ゲージ中。pointerdown で呼ぶ)。省略時は `onThrow`。 */
+  readonly onStop?: StopHandler;
   readonly swingKind: SwingKind;
   readonly onSelectSwingKind: (kind: SwingKind) => void;
   /** スイングボタンの pointerdown ハンドラ(`SwingControls` の `onSwing`)。 */
@@ -54,11 +62,11 @@ function barVariant(mode: GameView["mode"]): "batting" | "pitching" | "cpu" {
 }
 
 /**
- * 下部の操作バー。人間打撃では `SwingControls`、人間守備では `PitchingControls` → `CourseGrid` の順に、wrapper を挟まずバーの直下へ置く
- * (守備バーの配置は CSS のサブグリッドが担う)。CPU どうしの対戦(`cpu-only`)では何も描かない。
+ * 下部の操作バー。人間打撃では `SwingControls`、人間守備では `PitchingControls`(球種チップ+操作ボタンの 1 行)を置く。
+ * CPU どうしの対戦(`cpu-only`)では何も描かない。`inputState` は守備の投球入力の状態(`stageProps.inputState`)。
  */
-function ActionBar(props: ActionBarProps) {
-  const { view, selection } = props;
+function ActionBar(props: ActionBarProps & { readonly inputState: PitchInputPhase | null }) {
+  const { view } = props;
   switch (view.mode) {
     case "human-batting":
       return (
@@ -72,11 +80,12 @@ function ActionBar(props: ActionBarProps) {
           <PitchingControls
             ready={props.pitchReady}
             repertoire={view.pitcher.repertoire}
-            selectedKind={selection.kind}
+            selectedKind={props.selectedKind ?? props.selection?.kind ?? "straight"}
             onSelectKind={props.onSelectKind}
+            inputState={props.inputState}
             onThrow={props.onThrow}
+            onStop={props.onStop}
           />
-          <CourseGrid selectedCell={selection.cell} onSelectCell={props.onSelectCell} />
         </div>
       );
     default:
@@ -113,7 +122,7 @@ export function GameLayout({ stageProps, contactQuality, tutorial, playtest, ...
         </div>
         <div className="bb-overlay__bottom" data-inset="bottom">
           <Ticker lastEvent={view.lastEvent} log={view.log} />
-          <ActionBar {...bar} />
+          <ActionBar {...bar} inputState={stageProps.inputState?.phase ?? null} />
         </div>
       </div>
       {tutorial}

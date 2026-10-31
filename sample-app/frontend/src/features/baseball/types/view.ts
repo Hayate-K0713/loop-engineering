@@ -1,8 +1,8 @@
 import type { AssistParams, BattedBall, CursorRadii, InPlayResult, PlateOutcome } from "./batting";
 import type { Side, ZonePoint } from "./common";
-import type { Bases, Difficulty, LogEntry } from "./game";
+import type { Bases, Difficulty, LogEntry, RunnerMoves } from "./game";
 import type { PitchFlight, PitchKind } from "./pitch";
-import type { UniformColors } from "./scene";
+import type { UniformColors, WipeRect } from "./scene";
 
 /** スコアボードの1行(チーム)。`cells` は整形済み文字列で、未到達は「-」、スキップされた裏は「x」。 */
 export type ScoreRowView = {
@@ -70,6 +70,8 @@ export type PitchOutcomeView = {
   readonly inPlay: { readonly result: InPlayResult; readonly ball: BattedBall } | null;
   /** 打席が終わった球のみ非 `null`(`walk`・`strikeout`・インプレーの結果)。 */
   readonly plate: PlateOutcome | null;
+  /** 走者の進塁の事実(`GameState.lastAdvance` から作る)。走者が関与しない球では `null`。 */
+  readonly runners: RunnerMoves | null;
 };
 
 /** 球種チップの曲がり矢印(球種の `bend` から導く。x + = 右(ライト側)、y − = 落ちる)。 */
@@ -101,6 +103,16 @@ export type ZoneFeedbackView = {
   readonly to: ZonePoint;
   readonly ringRadiusZone: number;
   readonly alpha: number;
+  readonly label: string | null;
+};
+
+/**
+ * ワイプ(顔アップ)の DOM 側の表示(縁取り・名前・背番号は `ui/CutIn.tsx`)。`rect` は画面の px(キャンバス左上基準)、
+ * `label` = 「打者 3番 〇〇」などの添え字。
+ */
+export type WipeView = {
+  readonly visible: boolean;
+  readonly rect: WipeRect;
   readonly label: string | null;
 };
 

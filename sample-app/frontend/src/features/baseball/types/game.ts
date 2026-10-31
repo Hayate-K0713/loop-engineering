@@ -26,6 +26,27 @@ export type Bases = {
   readonly third: boolean;
 };
 
+/** 出発の塁。0 = 打席(打者走者)、1〜3 = 一〜三塁。 */
+export type BaseFrom = 0 | 1 | 2 | 3;
+
+/** 到達の塁。0 = 打席にとどまる(例: 範囲外)、1〜3 = 一〜三塁、4 = 本塁に生還。 */
+export type BaseTo = 0 | 1 | 2 | 3 | 4;
+
+/**
+ * 1 球の進塁の事実(表示専用)。`before`/`after` = 結果の適用前後の塁の占有、`scored` = 生還数、
+ * `batterTo` = 打者走者の到達塁、`advances` = 塁上の走者ごとの出発塁→到達塁。
+ */
+export type RunnerMoves = {
+  readonly before: Bases;
+  readonly after: Bases;
+  readonly scored: number;
+  readonly batterTo: BaseTo;
+  readonly advances: readonly { readonly from: BaseFrom; readonly to: BaseTo }[];
+};
+
+/** `GameState.lastAdvance`。`seq` はその球の `pitchSeq`。reducer の乱数・判定には影響しない。 */
+export type RunnerAdvanceRecord = RunnerMoves & { readonly seq: number };
+
 /** 試合の進行フェーズ。`winner: null` は引き分け。 */
 export type Phase =
   | { readonly kind: "await-pitch" }
@@ -80,6 +101,8 @@ export type GameState = {
   readonly lastPlate: PlateOutcome | null;
   /** 直近のインプレー打球。インプレー以外の投球では更新せず保持し、攻守交代でもクリアしない。 */
   readonly lastInPlay: InPlayRecord | null;
+  /** 直近の1球の進塁の事実(走者の3D表示用。表示専用で、reducer の乱数・判定に影響しない)。 */
+  readonly lastAdvance: RunnerAdvanceRecord | null;
   readonly phase: Phase;
   readonly log: readonly LogEntry[];
 };

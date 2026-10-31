@@ -2,7 +2,7 @@ import type { AssistParams } from "../../types/batting";
 import type { ZonePoint } from "../../types/common";
 import type { Difficulty } from "../../types/game";
 
-// 打撃のアシスト(ロックオン・予告・質の補正)の難易度別の表と、それを使う純関数。値は出発値で、人間代理ボット(A14)が調整してよい。
+// 打撃のアシスト(ロックオン・予告・質の補正)の難易度別の表と、それを使う純関数。値は出発値で、人間代理ボット(A14)が調整してよい。A14 で `normal` のロックオン強度 0.55 → 0.65・捕捉半径 1.2 → 1.4・質の低下 0.35 → 0.45 にした(E 群の帯。`easy`/`hard` は出発値のまま)。
 
 /**
  * 難易度ごとのアシスト。`fadeRadius`/`fadeJitter` は `preview: "fade"` のときだけ使う(`exact` は 0)。
@@ -10,7 +10,7 @@ import type { Difficulty } from "../../types/game";
  */
 export const ASSIST_TABLE: Readonly<Record<Difficulty, AssistParams>> = {
   easy: { lockStrength: 0.8, captureRadius: 1.6, rampStart: 0.3, rampEnd: 0.8, preview: "exact", fadeRadius: 0, fadeJitter: 0, qualityPenalty: 0.3 },
-  normal: { lockStrength: 0.55, captureRadius: 1.2, rampStart: 0.35, rampEnd: 0.85, preview: "exact", fadeRadius: 0, fadeJitter: 0, qualityPenalty: 0.35 },
+  normal: { lockStrength: 0.65, captureRadius: 1.4, rampStart: 0.35, rampEnd: 0.85, preview: "exact", fadeRadius: 0, fadeJitter: 0, qualityPenalty: 0.45 },
   hard: { lockStrength: 0.2, captureRadius: 0.7, rampStart: 0.4, rampEnd: 0.9, preview: "fade", fadeRadius: 0.45, fadeJitter: 0.25, qualityPenalty: 0.4 },
 };
 

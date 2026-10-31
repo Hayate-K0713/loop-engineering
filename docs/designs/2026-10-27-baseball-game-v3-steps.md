@@ -120,7 +120,7 @@
   - やること: director が新項目を毎フレーム渡し、有効カーソルを表示する。`zoneFeedback`・`tapHint` を props に渡す。`useGameStage` が `tutorialActive`・`usePreferences`・`usePlaytestLog`・`useFramePerf` を結線し、`stage.stats()` を起動時にログへ。`inputActive` を人間打撃中に付ける。**人間守備は旧格子 UI のまま**、`onThrow` が `{ kind, aim: セル中心, quality: "normal" }` を作って渡す。`skip()` は reducer に触れない・`stage === null` でも進行が止まらない。`cd sample-app && npm run typecheck && npm run lint && npm run test && npm run build` を通す。構造検査・knip レポートを確認。バンドルサイズを記録。**試遊ビルド**(`VITE_PLAYTEST=1`)を作り、1 試合が通ることを確認する。E2E は D2 で更新するので、ここでは手動確認だけ。
   - 完了条件: 上記がすべて成功(typecheck は全体で緑)。構造検査 1〜15 が pass。試遊ビルドの手順を完了報告にまとめる。
   - **→ T1(中間試遊。ゲート1で承認済み: Q8)**: orchestrator が試遊ビルドを人間に渡し、「**打撃 20 打席(約 60 球)を遊んで、試遊ログ(画面の JSON)をコピーして貼る**」ことと「打てた/微妙/打てない」の 3 択を `AskUserQuestion` で聞く(キャラクターは v2 のまま・演出と音と新しい投球は未実装と伝える。**操作は v2 と同じタップ方式で、予告・リング・ロックオンが加わった版**)。ログは A14 の較正に使い、結果によっては E3 の前に A1・A2・A4 を直す。
-- [ ] **A14: 人間代理ボット v2(打撃)と打撃バランス**
+- [x] **A14: 人間代理ボット v2(打撃)と打撃バランス**
   - 依存: A13(と T1 のログがあればそれ)。E0・B1・B2 と並列可。**E3・E4 より先に完了する**。担当ファイル: 新規 `model/sim/{human-bot,human-game}.ts`、`model/sim/human-bot.test.ts`、`model/sim/bot-balance.test.ts`、`model/batting/{params,result-table,batted-ball,assist}.ts` の**値**。
   - やること: 「人間代理ボット v2」を実装し、受け入れ帯(E 群)を満たすよう、ロックオン強度・結果表・強さのしきい値・`foulRatio`・`qualityPenalty` を調整する。**失敗の型はタップ方式のもの**(`slowTapRate`・`driftTapRate`・`cancelRate`・`ignoreRing`。本体 §4-1)。**検出力テストを先に通す**(調整先は共有パラメータだけ)。旧ボット(A〜E)は「補助なし・理想知覚」の参照として残す。
   - 動かしてよい値(この順に): `ASSIST_TABLE` の `lockStrength`(±0.15)・`captureRadius`(±0.4)・`qualityPenalty`(0.2〜0.5)、`linerHalfBand`(0.08〜0.22)、`mediumFrom`(0.28〜0.45)、`strongFrom`(0.5〜0.75)、`RESULT_TABLE` の重み(v2 の不変条件を守る範囲で各セル ±8)、`foulRatio`(0.6〜0.8)。**動かさない値**: `contactWindowMs`・`powerWindowScale`・`centerRatio`・`lateCutoffMs`・`inputLatencyMs`・`ballReachX/Y`・`meetBaseRx`・`TAP_*`、ボットの「リング無し」の `biasMs`。
@@ -130,7 +130,7 @@
 
 「最大」の分は段階 M。**描画予算(draw call・三角形)の目標と品質ティアは character 分冊 §3-4-10**。
 
-- [ ] **E0: 段階 E の契約と定数の凍結**(直列。A13 の後。A14・B1・B2 と並列可)
+- [x] **E0: 段階 E の契約と定数の凍結**(直列。A13 の後。A14・B1・B2 と並列可)
   - 依存: A13。担当ファイル: `types/{team,game,scene,stage,view}.ts`(段階 E の分)、新規 `render/character/parts.ts`(型と定数のみ)、`render/test-fixtures.ts`(E の新フィールドの既定値)、`model/world/space/params.ts`(E の分の値)。
   - やること: contract 分冊 §5-2 のとおり、E の型を定義し、**`render/character/parts.ts` に `CharacterParts` 契約(`SkinnedMesh` 方式のハンドル)と `JOINT_ORDER`・`FACE_PATCH`・`DECAL_SIZE`・`WIPE_LAYER` を置く**。`WORLD_PARAMS` に `character`・`runners`(**`infieldCamera.halfWidthTan 0.60` を含む**)・`wipe`・`qualityTier`(`heavy*` を含む)・`actors.framingScale` を入れる。`motion/*`・`teams.ts`・`state.ts` には触れない。壊れる箇所の一覧を完了報告に書く。
   - 完了条件: 担当ファイルの lint 0 件・typecheck 起因 0 件。`types/` が他セグメントを import していない。`render/character/parts.ts` が型と定数だけで、`render/` 以外から import されない。E5・E6 が `parts.ts` だけを見て並列に作業できる。
@@ -198,7 +198,7 @@
   - 依存: A13。担当ファイル: 新規 `model/world/sequence/pitch-input.ts`(+test)。
   - やること: `reducePitchInput(state, event, ctx)`(`idle` → `aiming` → `gauge` → `throwing`)。ゲージ開始から `stopGuardMs` の停止は無視。副作用は `effect`。`holding`・`enabled` が偽なら無視。**持ち越しの指(スキップに使った指)の規則**: その指の離しはゲージを始めない(`none`)、最初の move で狙い開始(`aiming`)、複数あるときは最初に下りた `pointerId` を昇格。
   - 完了条件: 全組み合わせの単体テスト — 離し=確定+ゲージ開始、ゲージ中の押す=停止+投球、`stopGuardMs` 未満の停止は無視、`ringMs + graceMs` で自動投球(失投)、ゲージ中の動きは狙いを変えない、`aimLimit`、キー・ボタンでも同じ遷移、`timeScale`、`holding` 中は何も起きない、持ち越しの指を離してもゲージが始まらない・最初の move で `aiming` になる・複数の持ち越しの指で最初に下りた pointerId が昇格する。
-- [ ] **B2: UI — 守備の操作バー**
+- [x] **B2: UI — 守備の操作バー**
   - 依存: A13。担当ファイル: `ui/{GameLayout,PitchingControls,PitchKindButtons}.tsx`、削除 `ui/CourseGrid.tsx`、CSS。
   - やること: 守備の操作バーを「球種チップ(球速・矢印つき、76×52px)+ 操作ボタン(投げる/とめる!、96×52px)」に作り直す(高さ ≈ 130px、800px 未満で ≤ 140px)。`inputState` を `data-input-state` に反映。
   - 完了条件: lint 0 件・typecheck 起因 0 件。`ui/` が `../model`・`../render`・`../audio` を import していない。守備の `bb-overlay__bottom` の高さを 390×844・745・664 で測った値を完了報告に書く(≤ 135 / 140 / 140px)。ボタン・チップは 44px 以上。

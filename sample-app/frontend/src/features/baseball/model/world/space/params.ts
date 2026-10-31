@@ -53,7 +53,8 @@ const PARAMS = {
   pitcherFollowMs: 400,
   /** 投手・捕手・打者の足元の位置と向き(yaw)・大きさ。 */
   actors: {
-    pitcher: { position: { x: 0, y: 0.25, z: -18.4 }, yaw: 0, scale: 1 },
+    // v3: `portraitScale` は縦長の打撃/守備カメラでの投手の構図の倍率(E3 が `scale` に適用する。それまで `scale` は v2 の 1)。
+    pitcher: { position: { x: 0, y: 0.25, z: -18.4 }, yaw: 0, scale: 1, portraitScale: 1.3 },
     catcher: { position: { x: 0, y: -0.25, z: 1.3 }, yaw: Math.PI, scale: 1 },
     // `portraitX` は縦長(アスペクト ≤ 0.7)での打者の x。横長は `position.x`、その間は縦横比の補間で混ぜる(z は不変)。
     // v3: 縦長は `portraitScale`(構図の倍率。接触後に 1.0 へ戻す)・`portraitBatLength`(バット軸の長さの倍率)、横長は `scale`・`position.x`・`batLength`(v2 と同値)。
@@ -68,6 +69,9 @@ const PARAMS = {
       portraitBatLength: 1.35,
     },
     fielderScale: 1.15,
+    // v3: 構図の倍率 `framingScale`(縦長の打撃/守備カメラの間だけ効かせ、カメラが動き出したら 1.0 へ戻す。`framingScaleAt`)。表示専用。
+    // 打者の 0.70 は横長の v2 の 0.92 との補間(`batterRootFor`)の縦長側の値(`batter.portraitScale` と同値)。
+    framingScale: { batter: 0.7, pitcher: 1.3, others: 1 },
   },
   /** 野手7人の守備位置(固定順: 一塁・二塁・遊撃・三塁・左・中・右。`FIELDER_SLOTS` が順序を決める)。 */
   fielders: {
@@ -207,6 +211,69 @@ const PARAMS = {
   },
   /** テロップの表示時間(ms)と、その後の余韻(ms)。 */
   telop: { inPlayMs: 900, foulMs: 520, swingMissMs: 520, takeMs: 380, afterglowMs: 120 },
+  /**
+   * キャラクター(段階 E。character 分冊 §3-4)。
+   * `proportion.headToBody`: 全身 ÷ 頭の高さ(約 2.2 頭身。体格を含め 2.0〜2.6)。
+   * `face`: 顔アトラス(1 体 1 枚。`cell` px のセルを `columns`×`rows`。外周 `padPx` は肌色の余白)・まばたきの周期と長さ(ms)。
+   * `order` はセルの並び(行優先)で、`render/character/parts.ts` の `FACE_PATCH` と同じ。
+   * `build`: 胴・脚の幅の倍率。`lod`: 三角形の上限(近景は体+輪郭を含む合計で別に ≤ 6000)。`bones`: 1 体のボーン数(打者はバットを加えて 13)。
+   * `budget`: 描画予算(draw call / 三角形)。段階 M で上書きされる値は contract 分冊 §5-4。
+   */
+  character: {
+    proportion: { headToBody: 2.2 },
+    face: {
+      cell: 96,
+      columns: 4,
+      rows: 2,
+      padPx: 4,
+      blinkPeriodMs: 2800,
+      blinkMs: 120,
+      order: ["neutral", "focus", "effort", "shock", "joy", "cheer", "sad", "blink"],
+    },
+    build: { slim: 0.9, normal: 1, stocky: 1.15 },
+    lod: { nearTriangles: 4000, farTriangles: 1200 },
+    bones: { count: 12, batter: 13 },
+    budget: { characterCalls: 60, wipePassCalls: 12, sceneCallsT0: 200, sceneCallsT2: 160, sceneCallsT3: 110, triangles: 120000 },
+  },
+  /**
+   * 走者の3D表示と進塁を見せるカメラ(character 分冊 §3-4-8)。`msPerBase`: 1 塁あたりの時間(ms)、`maxMs`: 全体の上限(ms)、
+   * `leadOffsetM`: リードの距離(m)。`infieldCamera`: 落下後に走者が動くプレーで blend する高い内野のカメラ
+   * (`blendMs` で打球の追跡カメラから移る。`halfWidthTan` = 水平半幅 tan で、0.60 だと一塁・三塁(x ±19.4m)とダグアウトの手前が入る)。
+   */
+  runners: {
+    msPerBase: 1600,
+    maxMs: 3000,
+    leadOffsetM: 0.8,
+    infieldCamera: { position: { x: 0, y: 22, z: 10 }, target: { x: 0, y: 0, z: -20 }, blendMs: 400, halfWidthTan: 0.6 },
+  },
+  /**
+   * ワイプ(顔アップ。第 2 ビューポート)。`showMs`: 標準の表示時間(ms)。`rectPortrait`: 縦長での矩形(正方形の一辺 / 右端の余白 /
+   * HUD の下端からの間隔、すべて px)。`batterDistanceM`: 打者の顔を投手側から撮るカメラの打者からの距離(m)、`fovDeg`: ワイプ用カメラの画角。
+   */
+  wipe: { showMs: 1200, rectPortrait: { sizePx: 94, marginRightPx: 6, belowHudPx: 20 }, batterDistanceM: 2.2, fovDeg: 30 },
+  /**
+   * 品質ティアの自動切替(character 分冊 §3-4-10。`model/character/quality-tier.ts` の `nextTier`)。
+   * `windowMs`: 計測の窓、`p95ThresholdMs`: この p95 を超えた窓が `consecutiveWindows` 回続くとティアを 1 つ下げる。
+   * `heavyP95Ms`・`heavyLongFrameRatio`: 重い場合(p95 がこれ超、またはフレームの `heavyLongFrameRatio` 以上が `heavyLongFrameMs` 超)は
+   * 連続を待たずに 2 つ下げる(段階 M で使う)。自動では上げない。
+   * `tiers`(添字 = ティア 0〜3): `pixelRatioMax` 画素比の上限、`shadowNearCount` 影を落とす近景の体数(0 = 影なしで足元の円盤)、
+   * `shadowMapSize` 影マップの一辺(px。0 = 影なし)、`farJoints` 遠景の関節を更新するか(偽 = 根の揺れだけ)、
+   * `hideStaticFar` 動かない遠景を隠すか、`wipe` ワイプを出すか。
+   */
+  qualityTier: {
+    windowMs: 2000,
+    p95ThresholdMs: 28,
+    heavyP95Ms: 45,
+    heavyLongFrameMs: 50,
+    heavyLongFrameRatio: 0.1,
+    consecutiveWindows: 2,
+    tiers: [
+      { pixelRatioMax: 1.5, shadowNearCount: 4, shadowMapSize: 1024, farJoints: true, hideStaticFar: false, wipe: true },
+      { pixelRatioMax: 1.25, shadowNearCount: 3, shadowMapSize: 512, farJoints: true, hideStaticFar: false, wipe: true },
+      { pixelRatioMax: 1, shadowNearCount: 0, shadowMapSize: 0, farJoints: false, hideStaticFar: false, wipe: true },
+      { pixelRatioMax: 0.85, shadowNearCount: 0, shadowMapSize: 0, farJoints: false, hideStaticFar: true, wipe: false },
+    ],
+  },
   /** 球場の寸法(m)。フェンス半径・塁間は `LANDING_PARAMS` から `buildStageGeometry` が導く。 */
   stadium: {
     groundSize: 700,
