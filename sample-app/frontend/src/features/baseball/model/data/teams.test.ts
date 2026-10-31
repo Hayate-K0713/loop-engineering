@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Team } from "../../types/team";
+import type { PlayerLook, Team } from "../../types/team";
 import { CPU_TEAM, getTeam, PLAYER_TEAM } from "./teams";
 
 const ALL_TEAMS: readonly Team[] = [PLAYER_TEAM, CPU_TEAM];
@@ -113,6 +113,47 @@ describe("teams: uniform color and short name", () => {
       expect(chars.every(isFullWidthChar)).toBe(true);
     }
     expect(new Set(ALL_TEAMS.map((team) => team.shortName)).size).toBe(ALL_TEAMS.length);
+  });
+});
+
+describe("teams: look and pinstripe", () => {
+  const looksOf = (team: Team): readonly PlayerLook[] => [...team.batters.map((batter) => batter.look), team.pitcher.look];
+  const allLooks: readonly PlayerLook[] = ALL_TEAMS.flatMap(looksOf);
+  const keyOf = (look: PlayerLook): string => [look.hair.style, look.hair.color, look.skin, look.build, look.eyes].join("/");
+
+  it("2 チーム × (打者 9 + 投手 1) = 20 人の look がある", () => {
+    expect(allLooks).toHaveLength(20);
+  });
+
+  it("20 人全員で (髪型, 髪色, 肌, 体格, 目の形) の組が異なる", () => {
+    expect(new Set(allLooks.map(keyOf)).size).toBe(allLooks.length);
+  });
+
+  it("背番号は 0〜99 の整数で、チーム内で一意", () => {
+    for (const team of ALL_TEAMS) {
+      const numbers = looksOf(team).map((look) => look.number);
+      expect(new Set(numbers).size).toBe(numbers.length);
+      expect(numbers.every((value) => Number.isInteger(value) && value >= 0 && value <= 99)).toBe(true);
+    }
+  });
+
+  it("肌・髪色は 0〜4 のパレット番号", () => {
+    expect(allLooks.every((look) => [0, 1, 2, 3, 4].includes(look.skin) && [0, 1, 2, 3, 4].includes(look.hair.color))).toBe(true);
+  });
+
+  it("髪型 6 種・体格 3 種・目 4 種・眉 3 種・口 3 種・構え 3 種がすべて使われ、投手のフォームも複数ある", () => {
+    const used = <T>(pick: (look: PlayerLook) => T): number => new Set(allLooks.map(pick)).size;
+    expect(used((look) => look.hair.style)).toBe(6);
+    expect(used((look) => look.build)).toBe(3);
+    expect(used((look) => look.eyes)).toBe(4);
+    expect(used((look) => look.brow)).toBe(3);
+    expect(used((look) => look.restMouth)).toBe(3);
+    expect(used((look) => look.batStance)).toBe(3);
+    expect(new Set(ALL_TEAMS.map((team) => team.pitcher.look.pitchForm)).size).toBe(2);
+  });
+
+  it("ピンストライプは 2 チームで一方だけ", () => {
+    expect(ALL_TEAMS.filter((team) => team.pinstripe)).toHaveLength(1);
   });
 });
 

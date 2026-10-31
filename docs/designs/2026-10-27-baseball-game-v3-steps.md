@@ -149,7 +149,7 @@
   - 依存: E0(`render/character/parts.ts`)。担当ファイル: 新規 `render/character/{index,geometry-merge,skeleton,head,hair,headwear,torso,limbs,gear,outline,lod}.ts`(+test)、削除 `render/character.ts`(置換)。
   - やること: 頭・髪 6 種・ヘルメット(打者。投手側の左耳のフラップ)/帽子・胴・腕・脚・バットを、**自前の `mergeGeometries`(`skinIndex`・`skinWeight` を保持)で 1 つの `BufferGeometry` に統合**し(頂点カラー。各頂点を 12(打者 13)本のボーンのいずれか 1 本に剛体として割り当てる)、`Skeleton` + `Bone` で `SkinnedMesh` 1 つにする。輪郭は法線方向に押し出した複製の `SkinnedMesh`(同じ `Skeleton` を共有・`BackSide`)。顔と背番号は通常の `Mesh`。`createCharacterParts(look, lod)`・`dispose()`・`setWipeLayer`。体格。LOD: 近景(体+輪郭+顔+背番号)・遠景(体+顔)。`BufferGeometryUtils` を使わない。**character 分冊 §3-4-10 の `SkinnedMesh` の確認事項 1〜6 を r186 で確認し、結果を完了報告に書く**。
   - 完了条件: 単体テスト(smoke)— 近景 1 体 = 体 1 + 輪郭 1 + 顔 1 + 背番号 1 = 4(影を除く)、遠景 = 2、三角形 近景 ≤ 4000(輪郭込み ≤ 6000)・遠景 ≤ 1200、体格 3 種で幅の比が 0.9:1.0:1.15、ボーン数 12(打者 13)、体と輪郭が同じ `Skeleton` を共有、破棄でリークなし、`BufferGeometryUtils` を import していない。`SkinnedMesh` で致命的な問題が出て回避できない場合は実装せずに上申する。
-- [ ] **E6: render — 顔・ユニフォーム・表情の適用・ボーンへのポーズ**
+- [x] **E6: render — 顔・ユニフォーム・表情の適用・ボーンへのポーズ**
   - 依存: E0(`CharacterParts` 契約)。E5 の実装を待たない。担当ファイル: 新規 `render/{character-look,textures}.ts`、`render/pose-apply.ts`(+test)。
   - やること: `applyLook(parts, data)`(`DataTexture` を作り、顔アトラス・背番号・縞を貼る。**`LinearFilter`・`LinearMipmapLinearFilter`・`generateMipmaps = true`**。キャッシュと破棄)、`applyExpression(parts, expression)`(**`offset` の UV 切替だけ**)、色の反映、`pose-apply.ts` に**ボーン**への回転の適用(肘・膝を含む。`CharacterPose.scale`)。
   - 完了条件: 単体テスト — 表情の切替で `texture.offset` だけが変わり `needsUpdate` が立たない、`applyLook` の再呼び出しで古いテクスチャが破棄される、顔のテクスチャが Linear+mipmap、肘・膝のボーンの回転が反映される、`CharacterPose.scale` が root に反映される、`document`・`window` を使わない。
