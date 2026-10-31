@@ -52,7 +52,7 @@ const buffers = (atlas: FaceAtlas) => ({ width: atlas.width, height: atlas.heigh
 const EXPECTED_ATLAS_HASH = 3493521304;
 
 describe("rasterAtlas: 大きさと決定論", () => {
-  it("セルの並びが WORLD_PARAMS.character.face.order と一致し、FACE_PATCH の添字規則(列 = 添字 % 4・行 = 添字 ÷ 4)に従う", () => {
+  it("セルの並びが WORLD_PARAMS.character.face.order と一致し、セル数(列×行)と合う", () => {
     expect([...FACE_EXPRESSION_ORDER]).toEqual([...FACE.order]);
     expect(FACE.columns * FACE.rows).toBe(FACE_EXPRESSION_ORDER.length);
   });
