@@ -3,14 +3,17 @@ import { scaleRadiiForPitch } from "../model/batting/contact";
 import { sceneFrameAt, type SceneFrameInput } from "../model/world/sequence/frame";
 import { planPlay, type PlayPlan } from "../model/world/sequence/play-plan";
 import { isPlayFinished, phaseOf, planSwingOf, windupProgress, type SwingRecord } from "../model/world/sequence/session";
+import { contactQualityOf } from "../model/world/sequence/contact-quality";
+import { zoneFeedbackOfSwing } from "../model/world/sequence/contact-feedback";
 import { telopAt } from "../model/world/sequence/telop";
 import { timingAt } from "../model/world/sequence/timing-cue";
-import type { TimingCue } from "../types/batting";
+import type { ContactQuality, TimingCue } from "../types/batting";
+import type { ZonePoint } from "../types/common";
 import type { PlaybackSpeed } from "../types/game";
 import type { CourseCell, PitchFlight } from "../types/pitch";
 import type { SafeArea, SceneLayout, ScenePhase, UniformColors } from "../types/scene";
-import type { StageHandle } from "../types/stage";
-import type { GameView, PitchOutcomeView } from "../types/view";
+import type { ScreenRect, StageHandle } from "../types/stage";
+import type { GameView, PitchOutcomeView, ZoneFeedbackView } from "../types/view";
 import { useAnimationFrame, type FrameResult } from "./useAnimationFrame";
 import type { CursorView } from "./useBattingControls";
 import { useLatest } from "./useLatest";
@@ -22,8 +25,13 @@ type UseStageDirectorOptions = {
   readonly view: GameView;
   /** 3D ステージ。`null`(生成前・WebGL 不可・破棄後)でも演出の進行は止まらない(`apply` だけを省く)。 */
   readonly stage: StageHandle | null;
-  /** 演出中(`isHolding`)。`useGameStage` が `finishedSeq` から導出して渡す。director は `finishedSeq` を持たない。 */
+  /** 演出中(`isHolding`)。`useGameStage` が `finishedSeq` から導出して渡す。director は `finishedSeq` を持たない。スキップの可否だけに使う。 */
   readonly holding: boolean;
+  /**
+   * 次の投球・windup を始めない(`holding` に、説明のカード・試遊ログ画面の表示中を足したもの)。スキップの可否には使わない
+   * (カード表示中の入力がスキップ扱いにならない・Space/Enter がスキップに消費されないよう、`holding` とは別のフラグにする)。
+   */
+  readonly paused: boolean;
   /** 演出の終了(`plan.endMs` 到達)またはスキップで呼ぶ。`finishedSeq` を更新して `holding` を解除する。 */
   readonly onFinished: (seq: number) => void;
   /** `usePitchFlight` の `getElapsedMs`。演出の時計(リリースからの経過ゲーム時間)。 */
@@ -32,8 +40,10 @@ type UseStageDirectorOptions = {
   readonly getAspect: () => number;
   /** `useSafeArea` の `getSafeArea`。空き領域の実測値(測れなければ `null` = model が既定値を使う)。毎フレーム読んで `SceneFrameInput.safeArea` に渡す。 */
   readonly getSafeArea: () => SafeArea | null;
-  /** スイングカーソルの位置と半径の getter(安定した関数)。`useBattingControls` との循環を避けるため ref 経由で受ける。 */
+  /** スイングカーソルの位置(有効カーソルと素のカーソル)と半径の getter(安定した関数)。`useBattingControls` との循環を避けるため ref 経由で受ける。 */
   readonly getCursorView: () => CursorView;
+  /** 打撃カメラでのゾーン枠の画面矩形(`useStage3d` の `getZoneRect`)。位置ずれ表示の輪の半径(px → ゾーン単位)の換算に使う。 */
+  readonly getZoneRect: () => ScreenRect | null;
   /** 人間のスイング記録(`useGameStage` が `onSwing` で書き込む)。plan 作成時に読み、作成後に `null` へ戻す。 */
   readonly swingRecordRef: RefObject<SwingRecord | null>;
   /** 人間守備のとき選択中のセル。`null` なら5×5の格子も狙いのハイライトも出さない。 */
@@ -61,6 +71,10 @@ export type StageDirector = {
   readonly lastTiming: TimingCue | null;
   /** 捨てたスイングの回数(`data-swing-dropped` ミラー用。開発・E2E の観測用)。人間のスイングが入力されたのに、到達通知が先に処理されて見逃しが確定していた回数。 */
   readonly droppedSwings: number;
+  /** タイミングのピルの 2 行目(接触の質)。人間がスイングした球の演出中だけ非 `null`。 */
+  readonly contactQuality: ContactQuality | null;
+  /** スイング後の位置ずれ表示(判定に使った有効カーソルと着弾点。`zoneFeedback.swingMs` の間だけ)。なければ `null`。 */
+  readonly zoneFeedback: ZoneFeedbackView | null;
   /** 人間守備: windup を始め、`cpuWaitMs` 後に `onRelease()`(投球の dispatch)を呼ぶ。投げられない状況では何もしない。 */
   readonly startThrow: (onRelease: () => void) => void;
   /** 演出のスキップ。`holding` 中だけ有効で、表示だけを飛ばす(reducer・`GameState` に触れない。冪等)。 */
@@ -77,6 +91,8 @@ type Session = {
   windupStartedAtMs: number | null;
   /** 捨てたスイングの回数(`planSwingOf` の `dropped`。この director が生きている間の累計)。 */
   droppedSwings: number;
+  /** 演出中の人間のスイングの有効カーソル(位置ずれ表示の十字)。スイングがなければ `null`。plan と一緒に破棄する。 */
+  swingCursor: ZonePoint | null;
 };
 
 /** 再描画を伴う表示用の state(DOM の `data-*` ミラー、テロップ、「投げる」の可否に使う)。 */
@@ -89,6 +105,8 @@ type Shown = {
   readonly timingCue: TimingCue | null;
   readonly lastTiming: TimingCue | null;
   readonly droppedSwings: number;
+  readonly contactQuality: ContactQuality | null;
+  readonly zoneFeedback: ZoneFeedbackView | null;
 };
 
 type PatchShown = (change: Partial<Shown>) => void;
@@ -102,11 +120,35 @@ const INITIAL_SHOWN: Shown = {
   timingCue: null,
   lastTiming: null,
   droppedSwings: 0,
+  contactQuality: null,
+  zoneFeedback: null,
 };
 
 /** タイミング表示の同値判定。`timingAt` は毎フレーム新しいオブジェクトを返すので、参照ではなく値で比べる(再描画を増やさない)。 */
 function sameCue(a: TimingCue | null, b: TimingCue | null): boolean {
   return a === b || (a !== null && b !== null && a.label === b.label && a.dtMs === b.dtMs);
+}
+
+/** 位置ずれ表示の不透明度がこれ未満の差なら、同じ表示とみなす(毎フレームの再描画を、約 45ms に 1 回に抑える)。 */
+const FEEDBACK_ALPHA_STEP = 0.05;
+
+function samePoint(a: ZonePoint, b: ZonePoint): boolean {
+  return a.x === b.x && a.y === b.y;
+}
+
+/** 位置ずれ表示の同値判定。位置・半径・ラベルが同じで、不透明度の差が `FEEDBACK_ALPHA_STEP` 未満なら同じ。 */
+function sameFeedback(a: ZoneFeedbackView | null, b: ZoneFeedbackView | null): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
+  return (
+    a.tone === b.tone &&
+    a.label === b.label &&
+    a.ringRadiusZone === b.ringRadiusZone &&
+    samePoint(a.from, b.from) &&
+    samePoint(a.to, b.to) &&
+    Math.abs(a.alpha - b.alpha) < FEEDBACK_ALPHA_STEP
+  );
 }
 
 function sameShown(a: Shown, b: Shown): boolean {
@@ -118,7 +160,9 @@ function sameShown(a: Shown, b: Shown): boolean {
     a.lastFlight === b.lastFlight &&
     sameCue(a.timingCue, b.timingCue) &&
     sameCue(a.lastTiming, b.lastTiming) &&
-    a.droppedSwings === b.droppedSwings
+    a.droppedSwings === b.droppedSwings &&
+    a.contactQuality === b.contactQuality &&
+    sameFeedback(a.zoneFeedback, b.zoneFeedback)
   );
 }
 
@@ -186,15 +230,18 @@ function usePlanSession(
     const { swing, dropped } = planSwingOf(swingRecordRef.current, outcome);
     const plan = planPlay({ flight, outcome, swing, resolvedAtMs: getElapsedMs() });
     session.plan = plan;
+    session.swingCursor = swing === null ? null : swing.cursor;
     swingRecordRef.current = null;
     session.droppedSwings += dropped ? 1 : 0;
     patch({
       playKind: outcome.kind,
       lastTiming: plan.timing === null ? null : { label: plan.timing.label, dtMs: plan.timing.dtMs },
       droppedSwings: session.droppedSwings,
+      contactQuality: swing === null ? null : contactQualityOf(outcome),
     });
     return () => {
       session.plan = null;
+      session.swingCursor = null;
     };
   }, [outcomeSeq, latest, sessionRef, finishPlay, patch]);
 }
@@ -235,8 +282,8 @@ function useThrowStarter(latest: RefObject<UseStageDirectorOptions>, sessionRef:
 
   return useCallback(
     (onRelease: () => void): void => {
-      const { view, holding, speed } = latest.current;
-      if (timerRef.current !== null || !view.pitchReady || holding) {
+      const { view, paused, speed } = latest.current;
+      if (timerRef.current !== null || !view.pitchReady || paused) {
         return;
       }
       patch({ throwing: true });
@@ -256,12 +303,12 @@ export function layoutOf(aimCell: CourseCell | null): SceneLayout {
 }
 
 /**
- * 描画するスイングカーソル。投球(`session.flight`)があるあいだは、判定(`effectiveRadii`)と同じ球種の打ちにくさ補正(`cursorScale`)を半径に掛ける。
+ * 描画するスイングカーソル(`point` = 有効カーソル、`raw` = 素のカーソル)。投球(`session.flight`)があるあいだは、判定(`effectiveRadii`)と同じ球種の打ちにくさ補正(`cursorScale`)を半径に掛ける。
  * 投球がない間(待機中など)は補正なしの半径。
  */
 function cursorOf(options: UseStageDirectorOptions, session: Session): SceneFrameInput["cursor"] {
-  const { point, radii } = options.getCursorView();
-  return { visible: options.cursorVisible, point, radii: session.flight === null ? radii : scaleRadiiForPitch(radii, session.flight.kind) };
+  const { point, raw, radii } = options.getCursorView();
+  return { visible: options.cursorVisible, point, raw, radii: session.flight === null ? radii : scaleRadiiForPitch(radii, session.flight.kind) };
 }
 
 /** 時刻 `tMs` の `sceneFrameAt` の入力を組み立てる。`play` 中も session に保持した `flight` を渡す(接触前の投球を描くため)。 */
@@ -278,9 +325,27 @@ function frameInputOf(options: UseStageDirectorOptions, session: Session, phase:
     safeArea: options.getSafeArea(),
     uniforms: options.uniforms,
     cursor: cursorOf(options, session),
-    aim: options.aimCell,
+    assist: options.view.assist,
     grid: options.aimCell !== null,
   };
+}
+
+/**
+ * スイング後の位置ずれ表示。人間のスイングがある演出中(`plan.timing` あり)だけ、スイングの開始(= タイミング表示の開始)からの経過で `zoneFeedbackOfSwing` を引く。
+ * 十字 = 判定に使った有効カーソル(スイング時の値)、輪 = 着弾点。表示区間の外・スイングなしは `null`。
+ */
+function feedbackOf(options: UseStageDirectorOptions, session: Session, tMs: number): ZoneFeedbackView | null {
+  const { plan, flight, swingCursor } = session;
+  if (plan === null || plan.timing === null || flight === null || swingCursor === null) {
+    return null;
+  }
+  const zoneRect = options.getZoneRect();
+  return zoneFeedbackOfSwing({
+    effectiveCursor: swingCursor,
+    landing: flight.landing,
+    sinceMs: tMs - plan.timing.startMs,
+    zoneWidthPx: zoneRect === null ? Number.NaN : zoneRect.width,
+  });
 }
 
 /**
@@ -306,6 +371,7 @@ function useDirectorLoop(
       phase,
       telop: session.plan === null ? null : telopAt(session.plan, tMs),
       timingCue: session.plan === null ? null : timingAt(session.plan, tMs),
+      zoneFeedback: feedbackOf(options, session, tMs),
     });
     return "continue";
   }, "stage");
@@ -319,15 +385,16 @@ function useDirectorLoop(
 export function useStageDirector(options: UseStageDirectorOptions): StageDirector {
   const [shown, patch] = useShown();
   const latest = useLatest(options);
-  const sessionRef = useRef<Session>({ flight: null, plan: null, windupStartedAtMs: null, droppedSwings: 0 });
-  const { view, holding } = options;
+  const sessionRef = useRef<Session>({ flight: null, plan: null, windupStartedAtMs: null, droppedSwings: 0, swingCursor: null });
+  const { view, paused } = options;
 
   // 演出を終える(終了判定・スキップ・想定外の共通処理)。plan・flight・テロップを破棄して idle に戻し、`finishedSeq` の更新を依頼する。
   const finishPlay = useCallback(
     (seq: number): void => {
       sessionRef.current.plan = null;
       sessionRef.current.flight = null;
-      patch({ telop: null, playKind: null, phase: "idle", timingCue: null });
+      sessionRef.current.swingCursor = null;
+      patch({ telop: null, playKind: null, phase: "idle", timingCue: null, contactQuality: null, zoneFeedback: null });
       latest.current.onFinished(seq);
     },
     [latest, patch],
@@ -343,7 +410,7 @@ export function useStageDirector(options: UseStageDirectorOptions): StageDirecto
 
   useFlightSession(sessionRef, view.flight, patch);
   usePlanSession(latest, sessionRef, finishPlay, patch, view.outcome === null ? null : view.outcome.seq);
-  useCpuWindup(sessionRef, view.cpuPitchPending && !holding, view.turnKey);
+  useCpuWindup(sessionRef, view.cpuPitchPending && !paused, view.turnKey);
   const startThrow = useThrowStarter(latest, sessionRef, patch);
   useDirectorLoop(latest, sessionRef, finishPlay, patch);
 

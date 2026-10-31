@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { useGame } from "../hooks/useGame";
-import { useGameStage } from "../hooks/useGameStage";
+import { useGameStage, type PitchSelection } from "../hooks/useGameStage";
+import type { PlaytestLogApi } from "../hooks/usePlaytestLog";
+import type { PreferencesApi } from "../hooks/usePreferences";
 import type { Side } from "../types/common";
 import type { GameConfig, PlaybackSpeed } from "../types/game";
-import type { CourseCell, PitchCommand, PitchKind } from "../types/pitch";
+import type { CourseCell, PitchKind } from "../types/pitch";
 import type { GameView, ScoreRowView } from "../types/view";
 import { toCssColor } from "./css-color";
 import { GameLayout } from "./GameLayout";
 import { ResultScreen, type ResultTeam, type ResultTeams } from "./ResultScreen";
+import { Tutorial } from "./Tutorial";
 
 // 投球の初期選択はストレート+中央(2,2)。選択は投球後も保持する。
-const INITIAL_SELECTION: PitchCommand = { kind: "straight", cell: { col: 2, row: 2 } };
+const INITIAL_SELECTION: PitchSelection = { kind: "straight", cell: { col: 2, row: 2 } };
 
 /** 得点欄の1行(略称・正式名)とチーム色(24bit RGB)から、結果画面に出す1チーム分を作る。 */
 function resultTeamOf(row: ScoreRowView | undefined, rgb: number): ResultTeam {
@@ -29,17 +32,23 @@ type GameScreenProps = {
   readonly speed: PlaybackSpeed;
   readonly onRestart: () => void;
   readonly onBackToTitle: () => void;
+  /** 設定と説明の既読(ページ全体で 1 つ。`BaseballGamePage` が持つ)。 */
+  readonly prefs: PreferencesApi;
+  /** 試遊ログ(ページ全体で 1 つ)。 */
+  readonly log: PlaytestLogApi;
+  /** 試遊ログ画面を開いている間は真(次の投球と入力を止める)。 */
+  readonly paused: boolean;
 };
 
 /**
- * 1試合分の画面。`useGame`(試合の状態)と `useGameStage`(3D ステージ・演出・入力・CPU の手番)を結線し、人間守備時の投球の選択状態 `{ kind, cell }` を持つ。
+ * 1試合分の画面。`useGame`(試合の状態)と `useGameStage`(3D ステージ・演出・入力・CPU の手番・説明・試遊ログ)を結線し、人間守備時の投球の選択状態 `{ kind, cell }` を持つ。
  * 試合が終わると `view.result` があるが、`ResultScreen` は最後の演出が終わってから重ねる(「もう一度」は親が `key` を変えて再マウントする)。
  * `stage.view` は演出が終わるまで更新されない表示用の view。操作の可否は `stage.pitchReady`・`stage.swingReady` を使う。
  */
-export function GameScreen({ config, seed, speed, onRestart, onBackToTitle }: GameScreenProps) {
+export function GameScreen({ config, seed, speed, onRestart, onBackToTitle, prefs, log, paused }: GameScreenProps) {
   const game = useGame(config, seed);
-  const [selection, setSelection] = useState<PitchCommand>(INITIAL_SELECTION);
-  const stage = useGameStage({ game, speed, selection });
+  const [selection, setSelection] = useState<PitchSelection>(INITIAL_SELECTION);
+  const stage = useGameStage({ game, speed, selection, prefs, log, externalPause: paused });
   const { view, holding } = stage;
 
   const selectKind = (kind: PitchKind): void => setSelection((current) => ({ ...current, kind }));
@@ -59,6 +68,8 @@ export function GameScreen({ config, seed, speed, onRestart, onBackToTitle }: Ga
         onSelectSwingKind={stage.setSwingKind}
         onSwing={stage.swingNow}
         stageProps={stage.stageProps}
+        contactQuality={stage.contactQuality}
+        tutorial={stage.tutorialSteps === null ? null : <Tutorial steps={stage.tutorialSteps} onFinish={stage.finishTutorial} />}
       />
       {view.result === null || holding ? null : (
         <ResultScreen result={view.result} teams={resultTeamsOf(view)} onRestart={onRestart} onBackToTitle={onBackToTitle} />

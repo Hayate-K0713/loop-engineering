@@ -115,7 +115,7 @@
 
 ### ウェーブ A-4
 
-- [ ] **A13: 統合 A と全体確認(打撃の骨格)**(直列)
+- [x] **A13: 統合 A と全体確認(打撃の骨格)**(直列)
   - 依存: A7〜A12。担当ファイル: `hooks/{useStageDirector,useGameStage,useGame,useStage3d}.ts`、`ui/{GameScreen,BaseballGamePage}.tsx`、残った型・lint エラーの解消に必要な最小限のファイル。
   - やること: director が新項目を毎フレーム渡し、有効カーソルを表示する。`zoneFeedback`・`tapHint` を props に渡す。`useGameStage` が `tutorialActive`・`usePreferences`・`usePlaytestLog`・`useFramePerf` を結線し、`stage.stats()` を起動時にログへ。`inputActive` を人間打撃中に付ける。**人間守備は旧格子 UI のまま**、`onThrow` が `{ kind, aim: セル中心, quality: "normal" }` を作って渡す。`skip()` は reducer に触れない・`stage === null` でも進行が止まらない。`cd sample-app && npm run typecheck && npm run lint && npm run test && npm run build` を通す。構造検査・knip レポートを確認。バンドルサイズを記録。**試遊ビルド**(`VITE_PLAYTEST=1`)を作り、1 試合が通ることを確認する。E2E は D2 で更新するので、ここでは手動確認だけ。
   - 完了条件: 上記がすべて成功(typecheck は全体で緑)。構造検査 1〜15 が pass。試遊ビルドの手順を完了報告にまとめる。

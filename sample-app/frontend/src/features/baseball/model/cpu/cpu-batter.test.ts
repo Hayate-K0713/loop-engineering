@@ -26,7 +26,7 @@ function batterWith(power: number): BatterProfile {
 /** 球種ごとの球速から飛行時間を求めた投球(CPU 打者の判断に必要な項目のみ)。 */
 function flightOf(kind: PitchKind, landing: ZonePoint): PitchFlight {
   const speedKmh = PITCHER.speedKmh + getPitchSpec(kind).speedOffsetKmh;
-  return { seq: 1, kind, aim: landing, landing, speedKmh, durationMs: Math.round(PITCH_PARAMS.flightMsKmh / speedKmh) };
+  return { seq: 1, kind, aim: landing, landing, speedKmh, durationMs: Math.round(PITCH_PARAMS.flightMsKmh / speedKmh), quality: "normal" };
 }
 
 function inputWith(overrides: Partial<DecideCpuBatInput> = {}): DecideCpuBatInput {

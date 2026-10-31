@@ -1,9 +1,12 @@
 import { lazy, Suspense, useState } from "react";
 import { createRandomSeed } from "../hooks/random-seed";
 import { useLaunchParams } from "../hooks/useLaunchParams";
+import { usePlaytestLog } from "../hooks/usePlaytestLog";
+import { usePreferences } from "../hooks/usePreferences";
 import type { GameConfig, Innings } from "../types/game";
 import "./baseball.css";
 import "./baseball-stage.css";
+import { PlaytestEntry } from "./PlaytestEntry";
 import { TitleScreen } from "./TitleScreen";
 
 // three を含む試合画面は遅延ロードする(`/` とタイトル画面のバンドルに three を入れない)。
@@ -31,10 +34,15 @@ const INITIAL_PAGE: PageState = { runCount: 0, run: null };
  * `?seed=`(開発ビルドのみ)は最初の1試合にのみ適用し、2試合目以降は乱数シードを新しく作る。
  * 画面は全面(`bb-page`)で、ヘッダは持たない。見出し(`h1`)は視覚的に隠し、ホームへの戻りは右上の小さなピルにする。
  * ピルは DOM の最後に置く(タイトル画面の本体 `.bb-title__body` と同じ z-index 1 なので、後ろに置いてタイトルの上で押せるようにする)。
+ * 設定・説明の既読(`usePreferences`)と試遊ログ(`usePlaytestLog`)はここで 1 つだけ持ち、試合画面へ渡す(「もう一度」で試合画面を作り直しても、
+ * 記録とメモリ上の既読が消えない)。試遊ログの入口(`PlaytestEntry`)は試遊/開発ビルドだけ出る。
  */
 export function BaseballGamePage() {
   const launch = useLaunchParams();
   const [page, setPage] = useState<PageState>(INITIAL_PAGE);
+  const [playtestOpen, setPlaytestOpen] = useState(false);
+  const prefs = usePreferences();
+  const log = usePlaytestLog();
   const { run } = page;
 
   const startRun = (config: GameConfig): void => {
@@ -57,9 +65,13 @@ export function BaseballGamePage() {
             speed={launch.speed}
             onRestart={() => startRun(run.config)}
             onBackToTitle={backToTitle}
+            prefs={prefs}
+            log={log}
+            paused={playtestOpen}
           />
         </Suspense>
       )}
+      <PlaytestEntry log={log} open={playtestOpen} onOpen={() => setPlaytestOpen(true)} onClose={() => setPlaytestOpen(false)} />
       <a className="bb-home-link" href="#/" data-testid="back-home">
         ホームへ戻る
       </a>

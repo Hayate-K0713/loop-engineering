@@ -1,7 +1,7 @@
 import type { PointerEventHandler, ReactNode } from "react";
-import type { GameStageViewProps } from "../hooks/useGameStage";
+import type { GameStageViewProps, PitchSelection } from "../hooks/useGameStage";
 import type { ContactQuality, SwingKind } from "../types/batting";
-import type { CourseCell, PitchCommand, PitchKind } from "../types/pitch";
+import type { CourseCell, PitchKind } from "../types/pitch";
 import type { GameView } from "../types/view";
 import { CourseGrid } from "./CourseGrid";
 import { NamePlates } from "./NamePlates";
@@ -20,7 +20,7 @@ type ActionBarProps = {
   /** `SwingControls` の `ready`(最新の view に基づく。`holding` 中は偽)。 */
   readonly swingReady: boolean;
   /** 投球の選択状態(`GameScreen` が持つ)。 */
-  readonly selection: PitchCommand;
+  readonly selection: PitchSelection;
   readonly onSelectKind: (kind: PitchKind) => void;
   readonly onSelectCell: (cell: CourseCell) => void;
   readonly onThrow: () => void;

@@ -117,3 +117,48 @@
   font-weight: 700;
   line-height: 1.5;
 }
+
+/* ---- 入口(ページの最上段。タイトル・試合・結果のどこからでも開ける)。ページ内の最前面(結果画面 z-index 10 より上)に置く ---- */
+
+.bb-playtest-host {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* 上段の中央(左の HUD と右の「ホームへ戻る」の間)。見た目は小さく、タップ領域は擬似要素で広げる */
+.bb-playtest-entry {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  left: calc(50% + 6px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 48px;
+  padding: 0 10px;
+  border: 2px solid var(--bs-ink, #20140a);
+  border-radius: 999px;
+  background: var(--bs-panel, rgba(8, 20, 34, 0.78));
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+  color: var(--bs-muted, #a3b8ca);
+  font-family: var(--bs-font, system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: auto;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.bb-playtest-entry::before {
+  content: "";
+  position: absolute;
+  inset: -8px -6px;
+}
+
+.bb-playtest-entry:focus-visible {
+  outline: 3px solid var(--bs-accent, #ffd23f);
+  outline-offset: 2px;
+}
