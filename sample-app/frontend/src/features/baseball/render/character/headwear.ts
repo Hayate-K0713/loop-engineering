@@ -10,8 +10,8 @@ const FRONT_HALF = [-HALF, Math.PI] as const;
 
 function cap(ctx: PartContext): SkinPart[] {
   const { colors, detail } = ctx;
-  const dome = ellipsoid([0.485, 0.42, 0.495], anchor(ctx, "head", [0, 0.1, 0]), detail.dome, { theta: [0, HALF], rotation: [-0.08, 0, 0] });
-  const brim = tube({ top: 0.34, bottom: 0.34 }, 0.035, anchor(ctx, "head", [0, 0.1, 0.34]), detail.radial + 2, {
+  const dome = ellipsoid([0.485, 0.42, 0.495], anchor(ctx, "head", [0, 0.12, 0]), detail.dome, { theta: [0, HALF], rotation: [-0.08, 0, 0] });
+  const brim = tube({ top: 0.34, bottom: 0.34 }, 0.035, anchor(ctx, "head", [0, 0.12, 0.34]), detail.radial + 2, {
     depth: 0.85,
     rotation: [0.15, 0, 0],
     theta: FRONT_HALF,
@@ -21,8 +21,8 @@ function cap(ctx: PartContext): SkinPart[] {
     { geometry: brim, joint: "head", color: colors.cap, shade: [0.85, 0.85] },
   ];
   if (detail.near) {
-    const logo = ellipsoid([0.085, 0.085, 0.018], anchor(ctx, "head", [0, 0.28, 0.455]), detail.small, { rotation: [-0.5, 0, 0] });
-    const button = ellipsoid([0.04, 0.03, 0.04], anchor(ctx, "head", [0, 0.52, 0]), [6, 4]);
+    const logo = ellipsoid([0.085, 0.085, 0.018], anchor(ctx, "head", [0, 0.3, 0.455]), detail.small, { rotation: [-0.5, 0, 0] });
+    const button = ellipsoid([0.04, 0.03, 0.04], anchor(ctx, "head", [0, 0.54, 0]), [6, 4]);
     parts.push({ geometry: logo, joint: "head", color: colors.accent }, { geometry: button, joint: "head", color: colors.accent });
   }
   return parts;

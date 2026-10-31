@@ -145,7 +145,7 @@
   - 依存: E0。担当ファイル: 新規 `model/character/raster/{face,number,fabric,primitives}.ts`(+test)。
   - やること: SDF のプリミティブで、96×96 のセル 8 表情の顔アトラス(384×192 RGBA)を `PlayerLook` から生成。**各セルの外周 4px は肌色で塗る**。0〜99 の背番号(自前の 5×7 ビットマップ拡大)、ピンストライプの縞(64×64)。
   - 完了条件: 単体テスト — 8 表情のセルが互いに異なる画素を持つ、同じ入力で同じ出力(ハッシュ固定)、目の中心画素が不透明で期待位置にある、目の形 4 種が異なる、背番号 0〜99 が全て描ける、アトラスの大きさ 384×192×4、各セルの外周 4px が肌色。生成時間は参考値として出力するだけ(判定に使わない)。`document`・`window`・`three` を import しない。
-- [ ] **E5: render — キャラクターの造形(`SkinnedMesh`・メッシュ統合・LOD)**
+- [x] **E5: render — キャラクターの造形(`SkinnedMesh`・メッシュ統合・LOD)**
   - 依存: E0(`render/character/parts.ts`)。担当ファイル: 新規 `render/character/{index,geometry-merge,skeleton,head,hair,headwear,torso,limbs,gear,outline,lod}.ts`(+test)、削除 `render/character.ts`(置換)。
   - やること: 頭・髪 6 種・ヘルメット(打者。投手側の左耳のフラップ)/帽子・胴・腕・脚・バットを、**自前の `mergeGeometries`(`skinIndex`・`skinWeight` を保持)で 1 つの `BufferGeometry` に統合**し(頂点カラー。各頂点を 12(打者 13)本のボーンのいずれか 1 本に剛体として割り当てる)、`Skeleton` + `Bone` で `SkinnedMesh` 1 つにする。輪郭は法線方向に押し出した複製の `SkinnedMesh`(同じ `Skeleton` を共有・`BackSide`)。顔と背番号は通常の `Mesh`。`createCharacterParts(look, lod)`・`dispose()`・`setWipeLayer`。体格。LOD: 近景(体+輪郭+顔+背番号)・遠景(体+顔)。`BufferGeometryUtils` を使わない。**character 分冊 §3-4-10 の `SkinnedMesh` の確認事項 1〜6 を r186 で確認し、結果を完了報告に書く**。
   - 完了条件: 単体テスト(smoke)— 近景 1 体 = 体 1 + 輪郭 1 + 顔 1 + 背番号 1 = 4(影を除く)、遠景 = 2、三角形 近景 ≤ 4000(輪郭込み ≤ 6000)・遠景 ≤ 1200、体格 3 種で幅の比が 0.9:1.0:1.15、ボーン数 12(打者 13)、体と輪郭が同じ `Skeleton` を共有、破棄でリークなし、`BufferGeometryUtils` を import していない。`SkinnedMesh` で致命的な問題が出て回避できない場合は実装せずに上申する。

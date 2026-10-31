@@ -1,7 +1,19 @@
 // 剛体の部品(頭・髪・胴・腕・脚・バットなど)を 1 つの `BufferGeometry` に統合する。three の `BufferGeometryUtils` は使わない。
 // 各部品の頂点は 1 本のボーンだけに重み 1.0 で割り当てる(`skinIndex` = `JOINT_ORDER` の添字・`skinWeight` = (1, 0, 0, 0))。
 // 統合の後に `SkinnedMesh#bind(skeleton)` を呼ぶこと(部品の座標は「バインド姿勢の root 空間」で書く)。
-import { Box3, BufferGeometry, CylinderGeometry, Euler, Float32BufferAttribute, Matrix4, Quaternion, SphereGeometry, Uint16BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
+import {
+  Box3,
+  BufferGeometry,
+  CylinderGeometry,
+  Euler,
+  Float32BufferAttribute,
+  Matrix4,
+  Quaternion,
+  SphereGeometry,
+  Uint16BufferAttribute,
+  Uint32BufferAttribute,
+  Vector3,
+} from "three";
 import type { CharacterJoint } from "../../types/scene";
 import type { CharacterRig } from "../../types/stage";
 import type { Detail } from "./lod";
@@ -93,7 +105,13 @@ type TubeOptions = {
 };
 
 /** y 軸方向の円柱(上の半径・下の半径・高さ)。`at` = 中心。 */
-export function tube(radii: { readonly top: number; readonly bottom: number }, height: number, at: Triple, radial: number, options: TubeOptions = {}): BufferGeometry {
+export function tube(
+  radii: { readonly top: number; readonly bottom: number },
+  height: number,
+  at: Triple,
+  radial: number,
+  options: TubeOptions = {},
+): BufferGeometry {
   const [thetaStart, thetaLength] = options.theta ?? [0, Math.PI * 2];
   const cylinder = new CylinderGeometry(radii.top, radii.bottom, height, radial, 1, options.openEnded ?? false, thetaStart, thetaLength);
   return cylinder.applyMatrix4(compose(at, options.rotation ?? ZERO, [1, 1, options.depth ?? 1]));

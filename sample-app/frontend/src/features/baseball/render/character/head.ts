@@ -22,7 +22,8 @@ export function headParts(ctx: PartContext): SkinPart[] {
   const at = anchor(ctx, "head");
   const parts: SkinPart[] = [{ geometry: ellipsoid(HEAD_RADII, at, detail.head), joint: "head", color: colors.skin, shade: HEAD_SHADE }];
   if (!detail.near) return parts;
-  parts.push({ geometry: ellipsoid([0.2, 0.13, 0.18], anchor(ctx, "head", [0, -0.29, 0.16]), detail.small), joint: "head", color: colors.skin });
+  // あごは顔のパッチ(垂直 −35° まで)の内側に収め、パッチの下に少しだけはみ出させる(パッチと同じ面で z ファイティングしないように)。
+  parts.push({ geometry: ellipsoid([0.17, 0.11, 0.14], anchor(ctx, "head", [0, -0.34, 0.1]), detail.small), joint: "head", color: colors.skin });
   for (const side of [1, -1]) {
     const geometry = ellipsoid([0.055, 0.09, 0.07], anchor(ctx, "head", [side * 0.455, -0.03, -0.03]), detail.small);
     parts.push({ geometry, joint: "head", color: colors.skin, shade: [0.9, 0.9] });

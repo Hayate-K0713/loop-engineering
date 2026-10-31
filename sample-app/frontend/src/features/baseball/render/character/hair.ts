@@ -4,6 +4,7 @@ import type { BufferGeometry } from "three";
 import type { HairStyle } from "../../types/team";
 import { anchor, ellipsoid } from "./geometry-merge";
 import type { PartContext, SkinPart, Triple } from "./geometry-merge";
+import type { Segments } from "./lod";
 import { HEAD_RADII } from "./head";
 
 const HAIR_SHADE: readonly [number, number] = [0.82, 1];
@@ -16,10 +17,10 @@ function degrees(value: number): number {
 }
 
 /** 頭の楕円体を `scale` 倍した殻。`elevation` = [上端, 下端](度。水平面から上が +)。 */
-function shell(ctx: PartContext, scale: number, elevation: readonly [number, number]): BufferGeometry {
+function shell(ctx: PartContext, scale: number, elevation: readonly [number, number], segments: Segments = ctx.detail.hair): BufferGeometry {
   const [top, bottom] = elevation;
   const radii: Triple = [HEAD_RADII[0] * scale, HEAD_RADII[1] * scale, HEAD_RADII[2] * scale];
-  return ellipsoid(radii, anchor(ctx, "head"), ctx.detail.hair, { phi: BACK_PHI, theta: [degrees(90 - top), degrees(top - bottom)] });
+  return ellipsoid(radii, anchor(ctx, "head"), segments, { phi: BACK_PHI, theta: [degrees(90 - top), degrees(top - bottom)] });
 }
 
 /** 頭のボーンの局所座標で置く飾りの楕円体。 */
@@ -37,23 +38,23 @@ function styleGeometries(ctx: PartContext, style: HairStyle): BufferGeometry[] {
   const near = ctx.detail.near;
   switch (style) {
     case "short":
-      return [shell(ctx, 1.03, [30, -32]), ...sideburns(ctx, 0.1)];
+      return [shell(ctx, 1.03, [30, -24]), ...sideburns(ctx, 0.1)];
     case "side":
-      return [shell(ctx, 1.03, [30, -30]), ...sideburns(ctx, 0.1).slice(0, 1), lump(ctx, [0.06, 0.16, 0.14], [-0.45, -0.15, 0.02])];
+      return [shell(ctx, 1.03, [30, -24]), ...sideburns(ctx, 0.1).slice(0, 1), lump(ctx, [0.06, 0.16, 0.14], [-0.45, -0.15, 0.02])];
     case "long":
       return [
-        shell(ctx, 1.035, [30, -52]),
-        ellipsoid([0.4, 0.46, 0.13], anchor(ctx, "head", [0, -0.3, -0.33]), near ? [8, 3] : [4, 2]),
+        shell(ctx, 1.035, [30, -45], near ? [10, 3] : ctx.detail.hair),
+        ellipsoid([0.36, 0.42, 0.15], anchor(ctx, "head", [0, -0.32, -0.33]), near ? [8, 4] : [4, 2]),
       ];
     case "round":
-      return [shell(ctx, 1.1, [30, -18]), ...(near ? [1, -1].map((side) => lump(ctx, [0.1, 0.1, 0.1], [side * 0.47, -0.02, -0.06])) : [])];
+      return [shell(ctx, 1.07, [12, -20]), ...(near ? [1, -1].map((side) => lump(ctx, [0.1, 0.1, 0.1], [side * 0.47, -0.02, -0.06])) : [])];
     case "buzz":
       return [shell(ctx, 1.012, [30, -12])];
     case "ponytail":
       return [
-        shell(ctx, 1.03, [30, -30]),
-        lump(ctx, [0.09, 0.2, 0.09], [0, -0.12, -0.5], [0.3, 0, 0]),
-        lump(ctx, [0.07, 0.07, 0.07], [0, 0.02, -0.45]),
+        shell(ctx, 1.03, [30, -24], near ? [10, 3] : ctx.detail.hair),
+        ellipsoid([0.12, 0.28, 0.12], anchor(ctx, "head", [0, -0.22, -0.52]), near ? [5, 4] : [4, 3], { rotation: [0.25, 0, 0] }),
+        lump(ctx, [0.07, 0.07, 0.07], [0, 0.0, -0.46]),
       ];
   }
 }
