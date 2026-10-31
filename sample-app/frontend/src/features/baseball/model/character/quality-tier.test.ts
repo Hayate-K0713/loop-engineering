@@ -72,7 +72,9 @@ describe("nextTier: 上限と自動で上げない", () => {
 
   it("どんな窓の列でもティアは単調非減少(速い窓が続いても上がらない)", () => {
     const windows: readonly TierFrameStats[] = [SLOW, SLOW, FAST, FAST, FAST, FAST, HEAVY, FAST, stats(5), stats(1)];
-    const tiers = windows.reduce<readonly TierState[]>((history, window) => [...history, nextTier(history.at(-1) ?? at(0), window)], [at(0)]).map((state) => state.tier);
+    const tiers = windows
+      .reduce<readonly TierState[]>((history, window) => [...history, nextTier(history.at(-1) ?? at(0), window)], [at(0)])
+      .map((state) => state.tier);
     expect(tiers.every((tier, index) => index === 0 || tier >= (tiers.at(index - 1) ?? 0))).toBe(true);
     expect(run(at(2), [FAST, FAST, FAST, FAST]).tier).toBe(2);
   });

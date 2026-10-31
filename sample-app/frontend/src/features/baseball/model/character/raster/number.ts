@@ -63,7 +63,7 @@ function numberShape(value: number, scale: number): { readonly sdf: Sdf; readonl
   const top = Math.floor((NUMBER_DECAL_HEIGHT - GLYPH_ROWS * scale) / 2);
   const boxes = digits.flatMap((digit, digitIndex) =>
     glyphCells(digit).map((cell) =>
-      boxDistance(left + ((digitIndex * (GLYPH_COLUMNS + 1) + cell.column) + 0.5) * scale, top + (cell.row + 0.5) * scale, scale / 2),
+      boxDistance(left + (digitIndex * (GLYPH_COLUMNS + 1) + cell.column + 0.5) * scale, top + (cell.row + 0.5) * scale, scale / 2),
     ),
   );
   const sdf: Sdf = (x, y) => {

@@ -22,7 +22,7 @@ export function rasterPinstripe(base: number, stripe: number): FabricTexture {
     const rowColor = mixColor(base, 0x000000, weave);
     for (let x = 0; x < FABRIC_SIZE; x += 1) {
       blendPixel(buffer, x, y, rowColor, 1);
-      const distance = Math.abs((x + 0.5) % STRIPE_PITCH - STRIPE_PITCH / 2);
+      const distance = Math.abs(((x + 0.5) % STRIPE_PITCH) - STRIPE_PITCH / 2);
       const coverage = Math.min(1, Math.max(0, 0.5 + 0.7 - distance));
       if (coverage > 0) blendPixel(buffer, x, y, stripe, coverage);
     }

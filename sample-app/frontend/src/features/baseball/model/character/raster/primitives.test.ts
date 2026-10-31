@@ -18,7 +18,6 @@ import {
   readPixel,
   rgbOf,
   roundBox,
-  stroke,
   translate,
   union,
 } from "./primitives";
@@ -56,13 +55,12 @@ describe("距離関数", () => {
     expect(arc(0, -10)).toBeGreaterThan(10);
   });
 
-  it("合成・変形(共通部分・和集合・広げる・縁・移動・半平面)", () => {
+  it("合成・変形(共通部分・和集合・広げる・移動・半平面)", () => {
     const a = circle(0, 0, 5);
     expect(intersect(a, halfPlane(0, -1, 0))(0, 3)).toBeLessThan(0);
     expect(intersect(a, halfPlane(0, -1, 0))(0, -3)).toBeGreaterThan(0);
     expect(union([a, circle(20, 0, 5)])(20, 0)).toBeCloseTo(-5, 6);
     expect(expand(a, 2)(7, 0)).toBeCloseTo(0, 6);
-    expect(stroke(a, 2)(5, 0)).toBeCloseTo(-1, 6);
     expect(translate(a, 10, 0)(10, 0)).toBeCloseTo(-5, 6);
   });
 
@@ -98,7 +96,7 @@ describe("画素バッファ", () => {
     expect(readPixel(buffer, 12, 8)).toEqual([0, 0, 0, 255]);
     const soft = createBuffer(16, 16, 0x000000, 255);
     paintSdf(soft, { offsetX: 0, offsetY: 0, clip: { x0: 0, y0: 0, x1: 16, y1: 16 } }, boundsAround(8, 8, 10), circle(8, 8, 4), 0xffffff);
-    const edge = readPixel(soft, 12, 8)[0];
+    const edge = readPixel(soft, 11, 8)[0];
     expect(edge).toBeGreaterThan(0);
     expect(edge).toBeLessThan(255);
   });

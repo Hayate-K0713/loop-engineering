@@ -149,7 +149,7 @@ export function halfPlane(nx: number, ny: number, offset: number): Sdf {
 
 /**
  * 円弧の線(太さなし)までの距離。中心 (cx, cy)・半径 r で、`mid` 方向(ラジアン。0 = +x、π/2 = +y = 下)を中心に両側へ `half` ずつ開く。
- * `half` ≤ π。太さは `stroke` で付ける。
+ * `half` ≤ π。太さは `expand` で付ける。
  */
 export function arcDistance(cx: number, cy: number, r: number, mid: number, half: number): Sdf {
   const endAx = cx + r * Math.cos(mid - half);
@@ -188,11 +188,6 @@ export function polygon(points: readonly (readonly [number, number])[]): Sdf {
   };
 }
 
-/** 輪郭(縁の線)だけにする。太さ `width`(画素)の帯。 */
-export function stroke(sdf: Sdf, width: number): Sdf {
-  return (x, y) => Math.abs(sdf(x, y)) - width / 2;
-}
-
 /** 距離を `amount` だけ外へ広げる(負なら縮める)。 */
 export function expand(sdf: Sdf, amount: number): Sdf {
   return (x, y) => sdf(x, y) - amount;
@@ -210,11 +205,6 @@ export function union(shapes: readonly Sdf[]): Sdf {
     for (const shape of shapes) best = Math.min(best, shape(x, y));
     return best;
   };
-}
-
-/** `a` から `b` を引いた形(`a` の内側で `b` の外側)。 */
-export function subtract(a: Sdf, b: Sdf): Sdf {
-  return (x, y) => Math.max(a(x, y), -b(x, y));
 }
 
 /** 座標系の変換の指定。`angle` = 局所の図形を画面上で時計回り(y 下向きで正)に回す角度(ラジアン)、`mirror` = そのあとで中心を軸に左右反転する。 */

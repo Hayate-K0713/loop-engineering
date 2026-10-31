@@ -137,7 +137,7 @@
 
 #### ウェーブ E-1(4 並列。E0 の後)
 
-- [ ] **E1: 見た目のデータ・表情のタイムライン・ティア・表示倍率の純関数**
+- [x] **E1: 見た目のデータ・表情のタイムライン・ティア・表示倍率の純関数**
   - 依存: E0。担当ファイル: `model/data/teams.ts`(+test)、新規 `model/character/{look,expression,quality-tier,framing-scale}.ts`(+test)。
   - やること: 20 人の `PlayerLook` を `teams.ts` に加算(判定・乱数に影響しない)。`look.ts`: 守備/走者のスロットへの割り当て。`expression.ts`: `expressionAt`。`quality-tier.ts`: `nextTier`(**2 秒窓・p95 > 28ms が 2 窓連続で 1 段下げる・p95 > 45ms またはフレームの 10% 以上が 50ms 超なら 2 段下げる・自動では上げない**)。`framing-scale.ts`: `framingScaleAt`。
   - 完了条件: 単体テスト — 20 人全員で (髪型, 髪色, 肌, 体格, 目) の組が異なり背番号がチーム内で一意、全スロットに look が割り当たる、全 `outcome.kind × inPlay.result × plate × 役割` で `expressionAt` が定義される、まばたきが決定論で周期 2.8 秒・120ms、`nextTier` が閾値・連続窓・**重い場合の 2 段降格**・上限(T3)・自動で上げないことを満たす、`framingScaleAt` が連続で `cameraBlend = 1` のとき全スロット 1.0・走者/野手/捕手は常に 1.0。

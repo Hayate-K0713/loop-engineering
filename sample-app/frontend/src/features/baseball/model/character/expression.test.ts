@@ -15,10 +15,34 @@ import {
 } from "./expression";
 import { CHARACTER_SLOTS } from "./look";
 
-const ALL_EXPRESSIONS: readonly FaceExpression[] = WORLD_PARAMS.character.face.order;
+const ALL_EXPRESSIONS: readonly FaceExpression[] = ["neutral", "focus", "effort", "shock", "joy", "cheer", "sad", "blink"];
 const KINDS: readonly ExpressionOutcome["kind"][] = ["ball", "called-strike", "swinging-strike", "foul", "in-play"];
-const IN_PLAY_RESULTS: readonly (InPlayResult | null)[] = [null, "groundout", "doublePlay", "flyout", "lineout", "single", "double", "triple", "homerun", "error"];
-const PLATES: readonly (PlateOutcome | null)[] = [null, "walk", "strikeout", "groundout", "doublePlay", "flyout", "lineout", "single", "double", "triple", "homerun", "error"];
+const IN_PLAY_RESULTS: readonly (InPlayResult | null)[] = [
+  null,
+  "groundout",
+  "doublePlay",
+  "flyout",
+  "lineout",
+  "single",
+  "double",
+  "triple",
+  "homerun",
+  "error",
+];
+const PLATES: readonly (PlateOutcome | null)[] = [
+  null,
+  "walk",
+  "strikeout",
+  "groundout",
+  "doublePlay",
+  "flyout",
+  "lineout",
+  "single",
+  "double",
+  "triple",
+  "homerun",
+  "error",
+];
 const PHASES: readonly ScenePhase[] = ["idle", "windup", "flight", "play"];
 const TIMES = [-500, 0, 100, 349, 351, 560, 699, 701, 1000, 1600, 1699, 1701, 5000];
 const BLINK_PERIOD = WORLD_PARAMS.character.face.blinkPeriodMs;
@@ -39,7 +63,12 @@ function sweepInputs(outcome: ExpressionOutcome | null, plan: ExpressionPlan | n
   return inputs;
 }
 
-const outcomeOf = (kind: ExpressionOutcome["kind"], result: InPlayResult | null, plate: PlateOutcome | null, runners: ExpressionOutcome["runners"] = null): ExpressionOutcome => ({
+const outcomeOf = (
+  kind: ExpressionOutcome["kind"],
+  result: InPlayResult | null,
+  plate: PlateOutcome | null,
+  runners: ExpressionOutcome["runners"] = null,
+): ExpressionOutcome => ({
   kind,
   inPlay: result === null ? null : { result },
   plate,
@@ -56,8 +85,14 @@ const PLAN_CONTACT: ExpressionPlan = {
 const PLAN_TAKE: ExpressionPlan = { durationMs: 700, swing: null, contactMs: null, fielder: null, telop: { startMs: 700 } };
 const PLAN_MISS: ExpressionPlan = { durationMs: 700, swing: { startMs: 560, contactAtMs: 700 }, contactMs: null, fielder: null, telop: { startMs: 700 } };
 
-const at = (role: ExpressionRole, slotName: CharacterSlot, plan: ExpressionPlan | null, outcome: ExpressionOutcome | null, tMs: number, phase: ScenePhase = "flight"): FaceExpression =>
-  expressionAt({ role, phase, plan, outcome, tMs, slotIndex: slotIndexOf(slotName) });
+const at = (
+  role: ExpressionRole,
+  slotName: CharacterSlot,
+  plan: ExpressionPlan | null,
+  outcome: ExpressionOutcome | null,
+  tMs: number,
+  phase: ScenePhase = "flight",
+): FaceExpression => expressionAt({ role, phase, plan, outcome, tMs, slotIndex: slotIndexOf(slotName) });
 
 /** まばたき(`blink`)を `neutral` に戻した結果(まばたきと独立に本体の表を検査するため)。 */
 const settled = (input: ExpressionInput): FaceExpression => {
@@ -66,7 +101,9 @@ const settled = (input: ExpressionInput): FaceExpression => {
 };
 
 describe("expressionAt: 全組み合わせで定義される", () => {
-  const outcomes: readonly ExpressionOutcome[] = KINDS.flatMap((kind) => IN_PLAY_RESULTS.flatMap((result) => PLATES.map((plate) => outcomeOf(kind, result, plate))));
+  const outcomes: readonly ExpressionOutcome[] = KINDS.flatMap((kind) =>
+    IN_PLAY_RESULTS.flatMap((result) => PLATES.map((plate) => outcomeOf(kind, result, plate))),
+  );
   const plans: readonly (ExpressionPlan | null)[] = [null, PLAN_CONTACT, PLAN_TAKE, PLAN_MISS];
 
   it("outcome.kind × inPlay.result × plate × スロット × phase × plan × 時刻のすべてで 8 表情のいずれかを返す", () => {
@@ -196,7 +233,12 @@ describe("expressionAt: 表(character 分冊 §3-4-7)", () => {
 });
 
 describe("blinkingAt: まばたき", () => {
-  const sample = (slotIndex: number, fromMs: number, toMs: number): readonly boolean[] => Array.from({ length: toMs - fromMs }, (_, index) => blinkingAt(fromMs + index, slotIndex));
+  const sample = (slotIndex: number, fromMs: number, toMs: number): readonly boolean[] =>
+    Array.from({ length: toMs - fromMs }, (_, index) => blinkingAt(fromMs + index, slotIndex));
+
+  it("表情の一覧は顔アトラスのセルの並び(WORLD_PARAMS.character.face.order)と同じ", () => {
+    expect([...WORLD_PARAMS.character.face.order]).toEqual([...ALL_EXPRESSIONS]);
+  });
 
   it("周期 2.8 秒・120ms(定数)", () => {
     expect(BLINK_PERIOD).toBe(2800);

@@ -29,6 +29,12 @@ import {
 
 const FACE = WORLD_PARAMS.character.face;
 
+/**
+ * セルの並び(行優先。`WORLD_PARAMS.character.face.order` と同じ。あちらは `string[]` 型なので、`FaceExpression` の型でここに持つ。
+ * 一致は `face.test.ts` が確かめる)。
+ */
+export const FACE_EXPRESSION_ORDER: readonly FaceExpression[] = ["neutral", "focus", "effort", "shock", "joy", "cheer", "sad", "blink"];
+
 /** 顔アトラスの大きさ(px)。 */
 export const FACE_ATLAS_WIDTH = FACE.cell * FACE.columns;
 export const FACE_ATLAS_HEIGHT = FACE.cell * FACE.rows;
@@ -226,7 +232,14 @@ function drawEye(ctx: Ctx, side: Side, shape: EyeShape, expression: FaceExpressi
 }
 
 function browThickness(shape: BrowShape): number {
-  return shape === "thick" ? 5 : shape === "angled" ? 3.6 : 2.8;
+  switch (shape) {
+    case "thick":
+      return 5;
+    case "angled":
+      return 3.6;
+    case "thin":
+      return 2.8;
+  }
 }
 
 function drawBrow(ctx: Ctx, side: Side, shape: BrowShape, expression: FaceExpression): void {
@@ -272,7 +285,14 @@ function drawSweat(ctx: Ctx, expression: FaceExpression): void {
   if (expression !== "shock" && expression !== "sad") return;
   const x = 83;
   const y = 36;
-  const drop = union([circle(x, y + 4, 3.6), polygon([[x, y - 6], [x - 3.3, y + 2.6], [x + 3.3, y + 2.6]])]);
+  const drop = union([
+    circle(x, y + 4, 3.6),
+    polygon([
+      [x, y - 6],
+      [x - 3.3, y + 2.6],
+      [x + 3.3, y + 2.6],
+    ]),
+  ]);
   const bounds = boundsAround(x, y, 12);
   paint(ctx, bounds, expand(drop, 1), SWEAT_EDGE);
   paint(ctx, bounds, drop, SWEAT_FILL);
@@ -378,7 +398,7 @@ function cellContext(buffer: PixelBuffer, index: number, skin: number): Ctx {
 export function rasterAtlas(look: PlayerLook): FaceAtlas {
   const skin = skinOf(look.skin);
   const buffer = createBuffer(FACE_ATLAS_WIDTH, FACE_ATLAS_HEIGHT, skin, 255);
-  FACE.order.forEach((expression, index) => {
+  FACE_EXPRESSION_ORDER.forEach((expression, index) => {
     drawFace(cellContext(buffer, index, skin), look, expression);
   });
   return { width: FACE_ATLAS_WIDTH, height: FACE_ATLAS_HEIGHT, cell: FACE.cell, rgba: buffer.data };
