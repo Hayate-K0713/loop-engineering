@@ -90,6 +90,20 @@ describe("StageView: ヒント", () => {
   });
 });
 
+describe("StageView: ワイプの縁取り(CutIn)", () => {
+  it("wipe が無い・visible でないときは縁取りを出さない", () => {
+    expect(render({})).not.toContain("cut-in");
+    expect(render({ wipe: { ...WIPE_ON, visible: false } })).not.toContain("cut-in");
+  });
+
+  it("wipe の矩形(model が決めた px)にそのまま重ねる。名前・補足は label と detail", () => {
+    const html = render({ wipe: WIPE_ON, cutInDetail: { number: 18, role: null } });
+    expect(html).toContain("left:290px;top:175px;width:94px;height:94px");
+    expect(html).toContain("1番 カイト");
+    expect(html).toContain("背番号 18");
+  });
+});
+
 describe("StageView: data-* ミラーと入力面", () => {
   it("予告の見せ方・投球入力の状態・投球の質・バナーを data-* に出す。値が無いものは属性を出さない", () => {
     const empty = render({});
@@ -105,6 +119,25 @@ describe("StageView: data-* ミラーと入力面", () => {
     expect(html).toContain('data-input-state="gauge"');
     expect(html).toContain('data-pitch-quality="nice"');
     expect(html).toContain('data-banner="just"');
+  });
+
+  it("品質ティアを data-quality-tier に出す", () => {
+    expect(render({})).toContain('data-quality-tier="0"');
+    expect(render({ qualityTier: 3 })).toContain('data-quality-tier="3"');
+  });
+
+  it("ワイプは区間内(visible)だけ data-wipe=on、それ以外は off", () => {
+    expect(render({})).toContain('data-wipe="off"');
+    expect(render({ wipe: { ...WIPE_ON, visible: false } })).toContain('data-wipe="off"');
+    expect(render({ wipe: WIPE_ON })).toContain('data-wipe="on"');
+  });
+
+  it("表情は渡されたスロットだけ data-expr-<スロット> に出す(渡さなければ属性を出さない)", () => {
+    expect(render({})).not.toContain("data-expr-");
+    const html = render({ expressions: { pitcher: "focus", batter: "joy" } });
+    expect(html).toContain('data-expr-pitcher="focus"');
+    expect(html).toContain('data-expr-batter="joy"');
+    expect(html).not.toContain("data-expr-catcher");
   });
 
   it("入力面は inputActive のとき --active を付ける(人間打撃中も守備中も同じ構造)", () => {
