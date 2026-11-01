@@ -2,17 +2,24 @@ import type { CSSProperties, MouseEvent } from "react";
 import type { GameStageViewProps } from "../hooks/useGameStage";
 import type { ContactQuality, TimingCue } from "../types/batting";
 import type { PitchFlight } from "../types/pitch";
+import type { CharacterSlot, FaceExpression } from "../types/scene";
 import type { ScreenRect, StageStatus } from "../types/stage";
 import type { FieldMarkerView } from "../types/view";
+import { CutIn, type CutInDetail } from "./CutIn";
 import { StageTelop } from "./StageTelop";
 
 /**
- * `StageView` の props。`GameStageViewProps`(A0 が凍結)に、タイミングのピルの 2 行目(接触の質)を足したもの。
- * `contactQuality` が `null` のときは、ピルは 1 行(v2 と同じ)。
+ * `StageView` の props。`GameStageViewProps`(A0・E0 が凍結)に、タイミングのピルの 2 行目(接触の質)と、
+ * 表示専用の任意の項目(表情の `data-expr-*` ミラー・ワイプの帯の補足)を足したもの。
+ * `contactQuality` が `null` のときは、ピルは 1 行(v2 と同じ)。任意の項目は省略すると何も出さない。
  */
 type StageViewProps = GameStageViewProps & {
   /** タイミングのピルの 2 行目(「芯」「ふつう」「かすり」「ミス」)。`timingCue` と同じ区間に出す。 */
   readonly contactQuality: ContactQuality | null;
+  /** 役割ごとの今の表情(`data-expr-pitcher`・`data-expr-batter` など、スロット名のミラー。E2E・手動確認用)。無いスロットは属性を出さない。 */
+  readonly expressions?: Readonly<Partial<Record<CharacterSlot, FaceExpression>>>;
+  /** ワイプの帯の補足(背番号・役割ラベル)。省略なら `wipe.label` の 1 行だけ。 */
+  readonly cutInDetail?: CutInDetail | null;
 };
 
 /** WebGL が使えない・描画が中断されたときの案内。`loading`/`ready` では出さない。 */
@@ -45,11 +52,28 @@ function zoneRectText(rect: ScreenRect | null): string | undefined {
   return rect === null ? undefined : `${rect.left},${rect.top},${rect.width},${rect.height}`;
 }
 
+/** 表情の `data-expr-<スロット>` ミラー。渡されたスロットだけ属性を出す。 */
+function expressionData(expressions: StageViewProps["expressions"]): Record<string, string> {
+  const data: Record<string, string> = {};
+  for (const [slot, expression] of Object.entries(expressions ?? {})) {
+    data[`data-expr-${slot}`] = expression;
+  }
+  return data;
+}
+
+/** ワイプが出ているか(`data-wipe`)。`on` = 区間内で表示中、`off` = 出していない(区間外・品質ティア 3 など)。 */
+function wipeState(wipe: StageViewProps["wipe"]): "on" | "off" {
+  return wipe !== null && wipe.visible ? "on" : "off";
+}
+
 /** ステージ全体の `data-*` ミラー(E2E・手動確認が読む。見た目には効かない)。値が無いものは属性を出さない。 */
 function stageMirrors(props: StageViewProps): Record<string, string | undefined> {
-  const { status, phase, playKind, zoneRect, lastTiming, droppedSwings, guideMode, inputState, pitchQuality, banner } = props;
+  const { status, phase, playKind, zoneRect, lastTiming, droppedSwings, guideMode, inputState, pitchQuality, banner, wipe, qualityTier } = props;
   return {
     "data-status": status,
+    "data-wipe": wipeState(wipe),
+    "data-quality-tier": String(qualityTier),
+    ...expressionData(props.expressions),
     "data-phase": phase,
     "data-play-kind": playKind ?? undefined,
     "data-zone-rect": zoneRectText(zoneRect),
@@ -166,11 +190,13 @@ function suppressContextMenu(event: MouseEvent<HTMLElement>): void {
 
 /**
  * 全面ステージ。canvas の容器・入力面・テロップ・タイミングのピル・ヒント・スキップのヒント・フォールバック・`data-*` ミラーを描く。
+ * ワイプの縁取り・名前(`CutIn`)は `wipe.rect`(model が決めた px)に重ねる。操作は受けない。
  * HUD などのオーバーレイは子にしない(`GameLayout` が `bb-overlay` として重ねる)。入力面のハンドラは人間打撃中以外も常時つなぐ(スキップのため)。
  * 位置ずれのミニ図(`ZoneFeedback`)は `GameLayout` がステージの上に重ねる。
  */
 export function StageView(props: StageViewProps) {
-  const { containerRef, status, telop, pointerHandlers, inputActive, skipHint, zoneRect, marker, timingCue, contactQuality, hint, tapHint } = props;
+  const { containerRef, status, telop, pointerHandlers, inputActive, skipHint, zoneRect, marker, timingCue, contactQuality, hint, tapHint, wipe, cutInDetail } =
+    props;
   const fallback = fallbackText(status);
   const hintText = tapHint ?? hint;
   return (
@@ -178,6 +204,7 @@ export function StageView(props: StageViewProps) {
       <div className="bb-stage__canvas" ref={containerRef} />
       <div className={inputActive ? "bb-stage__input bb-stage__input--active" : "bb-stage__input"} {...pointerHandlers} />
       <StageTelop text={telop} />
+      <CutIn wipe={wipe} detail={cutInDetail ?? null} />
       {timingCue === null ? null : <TimingCuePill cue={timingCue} quality={contactQuality} zoneRect={zoneRect} />}
       {typeof hintText === "string" ? <StageHint text={hintText} isTap={typeof tapHint === "string"} zoneRect={zoneRect} /> : null}
       {skipHint ? <SkipHint /> : null}

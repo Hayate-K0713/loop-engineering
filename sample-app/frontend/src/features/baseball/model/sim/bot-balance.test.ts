@@ -192,10 +192,15 @@ describe("ボットの換算が実装と一致する(H10 の整合テスト)", (
     return { x: (at(1, 0).x - at(-1, 0).x) / 2, y: (at(0, -1).y - at(0, 1).y) / 2 };
   }
 
-  /** 設計 §10 に書かれた px/ゾーン単位(390×844 で x 77・y 87、390×664 で x 約 62・y 約 70、PC 1280×720 で x 90.7・y 104.5)。 */
+  /**
+   * 期待する px/ゾーン単位(390×844 で x 77・y 87、390×664 で x 約 55・y 約 62、PC 1280×720 で x 90.7・y 104.5)。
+   * 設計 §10 の初期値は 390×664 が x 約 62・y 約 70 だったが、E3(投手 scale 1.30・RELEASE_POINT と lift の変更)で
+   * 低い画面の縦長カメラのゾーンが縮み(`fitPortraitFraming` の収め直し)、`battingCameraFor` の投影は x 55.2・y 61.9 になった。
+   * 390×844 と PC は E3 で不変。値は E3 後の `battingCameraFor` + `zoneRectOf` の計算値で、帯(許容 ±8%)は緩めていない。
+   */
   const DESIGN_UNITS = [
     { name: "390×844", viewport: { width: 390, height: 844 }, x: 77, y: 87 },
-    { name: "390×664", viewport: { width: 390, height: 664 }, x: 62, y: 70 },
+    { name: "390×664", viewport: { width: 390, height: 664 }, x: 55, y: 62 },
     { name: "1280×720", viewport: { width: 1280, height: 720 }, x: 90.7, y: 104.5 },
   ] as const;
 

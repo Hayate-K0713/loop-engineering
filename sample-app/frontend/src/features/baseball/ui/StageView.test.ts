@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { GameStageViewProps } from "../hooks/useGameStage";
 import type { ContactQuality } from "../types/batting";
+import type { CharacterSlot, FaceExpression } from "../types/scene";
+import type { WipeView } from "../types/view";
+import type { CutInDetail } from "./CutIn";
 import { StageView } from "./StageView";
 
 const ZONE_RECT = { left: 117, top: 410, width: 156, height: 175 };
@@ -31,9 +34,18 @@ const BASE: GameStageViewProps = {
   hint: null,
   tapHint: null,
   zoneFeedback: null,
+  wipe: null,
+  qualityTier: 0,
 };
 
-function render(props: Partial<GameStageViewProps>, contactQuality?: ContactQuality | null): string {
+const WIPE_ON: WipeView = { visible: true, rect: { x: 290, y: 175, width: 94, height: 94 }, label: "1番 カイト" };
+
+type ExtraProps = {
+  readonly expressions?: Readonly<Partial<Record<CharacterSlot, FaceExpression>>>;
+  readonly cutInDetail?: CutInDetail | null;
+};
+
+function render(props: Partial<GameStageViewProps> & ExtraProps, contactQuality?: ContactQuality | null): string {
   return renderToStaticMarkup(createElement(StageView, { ...BASE, ...props, contactQuality: contactQuality ?? null }));
 }
 
