@@ -51,6 +51,19 @@ describe("fielderRunPose", () => {
     }
   });
 
+  it("肘は走りの曲げ(RUN_MOTION.elbow)へ leanRampMs かけて移り、膝は脚が前へ出る間(大腿の x が負)だけ曲がる", () => {
+    expect(fielderRunPose(RUN_MOTION.leanRampMs / 2).elbowL.x).toBeCloseTo((IDLE_POSE.elbowL.x + RUN_MOTION.elbow) / 2, 12);
+    expect(fielderRunPose(RUN_MOTION.leanRampMs).elbowR.x).toBeCloseTo(RUN_MOTION.elbow, 12);
+    for (const ms of RUN_GRID) {
+      const pose = fielderRunPose(ms);
+      expect(pose.kneeL.x).toBeGreaterThanOrEqual(0);
+      expect(pose.kneeR.x).toBeGreaterThanOrEqual(0);
+      expect(pose.kneeL.x).toBeLessThanOrEqual(RUN_MOTION.kneeBend + 1e-12);
+      if (pose.legL.x > 0) expect(pose.kneeL.x).toBe(0);
+      if (pose.legR.x > 0) expect(pose.kneeR.x).toBe(0);
+    }
+  });
+
   it("周期運動: 1周期(2π / 角速度)後に同じポーズに戻る", () => {
     const periodMs = ((Math.PI * 2) / RUN_MOTION.cycleRadPerSec) * 1000;
     const start = 500;
@@ -70,6 +83,8 @@ describe("catcherPose", () => {
     expect(isValidPose(catcher)).toBe(true);
     expect(catcher.torso.x).toBeGreaterThan(IDLE_POSE.torso.x);
     expect(maxJointDelta(catcher, fielderIdlePose())).toBeGreaterThan(0);
+    expect(catcher.kneeL.x).toBeGreaterThan(0.5);
+    expect(catcher.kneeR.x).toBeGreaterThan(0.5);
     expect(catcherPose()).toEqual(catcher);
   });
 });

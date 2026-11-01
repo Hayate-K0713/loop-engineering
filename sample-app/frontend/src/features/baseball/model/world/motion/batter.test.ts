@@ -180,6 +180,46 @@ describe("縦長の構え(portrait)", () => {
   });
 });
 
+describe("構え 3 種(stance)と肘・膝", () => {
+  const STANCES = ["open", "square", "crouch"] as const;
+
+  it("stance を省略するとスクエアで、params を省略すると標準(従来どおり)", () => {
+    for (const progress of PROGRESS_GRID) {
+      expect(batterSwingPose(progress, 0.72, 1)).toEqual(batterSwingPose(progress, 0.72, 1, "square"));
+      expect(batterSwingPose(progress, 0.72, 0.4)).toEqual(batterSwingPose(progress, 0.72, 0.4, "square", { spread: 0, batTilt: 0, handLift: 0, gaze: 0 }));
+    }
+    expect(batterStancePose(1, "open")).toEqual(batterSwingPose(0, BAT_STANCE_HEIGHT, 1, "open"));
+  });
+
+  it("構えだけが違い、接触(0.66)以降のスイングは 3 種で共有(関節・バットとも同じ)", () => {
+    for (const progress of PROGRESS_GRID.filter((p) => p >= SWING_CONTACT_PROGRESS)) {
+      const reference = batterSwingPose(progress, 0.72, 1, "square");
+      for (const stance of STANCES) {
+        expect(batterSwingPose(progress, 0.72, 1, stance)).toEqual(reference);
+      }
+    }
+  });
+
+  it("構えの種類で構え(progress 0)の姿勢は変わる。バットの向き・高さは同じ", () => {
+    const square = batterStancePose(1, "square");
+    for (const stance of ["open", "crouch"] as const) {
+      const other = batterStancePose(1, stance);
+      expect(maxJointDelta(square, other)).toBeGreaterThan(0.1);
+      expect(other.bat).toEqual(square.bat);
+    }
+  });
+
+  it("肘・膝が出る: 構えで肘を曲げ(x < 0)、接触で腕を伸ばし(曲げが浅くなる)、振り切りで後ろ脚の膝が曲がる", () => {
+    const stance = batterStancePose(1);
+    const contact = batterSwingPose(SWING_CONTACT_PROGRESS, 0.72, 1);
+    expect(stance.elbowL.x).toBeLessThan(-0.5);
+    expect(stance.elbowR.x).toBeLessThan(-0.5);
+    expect(contact.elbowL.x).toBeGreaterThan(stance.elbowL.x);
+    expect(contact.elbowR.x).toBeGreaterThan(stance.elbowR.x);
+    expect(batterSwingPose(1, 0.72).kneeR.x).toBeGreaterThan(0.3);
+  });
+});
+
 describe("接触姿勢(progress 0.66)", () => {
   it.each(HEIGHTS)("高さ %d: バットの高さがボールの高さに一致する", (height) => {
     expect(batterSwingPose(SWING_CONTACT_PROGRESS, height).bat.height).toBeCloseTo(height, 12);

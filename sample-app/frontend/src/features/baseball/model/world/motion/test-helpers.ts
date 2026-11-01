@@ -17,9 +17,9 @@ function rotAngles(r: Rot3): readonly number[] {
   return [r.x, r.y, r.z];
 }
 
-/** 6関節 × 3軸 = 18個の角度。 */
+/** 10 関節 × 3軸 = 30個の角度。 */
 function jointAngles(pose: JointPose): readonly number[] {
-  return [pose.torso, pose.head, pose.armL, pose.armR, pose.legL, pose.legR].flatMap(rotAngles);
+  return [pose.torso, pose.head, pose.armL, pose.armR, pose.elbowL, pose.elbowR, pose.legL, pose.legR, pose.kneeL, pose.kneeR].flatMap(rotAngles);
 }
 
 /** すべての角度が有限で ±2π 以内。 */

@@ -121,13 +121,22 @@ describe("横長(1280×720)", () => {
   });
 });
 
+// E3(投手 scale 1.30)で投手の頭頂の係数が −0.0846 → −0.1141 になり(contract §7)、同じ空き領域に頭頂を収める水平半幅 tan が大きくなって、ゾーンは小さくなる。
+// 390×844 は水平半幅 tan が既定(0.25)のままで変わらない。それ以外(390×745・664・375×667・360×640)の下限は、段階 A の下限に係数の比
+// `(zoneBottom − headTop(1.0)) / (zoneBottom − headTop(1.30))` = 0.5304 / 0.5599 ≈ 0.947 を掛けて導く(段階 A の実測の幅・高さに対する E3 後の実測の比も 0.947)。
+const E3_SHRINK = (0.4458 + 0.0846) / (0.4458 + 0.1141);
+
+function afterE3(stageALimit: number): number {
+  return Math.floor(stageALimit * E3_SHRINK);
+}
+
 describe("縦長・打撃のゾーン", () => {
   it.each([
     { width: 390, height: 844, minWidth: 140, minHeight: 155 },
-    { width: 390, height: 745, minWidth: 140, minHeight: 155 },
-    { width: 390, height: 664, minWidth: 115, minHeight: 130 },
-    { width: 375, height: 667, minWidth: 115, minHeight: 130 },
-    { width: 360, height: 640, minWidth: 105, minHeight: 118 },
+    { width: 390, height: 745, minWidth: afterE3(140), minHeight: afterE3(155) },
+    { width: 390, height: 664, minWidth: afterE3(115), minHeight: afterE3(130) },
+    { width: 375, height: 667, minWidth: afterE3(115), minHeight: afterE3(130) },
+    { width: 360, height: 640, minWidth: afterE3(105), minHeight: afterE3(118) },
   ])("$width×$height: 幅 ≥ $minWidth・高さ ≥ $minHeight、ティッカーの上に収まる", ({ width, height, minWidth, minHeight }) => {
     const size = sizeOf(width, height);
     const pose = battingCameraFor(width / height, "batting", safeAreaFor(height, "batting"));
@@ -145,12 +154,12 @@ describe("縦長・打撃のゾーン", () => {
     expect(margins.every((margin) => margin >= 40)).toBe(true);
   });
 
-  it("390×844 の既定の空き領域では、ゾーンが設計値(x 117.7〜272.3・y 410〜585、±3px。155×175px 前後)に近く、画面中央(x 195)に並ぶ", () => {
+  it("390×844 の既定の空き領域では、ゾーンが設計値(E 完了後 = 投手 scale 1.30: x 117.7〜272.3・y 433〜608、±3px。155×175px 前後)に近く、画面中央(x 195)に並ぶ", () => {
     const rect = zoneRectOf(battingCameraFor(390 / 844, "batting", null), sizeOf(390, 844), ZONE);
     expect(Math.abs(rect.left - 117.7)).toBeLessThanOrEqual(3);
     expect(Math.abs(rect.left + rect.width - 272.3)).toBeLessThanOrEqual(3);
-    expect(Math.abs(rect.top - 410)).toBeLessThanOrEqual(3);
-    expect(Math.abs(rect.top + rect.height - 585)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.top - 433)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.top + rect.height - 608)).toBeLessThanOrEqual(3);
     expect(rect.width).toBeGreaterThanOrEqual(150);
     expect(rect.height).toBeGreaterThanOrEqual(170);
     expect(rect.left + rect.width / 2).toBeCloseTo(195, 6);
@@ -160,9 +169,9 @@ describe("縦長・打撃のゾーン", () => {
 describe("縦長・守備のゾーンと格子(v3: 打撃と同じ構図。操作バー約 130px)", () => {
   it.each([
     { width: 390, height: 844, minWidth: 150 },
-    { width: 390, height: 745, minWidth: 140 },
-    { width: 390, height: 664, minWidth: 115 },
-    { width: 360, height: 640, minWidth: 105 },
+    { width: 390, height: 745, minWidth: afterE3(140) },
+    { width: 390, height: 664, minWidth: afterE3(115) },
+    { width: 360, height: 640, minWidth: afterE3(105) },
   ])("$width×$height: ゾーン幅 ≥ $minWidth、格子の下端が操作バー(ティッカー)の上端より上", ({ width, height, minWidth }) => {
     const size = sizeOf(width, height);
     const pose = battingCameraFor(width / height, "pitching", safeAreaFor(height, "pitching"));

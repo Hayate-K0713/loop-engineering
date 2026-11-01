@@ -154,17 +154,17 @@ const [landscapeStance, ...afterStance] = BATTER_SWING_KEYS;
 /**
  * 縦長(縦横比の補間 k = 1)の構え。横長の構えは前の手(`armL`)がゾーン枠の左端より内側(画面で右)まで出て、縦長ではゾーン枠・
  * 守備の 5×5 格子に掛かる。縦長だけ、体の向きを開き(`torso.y` を −0.4 → 0.1)、両腕を下げて体の脇に引く(`arm.x` を −1.1 → −0.2、`arm.z` を ±0.5 → ±0.2)。
- * 肘は曲げて、前腕を体の前に出す。頭は体の向きとの合計(0.97)を横長と同じにして、ボールを見続ける。バットは横長と同じ。
+ * 腕を後ろへ引いて肘を深く曲げ(`arm.x` +0.1〜0.2・`elbow.x` −1.1〜−1.2)、手を胸の前に畳む(肘を伸ばすと手が前へ出て、守備の格子に掛かる)。頭は体の向きとの合計(0.97)を横長と同じにして、ボールを見続ける。バットは横長と同じ。
  * スイングが進むと、接触(`SWING_CONTACT_PROGRESS`)以降の姿勢は横長と同じ値へ連続してつながる。
  */
 export const BATTER_PORTRAIT_STANCE: BatterKey = {
   ...landscapeStance.pose,
   torso: rot(0, 0.1, 0),
   head: rot(0, 0.87, 0),
-  armL: rot(-0.2, 0, 0.2),
-  armR: rot(-0.15, 0, -0.2),
-  elbowL: rot(-0.9),
-  elbowR: rot(-1),
+  armL: rot(0.2, 0, 0.2),
+  armR: rot(0.1, 0, -0.2),
+  elbowL: rot(-1.1),
+  elbowR: rot(-1.2),
 };
 
 /** 縦長用のキーフレーム表。構え(`at` = 0)だけ `BATTER_PORTRAIT_STANCE` で、それ以降は `BATTER_SWING_KEYS` と同じ。`k` で横長の表と混ぜる。 */

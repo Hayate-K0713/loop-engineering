@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PitchFlight, PitchKind } from "../../../types/pitch";
 import { ALL_CELLS, cellToPoint } from "../../pitch/zone";
 import { getPitchSpec } from "../../pitch/kinds";
+import { CHARACTER_RIG } from "../motion/rig";
 import { ZONE_HALF_HEIGHT, zoneToWorld } from "../space/coords";
 import { RELEASE_POINT, WORLD_PARAMS } from "../space/params";
 import { heldBallAt, pitchBallAt } from "./pitch-path";
@@ -207,6 +208,26 @@ describe("heldBallAt", () => {
       expect(heldBallAt(flight)).toEqual(pitchBallAt(flight, flight.durationMs));
       expect(heldBallAt(flight)).toEqual(zoneToWorld(flight.landing));
       expect(heldBallAt(flight).z).toBe(WORLD_PARAMS.zone.planeZ);
+    }
+  });
+});
+
+describe("リリース点(E3: 投手 scale 1.30 の FK の手先に合わせた値)", () => {
+  const pitcher = WORLD_PARAMS.actors.pitcher;
+  const shoulderY = pitcher.position.y + pitcher.scale * (CHARACTER_RIG.torsoY + CHARACTER_RIG.shoulderY);
+  const reach = pitcher.scale * CHARACTER_RIG.armLength;
+
+  it("投手の肩より高く、腕の長さ(scale 込み)を超えて高すぎない。足元より前(+z)にある", () => {
+    expect(RELEASE_POINT.y).toBeGreaterThan(shoulderY);
+    expect(RELEASE_POINT.y).toBeLessThan(shoulderY + reach + 0.15);
+    expect(RELEASE_POINT.z).toBeGreaterThan(pitcher.position.z);
+    expect(RELEASE_POINT.x).toBeLessThan(pitcher.position.x);
+  });
+
+  it("全球種・全着弾セルで、軌道はリリース点から始まり、着弾点はゾーン平面に着く", () => {
+    for (const flight of ALL_FLIGHTS) {
+      expect(pitchBallAt(flight, 0)).toEqual(RELEASE_POINT);
+      expect(pitchBallAt(flight, flight.durationMs).z).toBeCloseTo(WORLD_PARAMS.zone.planeZ, 12);
     }
   });
 });

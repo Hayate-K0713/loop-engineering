@@ -156,7 +156,7 @@
 
 #### ウェーブ E-1b(2 並列。A14 の完了と T1 の結果の反映の後)
 
-- [ ] **E3: リグ・フォーム・投手の拡大**
+- [x] **E3: リグ・フォーム・投手の拡大**
   - 依存: E0, **A14 の完了**, T1 の結果(A2 の修正が必要ならその修正の後)。担当ファイル: `model/world/motion/{rig,pose,fk,batter,pitcher,fielder}.ts`、新規 `model/world/motion/forms.ts`、`model/world/space/params.ts`(`actors.pitcher.scale 1.30`・`RELEASE_POINT` の値のみ)、`camera/{rig,project}.test.ts`・`path/pitch-path.test.ts`・`path/pitch-screen.test.ts`・`motion/*.test.ts`(数値の更新)。
   - やること: 腕を上腕+前腕・脚を大腿+下腿に分ける(FK。`CharacterPose` に `expression`・`elbowL/R`・`kneeL/R`・`scale` を出す)。`forms.ts`: 投球フォーム 3 種・打撃の構え 3 種・野手(待機・走り・捕球・ゴロ捕球・送球)・走者(リード・走り・喜び)・感情のポーズ。**固有フォーム(段階 M)のパラメータを受けられる構造にする**(`forms.ts` の関数が `params` を引数に取る)。**投手を scale 1.30(構図の倍率)にし、`RELEASE_POINT` を FK の手先に合わせて更新**(手先が 0.15m 以内。フォーム別のリリース点は採らない)。カメラの `fit` が追従することを `rig.test`/`project.test` の数値(E 完了後の列)で確認する。`pitch-screen.test` の S300 が崩れるときは `speedProfile` の範囲で調整。
   - 完了条件: 単体テスト — 投球 3 種の FK の手先がリリース点から 0.15m 以内、打撃の構え 3 種がゾーン枠・格子と重ならない、野手の捕球ポーズでグローブが落下点に届く、全フォームで関節の角度が有限・連続、全身の高さ ÷ 頭の高さが全体格で 2.0〜2.6、390×844 の打撃で投手の頭頂 y ≥ HUD 下端 + 8px・身長 ≥ 90px・頭径 ≥ 40px。`pitch-screen.test`・`bot-balance.test` が成功。

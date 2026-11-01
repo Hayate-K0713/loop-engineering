@@ -364,14 +364,25 @@ function withPitchParams(frames: Keyframes<JointPose>, params: PitchFormParams):
   ];
 }
 
+function pitchFormTable(form: PitchForm): PitchFormTable {
+  switch (form) {
+    case "over":
+      return PITCH_FORMS.over;
+    case "three-quarter":
+      return PITCH_FORMS["three-quarter"];
+    case "side":
+      return PITCH_FORMS.side;
+  }
+}
+
 /** 投球フォームの windup の表(`u` で引く)。 */
 export function pitchWindupKeys(form: PitchForm, params: PitchFormParams = DEFAULT_PITCH_FORM_PARAMS): Keyframes<JointPose> {
-  return withPitchParams(PITCH_FORMS[form].windup, params);
+  return withPitchParams(pitchFormTable(form).windup, params);
 }
 
 /** 投球フォームのフォロースルーの表(正規化時間で引く)。 */
 export function pitchFollowKeys(form: PitchForm): Keyframes<JointPose> {
-  return PITCH_FORMS[form].follow;
+  return pitchFormTable(form).follow;
 }
 
 // ---------- 打撃の構え(3 種) ----------
@@ -392,29 +403,57 @@ export type BatStanceParams = {
 
 export const DEFAULT_BAT_STANCE_PARAMS: BatStanceParams = { spread: 0, batTilt: 0, handLift: 0, gaze: 0 };
 
-/** 構えごとの標準の姿勢からの差。`yaw` = 体を投手側へ開く量(頭が打ち消す)、`lean` = 前傾(頭が打ち消す)、`bend` = 膝の曲げ(左右対称)、`spread` = 足の開き。 */
-const STANCE_SHAPE: Readonly<Record<BatStance, { readonly yaw: number; readonly lean: number; readonly bend: number; readonly spread: number }>> = {
-  square: { yaw: 0, lean: 0, bend: 0, spread: 0 },
-  open: { yaw: 0.45, lean: 0, bend: 0.12, spread: 0.1 },
-  crouch: { yaw: -0.1, lean: 0.3, bend: 0.5, spread: 0.12 },
+type StanceShape = {
+  /** 体を投手側へ開く量(rad。頭が打ち消す)。 */
+  readonly yaw: number;
+  /** 前傾(rad。頭が打ち消す)。 */
+  readonly lean: number;
+  /** 膝の曲げ(rad。左右対称)。 */
+  readonly bend: number;
+  /** 足の開き(rad)。 */
+  readonly spread: number;
+  /** 前の手(`armL`)・後ろの手(`armR`)の肩の x 回転の差(rad。正で後ろへ引く)と、後ろの手の肘の差(rad)。 */
+  readonly armL: number;
+  readonly armR: number;
+  readonly elbowR: number;
 };
 
+/**
+ * 構えごとの標準(スクエア)の姿勢からの差。開く(`open`)と右肩が前へ出て手が格子に近づくので、後ろの手を引く。
+ * 縦長の構図で手・肘・腕がゾーン枠・5×5 格子に 4px 以上の余白を取る値(`forms.test.ts` が全 5 画面で検査)。
+ */
+const STANCE_SHAPE: Readonly<Record<BatStance, StanceShape>> = {
+  square: { yaw: 0, lean: 0, bend: 0, spread: 0, armL: 0, armR: 0, elbowR: 0 },
+  open: { yaw: 0.45, lean: 0, bend: 0.12, spread: 0.1, armL: -0.1, armR: 0.35, elbowR: 0.3 },
+  crouch: { yaw: -0.1, lean: 0.3, bend: 0.5, spread: 0.12, armL: 0.2, armR: 0, elbowR: 0 },
+};
+
+function stanceShapeOf(stance: BatStance): StanceShape {
+  switch (stance) {
+    case "square":
+      return STANCE_SHAPE.square;
+    case "open":
+      return STANCE_SHAPE.open;
+    case "crouch":
+      return STANCE_SHAPE.crouch;
+  }
+}
+
 function isNeutralStance(stance: BatStance, params: BatStanceParams): boolean {
-  return (
-    stance === "square" && params.spread === 0 && params.batTilt === 0 && params.handLift === 0 && params.gaze === 0
-  );
+  return stance === "square" && params.spread === 0 && params.batTilt === 0 && params.handLift === 0 && params.gaze === 0;
 }
 
 /** 標準の構え `base`(スクエア)に、構えの種類と調整値を掛けた構え。 */
 function shapeStance(base: BatterKey, stance: BatStance, params: BatStanceParams): BatterKey {
-  const shape = STANCE_SHAPE[stance];
+  const shape = stanceShapeOf(stance);
   const spread = shape.spread + params.spread;
   return {
     ...base,
     torso: rot(base.torso.x + shape.lean, base.torso.y + shape.yaw, base.torso.z),
     head: rot(base.head.x - shape.lean * 0.8 + params.gaze, base.head.y - shape.yaw, base.head.z),
-    armL: rot(base.armL.x - params.handLift, base.armL.y, base.armL.z),
-    armR: rot(base.armR.x - params.handLift, base.armR.y, base.armR.z),
+    armL: rot(base.armL.x + shape.armL - params.handLift, base.armL.y, base.armL.z),
+    armR: rot(base.armR.x + shape.armR - params.handLift, base.armR.y, base.armR.z),
+    elbowR: rot(base.elbowR.x + shape.elbowR, base.elbowR.y, base.elbowR.z),
     legL: rot(base.legL.x - shape.bend, base.legL.y, base.legL.z + spread),
     legR: rot(base.legR.x - shape.bend, base.legR.y, base.legR.z - spread),
     kneeL: rot(base.kneeL.x + shape.bend * 2, base.kneeL.y, base.kneeL.z),
@@ -488,14 +527,25 @@ function gloveArm(root: PoseRoot, torso: Rot3, target: Vec3, lift: number, rig: 
   return reachArm({ x: inTorso.x - rig.shoulderX, y: inTorso.y - rig.shoulderY, z: inTorso.z }, rig);
 }
 
-/** 頭の向き: 目標点を見上げる/見下ろす(頭の絶対の仰角が目標の仰角に近づく。胴の前傾分を引く)。 */
-function lookAt(root: PoseRoot, torsoX: number, target: Vec3, lift: number, rig: CharacterRig): Rot3 {
-  const local = targetInRoot(root, target, lift);
-  const elevation = Math.atan2(local.y - (rig.torsoY + rig.headY), Math.max(0.05, Math.hypot(local.x, local.z)));
-  return rot(Math.max(-0.7, Math.min(0.7, -elevation - torsoX)));
+/**
+ * 胴体の向き(y 回転): 左肩(グローブ側。胴体の横 +shoulderX)が目標へ向くように体をひねる。左肩から目標までの横方向の成分が 0 になる
+ * ひねりで、腕を前へ伸ばすだけで届く(横へ大きく振らない)。目標が肩の幅より近いときは `acos` の引数を 1 に収める。±`TWIST_LIMIT` に収める。
+ */
+function twistToward(local: Vec3, rig: CharacterRig): number {
+  const horizontal = Math.hypot(local.x, local.z);
+  const ratio = horizontal > 0 ? Math.min(1, rig.shoulderX / horizontal) : 1;
+  return Math.max(-TWIST_LIMIT, Math.min(TWIST_LIMIT, Math.acos(ratio) - Math.atan2(local.z, local.x)));
 }
 
-// ---------- 野手 ----------
+/** 胴体のひねりの上限(rad)。 */
+const TWIST_LIMIT = 1.1;
+
+/** 頭の向き: 目標点を見る(頭の絶対の方位・仰角が目標に近づく。胴のひねり・前傾分を引く)。 */
+function lookAt(local: Vec3, torso: Rot3, rig: CharacterRig): Rot3 {
+  const elevation = Math.atan2(local.y - (rig.torsoY + rig.headY), Math.max(0.05, Math.hypot(local.x, local.z)));
+  const bearing = Math.atan2(local.x, local.z);
+  return rot(Math.max(-0.7, Math.min(0.7, -elevation - torso.x)), Math.max(-1, Math.min(1, bearing - torso.y)), 0);
+}
 
 /** 野手の待機(構え): 軽く前傾し、膝を曲げ、両手を膝の前へ下ろす。足が浮く分は `groundDropOf`。 */
 export function fielderReadyPose(): JointPose {
@@ -518,14 +568,15 @@ export function fielderReadyPose(): JointPose {
  * `root` は足が地面に着く位置・向き・拡大率。右手は胴の前へ添え、頭は目標を見る。足が浮く分は `groundDropOf`(この関数の IK はその分を見込んである)。
  */
 export function fielderCatchPose(root: PoseRoot, target: Vec3, rig: CharacterRig = CHARACTER_RIG): JointPose {
-  const torso = rot(-0.1);
   const legs = { legL: rot(-0.3, 0, 0.1), legR: rot(-0.3, 0, -0.1), kneeL: rot(0.6), kneeR: rot(0.6) };
   const lift = groundDropOf(jointPose(legs), rig);
+  const local = targetInRoot(root, target, lift);
+  const torso = rot(-0.1, twistToward(local, rig), 0);
   const glove = gloveArm(root, torso, target, lift, rig);
   return jointPose({
     ...legs,
     torso,
-    head: lookAt(root, torso.x, target, lift, rig),
+    head: lookAt(local, torso, rig),
     armL: glove.arm,
     elbowL: glove.elbow,
     armR: rot(-0.6, 0, -0.45),
@@ -535,14 +586,15 @@ export function fielderCatchPose(root: PoseRoot, target: Vec3, rig: CharacterRig
 
 /** ゴロの捕球。深くかがみ(前傾・膝を曲げる)、左手のグローブを `target`(ワールド。地面近く)へ下ろす。足が浮く分は `groundDropOf`。 */
 export function fielderGroundCatchPose(root: PoseRoot, target: Vec3, rig: CharacterRig = CHARACTER_RIG): JointPose {
-  const torso = rot(0.95);
-  const legs = { legL: rot(-0.8, 0, 0.12), legR: rot(-0.8, 0, -0.12), kneeL: rot(1.6), kneeR: rot(1.6) };
+  const legs = { legL: rot(-1.2, 0, 0.12), legR: rot(-1.2, 0, -0.12), kneeL: rot(2.2), kneeR: rot(2.2) };
   const lift = groundDropOf(jointPose(legs), rig);
+  const local = targetInRoot(root, target, lift);
+  const torso = rot(1.2, twistToward(local, rig), 0);
   const glove = gloveArm(root, torso, target, lift, rig);
   return jointPose({
     ...legs,
     torso,
-    head: lookAt(root, torso.x, target, lift, rig),
+    head: lookAt(local, torso, rig),
     armL: glove.arm,
     elbowL: glove.elbow,
     armR: rot(-0.9, 0, -0.3),
@@ -550,12 +602,21 @@ export function fielderGroundCatchPose(root: PoseRoot, target: Vec3, rig: Charac
   });
 }
 
-/** 送球(オーバースロー)の動き。`u` = 0 が構え(ボールを持った右手を胸の前に)、1 がリリース、1〜1.3 がフォロースルー。範囲外は端に収める。 */
+/** 送球(オーバースロー)の動き。`u` = 0 が構え(ボールを持った右手を胸の前に)、1 がリリース、1〜1.5 がフォロースルー。範囲外は端に収める。 */
 const FIELDER_THROW_KEYS: Keyframes<JointPose> = [
   {
     at: 0,
     ease: "linear",
-    pose: jointPose({ torso: rot(0.1, -0.2), armL: rot(-0.9, 0, 0.3), elbowL: rot(-0.7), armR: rot(-0.8, 0, -0.2), elbowR: rot(-1.3), legL: rot(-0.2), kneeL: rot(0.4), kneeR: rot(0.3) }),
+    pose: jointPose({
+      torso: rot(0.1, -0.2),
+      armL: rot(-0.9, 0, 0.3),
+      elbowL: rot(-0.7),
+      armR: rot(-0.8, 0, -0.2),
+      elbowR: rot(-1.3),
+      legL: rot(-0.2),
+      kneeL: rot(0.4),
+      kneeR: rot(0.3),
+    }),
   },
   {
     at: 0.45,
@@ -589,7 +650,7 @@ const FIELDER_THROW_KEYS: Keyframes<JointPose> = [
     }),
   },
   {
-    at: 1.3,
+    at: 1.5,
     ease: "out",
     pose: jointPose({
       torso: rot(0.5, 0.6),
@@ -607,7 +668,7 @@ const FIELDER_THROW_KEYS: Keyframes<JointPose> = [
 ];
 
 export function fielderThrowPose(u: number): JointPose {
-  return sampleKeyframes(FIELDER_THROW_KEYS, Number.isNaN(u) ? 0 : Math.max(0, Math.min(1.3, u)), lerpPose);
+  return sampleKeyframes(FIELDER_THROW_KEYS, Number.isNaN(u) ? 0 : Math.max(0, Math.min(1.5, u)), lerpPose);
 }
 
 // ---------- 走者 ----------

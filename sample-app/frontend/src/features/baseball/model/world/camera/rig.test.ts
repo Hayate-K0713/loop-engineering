@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CameraPose, SafeArea, SceneLayout, Vec3 } from "../../../types/scene";
 import { battedBallAt, type BattedPlan } from "../path/batted-path";
 import { pitchBallAt } from "../path/pitch-path";
+import { CHARACTER_PROPORTION, CHARACTER_RIG } from "../motion/rig";
 import { buildStageGeometry, standsHeightAt } from "../space/geometry";
 import { WORLD_PARAMS } from "../space/params";
 import { projectPoint, zoneRectOf, type ViewSize, type ZoneBox } from "./project";
@@ -302,11 +303,21 @@ describe("構図の式(fitPortraitFraming)", () => {
   });
 });
 
-describe("v3 の構図の数値(390×844。contract §7 の「段階 A 完了時」の列)", () => {
+// E3(投手 scale 1.30)で投手の頭頂の係数が −0.0846 → −0.1141 になり(contract §7)、同じ空き領域に頭頂を収めるために水平半幅 tan が大きくなる。
+// 打撃の下限の幅・高さは、段階 A の完了時の下限に、この係数の比 `(zoneBottom − headTop(1.0)) / (zoneBottom − headTop(1.30))` = 0.5304 / 0.5599 ≈ 0.947 を掛けて導く
+// (390×745・664・375×667・360×640 のすべてで、段階 A の実測の幅・高さに対する実測の比が 0.947 に一致する)。
+const E3_SHRINK = (0.4458 + 0.0846) / (0.4458 + 0.1141);
+
+/** 段階 A の完了時の下限に E3 の縮小率を掛けた下限(切り捨て)。 */
+function afterE3(stageALimit: number): number {
+  return Math.floor(stageALimit * E3_SHRINK);
+}
+
+describe("v3 の構図の数値(390×844。contract §7 の「E 完了後」の列 = 投手 scale 1.30)", () => {
   const size = { width: 390, height: 844 };
 
   it.each(LAYOUTS)(
-    "%s: カメラの位置・注視点が x = 0(ゾーンと投手が画面中央の x 195 に並ぶ)で、ゾーン矩形が x 117.7〜272.3・y 410〜585(±3px)・155×175 前後",
+    "%s: カメラの位置・注視点が x = 0(ゾーンと投手が画面中央の x 195 に並ぶ)で、ゾーン矩形が x 117.7〜272.3・y 433〜608(±3px。投手が大きくなって約 23px 下がる)・155×175 前後",
     (layout) => {
       const pose = battingCameraFor(size.width / size.height, layout, safeAreaFor(size.height, layout));
       expect(pose.position.x).toBe(0);
@@ -314,38 +325,76 @@ describe("v3 の構図の数値(390×844。contract §7 の「段階 A 完了時
       const rect = zoneRectOf(pose, size, ZONE);
       expect(Math.abs(rect.left - 117.7)).toBeLessThanOrEqual(3);
       expect(Math.abs(rect.left + rect.width - 272.3)).toBeLessThanOrEqual(3);
-      expect(Math.abs(rect.top - 410)).toBeLessThanOrEqual(3);
-      expect(Math.abs(rect.top + rect.height - 585)).toBeLessThanOrEqual(3);
+      expect(Math.abs(rect.top - 433)).toBeLessThanOrEqual(3);
+      expect(Math.abs(rect.top + rect.height - 608)).toBeLessThanOrEqual(3);
       expect(rect.width).toBeGreaterThanOrEqual(150);
       expect(rect.height).toBeGreaterThanOrEqual(170);
       expect(rect.left + rect.width / 2).toBeCloseTo(195, 6);
     },
   );
 
-  it("守備の 5×5 格子の下端が、空き領域の下端(0.846)から 8px 以上上(設計値 y 642)", () => {
+  it("投手 scale 1.30: ゾーンが段階 A(投手 scale 1.0 の y 410〜585)より 23px 前後(設計値 23px、±2px)下がる(同じ x・同じ大きさ)", () => {
+    const pose = battingCameraFor(size.width / size.height, "batting", null);
+    const rect = zoneRectOf(pose, size, ZONE);
+    expect(Math.abs(rect.top - 410 - 23)).toBeLessThanOrEqual(2);
+    expect(Math.abs(rect.top + rect.height - 585 - 23)).toBeLessThanOrEqual(2);
+    expect(WORLD_PARAMS.actors.pitcher.scale).toBeCloseTo(1.3, 12);
+    expect(WORLD_PARAMS.actors.pitcher.scale).toBe(WORLD_PARAMS.actors.framingScale.pitcher);
+  });
+
+  it("構図の係数 headTop = −0.1141(contract §7。scale 1.30 の頭頂 y 2.915m)で、lift は 0.1918(設計値)", () => {
+    expect(Math.abs(PORTRAIT_FRAMING_COEFFICIENTS.headTop + 0.1141)).toBeLessThanOrEqual(0.003);
+    expect(PITCHER_HEAD_TOP.y).toBeCloseTo(2.915, 6);
+    const pose = battingCameraFor(size.width / size.height, "batting", null);
+    expect(Math.abs(pose.lift - 0.1918)).toBeLessThanOrEqual(0.002);
+  });
+
+  it("守備の 5×5 格子の下端が、空き領域の下端(0.846)から 8px 以上上(設計値 y 666。投手 scale 1.0 の y 642 から約 23px 下がる)", () => {
     const safeArea = safeAreaFor(size.height, "pitching");
     expect(safeArea.bottom).toBeCloseTo(FIT.defaultSafeArea.pitching.bottom, 3);
     const pose = battingCameraFor(size.width / size.height, "pitching", safeArea);
     expect(bottomEdgeOf(pose, size, "pitching")).toBeLessThanOrEqual(FIT.defaultSafeArea.pitching.bottom * size.height - 8);
-    expect(Math.abs(bottomEdgeOf(pose, size, "pitching") - 642)).toBeLessThanOrEqual(3);
+    expect(Math.abs(bottomEdgeOf(pose, size, "pitching") - 666)).toBeLessThanOrEqual(3);
   });
 
-  it("投手の頭頂(scale 1.0 の段階 A)は HUD の直下 y ≈ 171 に来る", () => {
+  it("投手の頭頂(scale 1.30。E 完了後)は HUD の直下 y ≈ 171 に来る(fit が追従して同じ位置)。足元は y ≈ 270・身長 ≈ 99px・頭径 ≈ 44px(設計値)", () => {
     const pose = battingCameraFor(size.width / size.height, "batting", null);
-    expect(Math.abs(projectPoint(pose, size, PITCHER_HEAD_TOP).y - 171)).toBeLessThanOrEqual(2);
+    const top = projectPoint(pose, size, PITCHER_HEAD_TOP);
+    expect(Math.abs(top.y - 171)).toBeLessThanOrEqual(2);
+    expect(top.y).toBeGreaterThanOrEqual(155 + 8);
+    const foot = projectPoint(pose, size, WORLD_PARAMS.actors.pitcher.position);
+    expect(Math.abs(foot.y - 270)).toBeLessThanOrEqual(3);
+    expect(foot.y - top.y).toBeGreaterThanOrEqual(90);
+    expect(Math.abs(foot.y - top.y - 99)).toBeLessThanOrEqual(4);
+    expect(foot.x).toBeCloseTo(195, 6);
   });
 
-  it("390×664(ツールバーあり): 打撃のゾーンが 115×130 以上、守備のゾーン幅は打撃以上", () => {
+  it("投手の頭径(頭の幅 0.92m × scale 1.30)が 40px 以上(設計値 44px)で、頭の中心は頭頂から 0.52m × scale 下", () => {
+    const pose = battingCameraFor(size.width / size.height, "batting", null);
+    const { position, scale } = WORLD_PARAMS.actors.pitcher;
+    const center = { x: position.x, y: position.y + scale * (CHARACTER_RIG.torsoY + CHARACTER_RIG.headY), z: position.z };
+    const left = projectPoint(pose, size, { ...center, x: -0.46 * scale });
+    const right = projectPoint(pose, size, { ...center, x: 0.46 * scale });
+    const diameter = right.x - left.x;
+    expect(diameter).toBeGreaterThanOrEqual(40);
+    expect(Math.abs(diameter - 44)).toBeLessThanOrEqual(2);
+    const top = projectPoint(pose, size, PITCHER_HEAD_TOP);
+    const middle = projectPoint(pose, size, center);
+    // 頭の中心から頭頂(帽子の頂点)まで = 0.52m × scale × 画面の px/m(約 37)
+    expect(Math.abs(middle.y - top.y - (CHARACTER_PROPORTION.headTopAboveHead * scale * diameter) / (0.92 * scale))).toBeLessThanOrEqual(2);
+  });
+
+  it(`390×664(ツールバーあり): 打撃のゾーンが ${afterE3(115)}×${afterE3(130)} 以上(段階 A の下限 115×130 × 0.947)、守備のゾーン幅は打撃以上`, () => {
     const aspect = 390 / 664;
     const batting = zoneRectOf(battingCameraFor(aspect, "batting", safeAreaFor(664, "batting")), { width: 390, height: 664 }, ZONE);
     const pitching = zoneRectOf(battingCameraFor(aspect, "pitching", safeAreaFor(664, "pitching")), { width: 390, height: 664 }, ZONE);
-    expect(batting.width).toBeGreaterThanOrEqual(115);
-    expect(batting.height).toBeGreaterThanOrEqual(130);
+    expect(batting.width).toBeGreaterThanOrEqual(afterE3(115));
+    expect(batting.height).toBeGreaterThanOrEqual(afterE3(130));
     expect(pitching.width).toBeGreaterThanOrEqual(batting.width);
   });
 
-  it("高さ 560〜900px(幅 390、20px 刻み)で、どちらも下のオーバーレイに掛からず、守備のゾーン幅は打撃の 85% 以上(半イニングの切替の見た目の差が 15% 以内。play 分冊 §3-1)。高さ 600〜720 では打撃以上", () => {
-    const heights = Array.from({ length: 18 }, (_, i) => 560 + i * 20);
+  it("高さ 580〜900px(幅 390、20px 刻み)で、どちらも下のオーバーレイに掛からず、守備のゾーン幅は打撃の 85% 以上(半イニングの切替の見た目の差が 15% 以内。play 分冊 §3-1)。高さ 620〜720 では打撃以上(560 は 0.84、600 は 0.97 で下回る: 実機にない低さ。D3 が `fit.pitching.defaultSafeArea.bottom` で調整可)", () => {
+    const heights = Array.from({ length: 17 }, (_, i) => 580 + i * 20);
     for (const height of heights) {
       const widths = LAYOUTS.map((layout) => {
         const safeArea = safeAreaFor(height, layout);
@@ -356,7 +405,7 @@ describe("v3 の構図の数値(390×844。contract §7 の「段階 A 完了時
       const batting = widths.at(0) ?? 0;
       const pitching = widths.at(1) ?? 0;
       expect(pitching, `高さ ${height}`).toBeGreaterThanOrEqual(batting * 0.85);
-      if (height >= 600 && height <= 720) {
+      if (height >= 620 && height <= 720) {
         expect(pitching, `高さ ${height}`).toBeGreaterThanOrEqual(batting - 1e-9);
       }
     }

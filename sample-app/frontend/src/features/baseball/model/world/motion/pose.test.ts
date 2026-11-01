@@ -11,6 +11,7 @@ import {
   smoothstep,
   type BatterJoints,
   type JointPose,
+  jointPose,
   type Keyframes,
   type KeyframeEase,
   type PoseRoot,
@@ -23,16 +24,24 @@ const POSE_A: JointPose = {
   head: ZERO,
   armL: { x: 1, y: 2, z: 3 },
   armR: { x: -1, y: -2, z: -3 },
+  elbowL: { x: -0.2, y: 0, z: 0 },
+  elbowR: { x: -1.2, y: 0, z: 0 },
   legL: { x: 0.7, y: 0, z: 0 },
   legR: { x: 0, y: 0.7, z: 0 },
+  kneeL: { x: 0.4, y: 0, z: 0 },
+  kneeR: { x: 1.6, y: 0, z: 0 },
 };
 const POSE_B: JointPose = {
   torso: { x: 0.5, y: 0.2, z: -0.3 },
   head: { x: 0.4, y: 0.4, z: 0.4 },
   armL: { x: -1, y: -2, z: -3 },
   armR: { x: 1, y: 2, z: 3 },
+  elbowL: { x: -0.6, y: 0, z: 0 },
+  elbowR: { x: 0, y: 0, z: 0 },
   legL: { x: -0.7, y: 0, z: 0 },
   legR: { x: 0, y: -0.7, z: 0 },
+  kneeL: { x: 0, y: 0, z: 0 },
+  kneeR: { x: 0.2, y: 0, z: 0 },
 };
 const EASES: readonly KeyframeEase[] = ["linear", "smooth", "in", "out"];
 
@@ -94,13 +103,25 @@ describe("lerpRot / lerpPose", () => {
     expect(lerpPose(POSE_A, POSE_B, 1)).toEqual(POSE_B);
   });
 
-  it("lerpPose の中点は6関節それぞれの中点", () => {
+  it("lerpPose の中点は10関節(肘・膝を含む)それぞれの中点", () => {
     const mid = lerpPose(POSE_A, POSE_B, 0.5);
     expect(mid.armL).toEqual({ x: 0, y: 0, z: 0 });
     expect(mid.armR).toEqual({ x: 0, y: 0, z: 0 });
     expect(mid.legL.x).toBeCloseTo(0, 12);
     expect(mid.head.x).toBeCloseTo(0.2, 12);
     expect(mid.legR.y).toBeCloseTo(0, 12);
+    expect(mid.elbowL.x).toBeCloseTo(-0.4, 12);
+    expect(mid.elbowR.x).toBeCloseTo(-0.6, 12);
+    expect(mid.kneeL.x).toBeCloseTo(0.2, 12);
+    expect(mid.kneeR.x).toBeCloseTo(0.9, 12);
+  });
+
+  it("jointPose: 指定しない関節は回転なし。指定した関節はそのまま", () => {
+    const partial = jointPose({ elbowR: { x: -1, y: 0, z: 0 } });
+    expect(partial.elbowR).toEqual({ x: -1, y: 0, z: 0 });
+    expect(partial.torso).toEqual(ZERO);
+    expect(partial.kneeL).toEqual(ZERO);
+    expect(Object.keys(partial)).toHaveLength(10);
   });
 
   it("入力を変更しない", () => {
@@ -171,13 +192,22 @@ describe("placeCharacter / placeBatter", () => {
 
   it("関節ポーズに足元の配置を足す(既定は visible = true)", () => {
     const placed = placeCharacter(POSE_A, root);
-    expect(placed).toEqual({ visible: true, position: root.position, yaw: 0.5, scale: 1.15, ...POSE_A });
+    expect(placed).toEqual({ visible: true, position: root.position, yaw: 0.5, scale: 1.15, expression: "neutral", ...POSE_A });
     expect(placeCharacter(POSE_A, root, false).visible).toBe(false);
+  });
+
+  it("表情は省略すると neutral で、渡した表情がそのまま入る。肘・膝・拡大率が CharacterPose に出る", () => {
+    expect(placeCharacter(POSE_A, root, true, "effort").expression).toBe("effort");
+    const placed = placeCharacter(POSE_B, root);
+    expect(placed.elbowL).toEqual(POSE_B.elbowL);
+    expect(placed.kneeR).toEqual(POSE_B.kneeR);
+    expect(placed.scale).toBeCloseTo(1.15, 12);
   });
 
   it("打者はバットを引き継ぐ", () => {
     const joints: BatterJoints = { ...POSE_B, bat: { visible: true, sweepYaw: 0.3, tilt: -0.2, height: 0.8, lengthScale: 1 } };
-    const placed = placeBatter(joints, root);
+    const placed = placeBatter(joints, root, true, "focus");
+    expect(placed.expression).toBe("focus");
     expect(placed.bat).toEqual(joints.bat);
     expect(placed.torso).toEqual(POSE_B.torso);
     expect(placed.scale).toBeCloseTo(1.15, 12);
