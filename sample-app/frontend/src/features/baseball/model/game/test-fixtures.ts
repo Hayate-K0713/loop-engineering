@@ -1,12 +1,25 @@
 // テスト専用のフィクスチャ。本番コードからは import しない。
 // state.ts(createInitialState)や data/teams.ts に依存せず、game のルール部分のテストが使う最小の Team と GameState を直書きする。
 import type { Bases, GameState } from "../../types/game";
-import type { BatterProfile, Team } from "../../types/team";
+import type { BatterProfile, PlayerLook, Team } from "../../types/team";
 
 const LINEUP_SIZE = 9;
 
+/** 全員同じ見た目(表示専用。game のルールのテストでは使わない)。 */
+const FIXTURE_LOOK: PlayerLook = {
+  number: 1,
+  skin: 1,
+  hair: { style: "short", color: 0 },
+  build: "normal",
+  eyes: "round",
+  brow: "thin",
+  restMouth: "flat",
+  pitchForm: "over",
+  batStance: "square",
+};
+
 function makeBatter(teamId: string, index: number): BatterProfile {
-  return { id: `${teamId}-b${index + 1}`, name: `${teamId}-打者${index + 1}`, meet: 50, power: 50, trajectory: 2 };
+  return { id: `${teamId}-b${index + 1}`, name: `${teamId}-打者${index + 1}`, meet: 50, power: 50, trajectory: 2, look: FIXTURE_LOOK };
 }
 
 /** 能力が全員同じ最小のチーム(打者9人、持ち球はストレートのみ)。`look` はユニフォームの色と略称(描画・表示専用)。 */
@@ -16,8 +29,9 @@ export function makeTeam(id: string, name: string, look: Pick<Team, "uniformColo
     name,
     uniformColor: look.uniformColor,
     shortName: look.shortName,
+    pinstripe: false,
     batters: Array.from({ length: LINEUP_SIZE }, (_, index) => makeBatter(id, index)),
-    pitcher: { id: `${id}-p`, name: `${name}-投手`, speedKmh: 140, control: 50, stamina: 100, repertoire: ["straight"] },
+    pitcher: { id: `${id}-p`, name: `${name}-投手`, speedKmh: 140, control: 50, stamina: 100, repertoire: ["straight"], look: FIXTURE_LOOK },
   };
 }
 
@@ -48,6 +62,7 @@ export function makeState(overrides: Partial<GameState> = {}): GameState {
     lastResult: null,
     lastPlate: null,
     lastInPlay: null,
+    lastAdvance: null,
     phase: { kind: "await-pitch" },
     log: [],
     ...overrides,

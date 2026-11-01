@@ -40,6 +40,7 @@ export function createInitialState(input: InitialStateInput): GameState {
     lastResult: null,
     lastPlate: null,
     lastInPlay: null,
+    lastAdvance: null,
     phase: { kind: "await-pitch" },
     log: [],
   };

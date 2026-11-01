@@ -6,8 +6,11 @@ import type { Vec3 } from "../../../types/scene";
 
 type DeepReadonly<T> = T extends readonly (infer U)[] ? readonly DeepReadonly<U>[] : T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> } : T;
 
-/** 投手(右投げ)の手先のリリース位置。固定(B2 のテストが同値を持つ)。 */
-export const RELEASE_POINT: Vec3 = { x: -0.3, y: 1.65, z: -18.1 };
+/**
+ * 投手(右投げ)の手先のリリース位置。固定(B2 のテストが同値を持つ)。v3(E3): 投手が scale 1.30 になったので、FK の手先(3 種の投球フォームの手先の中心)に合わせた
+ * (v2 は (−0.3, 1.65, −18.1))。どのフォームのリリースの手先もこの点の 0.15m 以内(`motion/pitcher.test.ts`)。フォーム別のリリース点は採らない。
+ */
+export const RELEASE_POINT: Vec3 = { x: -0.5, y: 1.98, z: -18 };
 
 /** CPU 打者の `PITCH_ARRIVED` を `durationMs` より前倒しする時間(ms)。固定。 */
 export const CPU_SWING_LEAD_MS = 150;
@@ -53,8 +56,9 @@ const PARAMS = {
   pitcherFollowMs: 400,
   /** 投手・捕手・打者の足元の位置と向き(yaw)・大きさ。 */
   actors: {
-    // v3: `portraitScale` は縦長の打撃/守備カメラでの投手の構図の倍率(E3 が `scale` に適用する。それまで `scale` は v2 の 1)。
-    pitcher: { position: { x: 0, y: 0.25, z: -18.4 }, yaw: 0, scale: 1, portraitScale: 1.3 },
+    // v3: `scale` は縦長の打撃/守備カメラでの投手の構図の倍率 1.30(E3 で v2 の 1 から変更。カメラの `fit` と投手の足元・FK の手先はこの値で決まる)。
+    // 追跡/内野カメラでは `framingScaleAt` が 1.0 へ戻す(E8)。`portraitScale` は同じ値(`framingScale.pitcher`)。
+    pitcher: { position: { x: 0, y: 0.25, z: -18.4 }, yaw: 0, scale: 1.3, portraitScale: 1.3 },
     catcher: { position: { x: 0, y: -0.25, z: 1.3 }, yaw: Math.PI, scale: 1 },
     // `portraitX` は縦長(アスペクト ≤ 0.7)での打者の x。横長は `position.x`、その間は縦横比の補間で混ぜる(z は不変)。
     // v3: 縦長は `portraitScale`(構図の倍率。接触後に 1.0 へ戻す)・`portraitBatLength`(バット軸の長さの倍率)、横長は `scale`・`position.x`・`batLength`(v2 と同値)。

@@ -29,6 +29,7 @@ describe("createInitialState", () => {
     expect(state.lastResult).toBeNull();
     expect(state.lastPlate).toBeNull();
     expect(state.lastInPlay).toBeNull();
+    expect(state.lastAdvance).toBeNull();
     expect(state.log).toEqual([]);
   });
 

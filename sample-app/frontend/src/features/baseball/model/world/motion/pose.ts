@@ -1,17 +1,44 @@
-import type { BatPose, BatterPose, CharacterPose, Rot3, Vec3 } from "../../../types/scene";
+import type { BatPose, BatterPose, CharacterPose, FaceExpression, Rot3, Vec3 } from "../../../types/scene";
 
 // モーションの基盤(キーフレームの型と補間)。`types/` だけに依存し、`space/` など他の world サブフォルダは import しない。
 // 関節の回転は three の Euler(XYZ)と同義の rad。補間は明示フィールドごとに行い、添字アクセスを使わない。
 
-/** 関節の回転だけのポーズ(足元の位置・向き・大きさは持たない)。配置は `placeCharacter` が足す。 */
+/**
+ * 関節の回転だけのポーズ(足元の位置・向き・大きさは持たない)。配置は `placeCharacter` が足す。
+ * 10 関節: `armL/R` = 肩(上腕)、`elbowL/R` = 肘(前腕。負の x で前腕が前へ曲がる)、`legL/R` = 股関節(大腿)、
+ * `kneeL/R` = 膝(下腿。正の x で足が後ろへ曲がる)。回転は親から見た値。
+ */
 export type JointPose = {
   readonly torso: Rot3;
   readonly head: Rot3;
   readonly armL: Rot3;
   readonly armR: Rot3;
+  readonly elbowL: Rot3;
+  readonly elbowR: Rot3;
   readonly legL: Rot3;
   readonly legR: Rot3;
+  readonly kneeL: Rot3;
+  readonly kneeR: Rot3;
 };
+
+/** 回転なし。 */
+export const ZERO_ROT: Rot3 = { x: 0, y: 0, z: 0 };
+
+/** 指定しなかった関節は回転なし(0)のポーズ。キーフレーム表の記述を短くするためのもの。 */
+export function jointPose(joints: Partial<JointPose>): JointPose {
+  return {
+    torso: joints.torso ?? ZERO_ROT,
+    head: joints.head ?? ZERO_ROT,
+    armL: joints.armL ?? ZERO_ROT,
+    armR: joints.armR ?? ZERO_ROT,
+    elbowL: joints.elbowL ?? ZERO_ROT,
+    elbowR: joints.elbowR ?? ZERO_ROT,
+    legL: joints.legL ?? ZERO_ROT,
+    legR: joints.legR ?? ZERO_ROT,
+    kneeL: joints.kneeL ?? ZERO_ROT,
+    kneeR: joints.kneeR ?? ZERO_ROT,
+  };
+}
 
 /** 打者の関節ポーズ(関節 + バット)。 */
 export type BatterJoints = JointPose & { readonly bat: BatPose };
@@ -77,15 +104,19 @@ export function lerpRot(a: Rot3, b: Rot3, k: number): Rot3 {
   return { x: mix(a.x, b.x, k), y: mix(a.y, b.y, k), z: mix(a.z, b.z, k) };
 }
 
-/** 6関節をそれぞれ補間する。`k` = 0 で `a`、`k` = 1 で `b` と全フィールドが一致する。 */
+/** 10 関節をそれぞれ補間する。`k` = 0 で `a`、`k` = 1 で `b` と全フィールドが一致する。 */
 export function lerpPose(a: JointPose, b: JointPose, k: number): JointPose {
   return {
     torso: lerpRot(a.torso, b.torso, k),
     head: lerpRot(a.head, b.head, k),
     armL: lerpRot(a.armL, b.armL, k),
     armR: lerpRot(a.armR, b.armR, k),
+    elbowL: lerpRot(a.elbowL, b.elbowL, k),
+    elbowR: lerpRot(a.elbowR, b.elbowR, k),
     legL: lerpRot(a.legL, b.legL, k),
     legR: lerpRot(a.legR, b.legR, k),
+    kneeL: lerpRot(a.kneeL, b.kneeL, k),
+    kneeR: lerpRot(a.kneeR, b.kneeR, k),
   };
 }
 
@@ -109,23 +140,28 @@ export function sampleKeyframes<T>(frames: Keyframes<T>, at: number, lerp: Lerp<
   return prev.pose;
 }
 
-/** 関節ポーズに足元の配置を足して、`SceneFrame` の `CharacterPose` にする。 */
-export function placeCharacter(joints: JointPose, root: PoseRoot, visible = true): CharacterPose {
+/** 関節ポーズに足元の配置(と顔の表情。省略は `neutral`)を足して、`SceneFrame` の `CharacterPose` にする。 */
+export function placeCharacter(joints: JointPose, root: PoseRoot, visible = true, expression: FaceExpression = "neutral"): CharacterPose {
   return {
     visible,
     position: root.position,
     yaw: root.yaw,
     scale: root.scale,
+    expression,
     torso: joints.torso,
     head: joints.head,
     armL: joints.armL,
     armR: joints.armR,
+    elbowL: joints.elbowL,
+    elbowR: joints.elbowR,
     legL: joints.legL,
     legR: joints.legR,
+    kneeL: joints.kneeL,
+    kneeR: joints.kneeR,
   };
 }
 
-/** 打者の関節ポーズに足元の配置を足して、`SceneFrame` の `BatterPose` にする。 */
-export function placeBatter(joints: BatterJoints, root: PoseRoot, visible = true): BatterPose {
-  return { ...placeCharacter(joints, root, visible), bat: joints.bat };
+/** 打者の関節ポーズに足元の配置(と顔の表情。省略は `neutral`)を足して、`SceneFrame` の `BatterPose` にする。 */
+export function placeBatter(joints: BatterJoints, root: PoseRoot, visible = true, expression: FaceExpression = "neutral"): BatterPose {
+  return { ...placeCharacter(joints, root, visible, expression), bat: joints.bat };
 }

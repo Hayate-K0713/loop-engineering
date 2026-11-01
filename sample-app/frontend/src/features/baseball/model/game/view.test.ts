@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { BattedBall, InPlayResult, PitchResult, PlateOutcome } from "../../types/batting";
 import type { Side } from "../../types/common";
-import type { GameConfig, GameState, InPlayRecord } from "../../types/game";
+import type { GameConfig, GameState, InPlayRecord, RunnerAdvanceRecord } from "../../types/game";
 import type { PitchFlight, PitchKind } from "../../types/pitch";
 import type { BatterProfile, Team } from "../../types/team";
+import type { PitchOutcomeView } from "../../types/view";
 import { assistFor } from "../batting/assist";
 import { computeBattedLanding } from "../batting/batted-landing";
 import { cursorRadii } from "../batting/cursor";
 import { BATTING_PARAMS, LANDING_PARAMS } from "../batting/params";
 import { CPU_TEAM, PLAYER_TEAM } from "../data/teams";
 import { PITCH_PARAMS } from "../pitch/params";
+import { runnerMovesOf } from "./outcome";
 import { reduce } from "./reducer";
 import { createInitialState } from "./state";
-import { FIXTURE_AWAY_TEAM, FIXTURE_HOME_TEAM, makeState } from "./test-fixtures";
+import { FIXTURE_AWAY_TEAM, FIXTURE_HOME_TEAM, makeState, parseBases } from "./test-fixtures";
 import { toGameView } from "./view";
 
 const AWAY: GameConfig = { innings: 3, humanSide: "away", difficulty: "normal" };
@@ -368,6 +370,8 @@ describe("toGameView: purity", () => {
 });
 
 describe("toGameView: pitch outcome", () => {
+  const moves = (record: RunnerAdvanceRecord | null): PitchOutcomeView["runners"] =>
+    record === null ? null : { before: record.before, after: record.after, scored: record.scored, batterTo: record.batterTo, advances: record.advances };
   const BALL: BattedBall = { type: "liner", strength: "medium", direction: "center" };
 
   function resolvedState(result: PitchResult, plate: PlateOutcome | null, pitchSeq = 5): GameState {
@@ -382,13 +386,13 @@ describe("toGameView: pitch outcome", () => {
   it.each(["ball", "called-strike", "swinging-strike", "foul"] as const)(
     "describes a resolved %s with the current pitch sequence and no in-play detail",
     (kind) => {
-      expect(toGameView(resolvedState({ kind }, null)).outcome).toEqual({ seq: 5, kind, inPlay: null, plate: null });
+      expect(toGameView(resolvedState({ kind }, null)).outcome).toEqual({ seq: 5, kind, inPlay: null, plate: null, runners: null });
     },
   );
 
   it("carries the in-play result and batted ball, and the plate outcome", () => {
     const state = resolvedState({ kind: "in-play", result: "double", ball: BALL }, "double");
-    expect(toGameView(state).outcome).toEqual({ seq: 5, kind: "in-play", inPlay: { result: "double", ball: BALL }, plate: "double" });
+    expect(toGameView(state).outcome).toEqual({ seq: 5, kind: "in-play", inPlay: { result: "double", ball: BALL }, plate: "double", runners: null });
   });
 
   it("reports how the plate appearance ended: a walk, a strikeout, or null while it goes on", () => {
@@ -401,7 +405,7 @@ describe("toGameView: pitch outcome", () => {
   it("keeps the previous pitch's outcome, and its seq (pitchSeq - 1), while the next pitch is in flight", () => {
     const next: PitchFlight = { ...flight("curve", 125, 1500), seq: 6 };
     const state = makeState({ pitchSeq: 6, lastResult: { kind: "foul" }, lastPlate: null, phase: { kind: "in-flight", flight: next } });
-    expect(toGameView(state).outcome).toEqual({ seq: 5, kind: "foul", inPlay: null, plate: null });
+    expect(toGameView(state).outcome).toEqual({ seq: 5, kind: "foul", inPlay: null, plate: null, runners: null });
   });
 
   it("uses the current pitch sequence once the game is over", () => {
@@ -411,7 +415,7 @@ describe("toGameView: pitch outcome", () => {
       lastPlate: "homerun",
       phase: { kind: "game-over", winner: "home" },
     });
-    expect(toGameView(state).outcome).toEqual({ seq: 9, kind: "in-play", inPlay: { result: "homerun", ball: BALL }, plate: "homerun" });
+    expect(toGameView(state).outcome).toEqual({ seq: 9, kind: "in-play", inPlay: { result: "homerun", ball: BALL }, plate: "homerun", runners: null });
   });
 
   it("does not change the outcome seq when the next pitch starts (through the reducer)", () => {
@@ -433,10 +437,44 @@ describe("toGameView: pitch outcome", () => {
     const outcome = toGameView(hit).outcome;
     expect(outcome?.seq).toBe(pitch.seq);
     if (hit.lastResult?.kind === "in-play") {
-      expect(outcome).toEqual({ seq: pitch.seq, kind: "in-play", inPlay: { result: hit.lastResult.result, ball: hit.lastResult.ball }, plate: hit.lastPlate });
+      expect(outcome).toEqual({
+        seq: pitch.seq,
+        kind: "in-play",
+        inPlay: { result: hit.lastResult.result, ball: hit.lastResult.ball },
+        plate: hit.lastPlate,
+        runners: moves(hit.lastAdvance),
+      });
     } else {
       expect(outcome?.inPlay).toBeNull();
     }
+  });
+
+  it("carries the runners' advance of the same pitch (lastAdvance without its seq), and null for a different seq", () => {
+    const advance = { seq: 5, ...runnerMovesOf(parseBases("1--"), parseBases("12-"), 0, "single") };
+    const state = makeState({ pitchSeq: 5, lastResult: { kind: "in-play", result: "single", ball: BALL }, lastPlate: "single", lastAdvance: advance });
+    expect(toGameView(state).outcome?.runners).toEqual(moves(advance));
+    expect(toGameView(state).outcome?.runners).toEqual({
+      before: parseBases("1--"),
+      after: parseBases("12-"),
+      scored: 0,
+      batterTo: 1,
+      advances: [{ from: 1, to: 2 }],
+    });
+    const stale = makeState({ pitchSeq: 6, lastResult: { kind: "foul" }, lastPlate: null, lastAdvance: { ...advance, seq: 4 } });
+    expect(toGameView(stale).outcome?.runners).toBeNull();
+  });
+
+  it("keeps the runners of the previous pitch while the next pitch is in flight (seq = pitchSeq - 1)", () => {
+    const advance = { seq: 5, ...runnerMovesOf(parseBases("---"), parseBases("1--"), 0, "walk") };
+    const next: PitchFlight = { ...flight("curve", 125, 1500), seq: 6 };
+    const state = makeState({
+      pitchSeq: 6,
+      lastResult: { kind: "ball" },
+      lastPlate: "walk",
+      lastAdvance: advance,
+      phase: { kind: "in-flight", flight: next },
+    });
+    expect(toGameView(state).outcome?.runners).toEqual(moves(advance));
   });
 });
 

@@ -16,6 +16,7 @@ import { pitchBallAt } from "./pitch-path";
 // 参考値として出力するだけのもの: M1(弦からの最大ずれ)・M2(同じ着弾のストレートとの同時刻の最大差)。
 //   `bendGain` を 1.0(誇張なし)に決めたため、M1・M2 は設計 §15 の目標(スライダー・シュート ≥ 12px など)に届かないことを承知している(ゲート1の決定)。
 // v3 の姿勢(カメラ x = 0・位置 (0, 1.75, 2.6)・注視 (0, 0.55, −18))での実測(A2): S300 の平均は straight 60%・slider 58%・curve 57%・fork 61%・shoot 59%(最悪 64% まで)で、上限(0.62/0.68)に収まる。
+// E3(投手 scale 1.30・`RELEASE_POINT` を FK の手先 (−0.5, 1.98, −18.0) へ更新。ゾーンが約 23px 下がる)の実測も同じ範囲: S300 の平均は straight 60%・slider 58%・curve 57%・fork 60%・shoot 58%(最悪 64% まで)。`speedProfile` は 0.5 のまま。
 // 画面上の座標は CSS px。球速は CPU 投手の標準(145km/h)に球種ごとの `speedOffsetKmh` を足したもの。
 
 const VIEW = { width: 390, height: 844 } as const;
@@ -121,26 +122,26 @@ function fixed(value: number, digits = 1): string {
 }
 
 describe("投球の画面上の軌道(390×844・打撃レイアウト・bendGain 込み)", () => {
-  it("前提: bendGain は 1.0(誇張なし。ゲート1の決定)で、打撃カメラは v3 の姿勢(x = 0)、ゾーン枠が設計値(x 117.7〜272.3・y 410〜585、±3px。幅 ≥ 150・高さ ≥ 170)", () => {
+  it("前提: bendGain は 1.0(誇張なし。ゲート1の決定)で、打撃カメラは v3 の姿勢(x = 0)、ゾーン枠が設計値(E 完了後 = 投手 scale 1.30: x 117.7〜272.3・y 433〜608、±3px。幅 ≥ 150・高さ ≥ 170)", () => {
     expect(WORLD_PARAMS.pitch.bendGain).toBe(1);
     expect(POSE.position.x).toBe(0);
     expect(POSE.target.x).toBe(0);
     const rect = zoneRectOf(POSE, VIEW, WORLD_PARAMS.zone);
     expect(Math.abs(rect.left - 117.7)).toBeLessThanOrEqual(3);
     expect(Math.abs(rect.left + rect.width - 272.3)).toBeLessThanOrEqual(3);
-    expect(Math.abs(rect.top - 410)).toBeLessThanOrEqual(3);
-    expect(Math.abs(rect.top + rect.height - 585)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.top - 433)).toBeLessThanOrEqual(3);
+    expect(Math.abs(rect.top + rect.height - 608)).toBeLessThanOrEqual(3);
     expect(rect.width).toBeGreaterThanOrEqual(150);
     expect(rect.height).toBeGreaterThanOrEqual(170);
   });
 
-  it("前提: リリース点(段階 A の間は v2 の (−0.3, 1.65, −18.1))が画面 (184, 195) 付近(contract §7)、ゾーン中心が (195, 498) 付近", () => {
+  it("前提: リリース点(E 完了後 = FK の手先。設計の概算 (−0.39, 2.0, −18.0))が画面 (180, 205) 付近(contract §7。x は ±6px・y は ±3px)、ゾーン中心が (195, 521) 付近", () => {
     const release = screenOf(pitchBallAt(flightOf("straight", { x: 0, y: 0 }), 0));
-    expect(Math.abs(release.x - 184)).toBeLessThanOrEqual(3);
-    expect(Math.abs(release.y - 195)).toBeLessThanOrEqual(3);
+    expect(Math.abs(release.x - 180)).toBeLessThanOrEqual(6);
+    expect(Math.abs(release.y - 205)).toBeLessThanOrEqual(3);
     const center = screenOf(zoneToWorld({ x: 0, y: 0 }));
     expect(Math.abs(center.x - 195)).toBeLessThanOrEqual(1);
-    expect(Math.abs(center.y - 498)).toBeLessThanOrEqual(3);
+    expect(Math.abs(center.y - 521)).toBeLessThanOrEqual(3);
   });
 
   it("M1・M2・S300 の実測を表で出力する(M1・M2 は参考値で、合否に使わない)", () => {

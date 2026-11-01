@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { BattedBall, InPlayResult, PitchResult } from "../../types/batting";
+import type { BattedBall, InPlayResult, PitchResult, PlateOutcome } from "../../types/batting";
 import type { InPlayRecord } from "../../types/game";
-import { applyPitchResult, LINEUP_SIZE } from "./outcome";
+import { applyPitchResult, LINEUP_SIZE, runnerMovesOf } from "./outcome";
 import { formatBases, makeState, parseBases } from "./test-fixtures";
 
 const BALL_MEDIUM: BattedBall = { type: "ground", strength: "medium", direction: "pull" };
@@ -256,5 +256,248 @@ describe("applyPitchResult: lastPlate contract", () => {
     const ended = applyPitchResult(makeState(), inPlay("single"));
     expect(ended.lastPlate).toBe("single");
     expect(applyPitchResult(ended, { kind: "ball" }).lastPlate).toBeNull();
+  });
+});
+
+describe("applyPitchResult: lastAdvance", () => {
+  it("is null for every pitch that keeps the at-bat going, even if the previous pitch recorded one", () => {
+    const ended = applyPitchResult(makeState({ pitchSeq: 3, bases: parseBases("1--") }), inPlay("single"));
+    expect(ended.lastAdvance).not.toBeNull();
+    for (const kind of ["ball", "called-strike", "swinging-strike", "foul"] as const) {
+      expect(applyPitchResult({ ...ended, pitchSeq: 4 }, { kind }).lastAdvance).toBeNull();
+    }
+  });
+
+  it("records the advance with the pitchSeq of the resolved pitch, from the bases before the pitch", () => {
+    const next = applyPitchResult(makeState({ pitchSeq: 8, bases: parseBases("12-") }), inPlay("single"));
+    expect(next.lastAdvance).toEqual({
+      seq: 8,
+      before: parseBases("12-"),
+      after: parseBases("12-"),
+      scored: 1,
+      batterTo: 1,
+      advances: [
+        { from: 2, to: 4 },
+        { from: 1, to: 2 },
+      ],
+    });
+  });
+
+  it("records a walk and a strikeout too", () => {
+    const walk = applyPitchResult(makeState({ pitchSeq: 2, count: { balls: 3, strikes: 0 }, bases: parseBases("123") }), { kind: "ball" });
+    expect(walk.lastAdvance).toEqual({
+      seq: 2,
+      before: parseBases("123"),
+      after: parseBases("123"),
+      scored: 1,
+      batterTo: 1,
+      advances: [
+        { from: 3, to: 4 },
+        { from: 2, to: 3 },
+        { from: 1, to: 2 },
+      ],
+    });
+    const strikeout = applyPitchResult(makeState({ pitchSeq: 3, count: { balls: 0, strikes: 2 }, bases: parseBases("1--") }), { kind: "called-strike" });
+    expect(strikeout.lastAdvance).toEqual({
+      seq: 3,
+      before: parseBases("1--"),
+      after: parseBases("1--"),
+      scored: 0,
+      batterTo: 0,
+      advances: [{ from: 1, to: 1 }],
+    });
+  });
+
+  it("does not change anything else: the rest of the state is the same as before the record existed", () => {
+    const state = makeState({ pitchSeq: 6, bases: parseBases("1-3"), outs: 1 });
+    const { lastAdvance, ...rest } = applyPitchResult(state, inPlay("flyout", BALL_STRONG));
+    expect(lastAdvance?.seq).toBe(6);
+    expect(rest.outs).toBe(2);
+    expect(rest.lineScore.away).toEqual([1]);
+    expect(formatBases(rest.bases)).toBe("1--");
+  });
+});
+
+function resultFor(plate: PlateOutcome, ball: BattedBall): PitchResult {
+  switch (plate) {
+    case "walk":
+      return { kind: "ball" };
+    case "strikeout":
+      return { kind: "called-strike" };
+    default:
+      return inPlay(plate, ball);
+  }
+}
+
+describe("runnerMovesOf", () => {
+  const run = (bases: string, plate: PlateOutcome, outs = 0, ball: BattedBall = BALL_STRONG) => {
+    const before = parseBases(bases);
+    const count = plate === "walk" ? { balls: 3, strikes: 0 } : { balls: 0, strikes: 2 };
+    const state = makeState({ bases: before, outs, count });
+    const result = resultFor(plate, ball);
+    const next = applyPitchResult(state, result);
+    return { before, next, moves: next.lastAdvance };
+  };
+
+  it.each([
+    [
+      "12-",
+      "homerun",
+      4,
+      3,
+      [
+        { from: 2, to: 4 },
+        { from: 1, to: 4 },
+      ],
+    ],
+    [
+      "1-3",
+      "double",
+      2,
+      1,
+      [
+        { from: 3, to: 4 },
+        { from: 1, to: 3 },
+      ],
+    ],
+    [
+      "123",
+      "triple",
+      3,
+      3,
+      [
+        { from: 3, to: 4 },
+        { from: 2, to: 4 },
+        { from: 1, to: 4 },
+      ],
+    ],
+    [
+      "1-3",
+      "walk",
+      1,
+      0,
+      [
+        { from: 3, to: 3 },
+        { from: 1, to: 2 },
+      ],
+    ],
+    ["-2-", "error", 1, 0, [{ from: 2, to: 3 }]],
+    [
+      "12-",
+      "groundout",
+      0,
+      0,
+      [
+        { from: 2, to: 3 },
+        { from: 1, to: 2 },
+      ],
+    ],
+    [
+      "1-3",
+      "doublePlay",
+      0,
+      1,
+      [
+        { from: 3, to: 4 },
+        { from: 1, to: 0 },
+      ],
+    ],
+    [
+      "123",
+      "doublePlay",
+      0,
+      1,
+      [
+        { from: 3, to: 4 },
+        { from: 2, to: 3 },
+        { from: 1, to: 0 },
+      ],
+    ],
+    [
+      "1-3",
+      "flyout",
+      0,
+      1,
+      [
+        { from: 3, to: 4 },
+        { from: 1, to: 1 },
+      ],
+    ],
+    [
+      "12-",
+      "lineout",
+      0,
+      0,
+      [
+        { from: 2, to: 2 },
+        { from: 1, to: 1 },
+      ],
+    ],
+  ] as const)("%s %s: batter to %i, %i scored, runners %j", (bases, plate, batterTo, scored, advances) => {
+    const ball: BattedBall = plate === "groundout" ? BALL_WEAK : BALL_STRONG;
+    const { moves } = run(bases, plate, 0, ball);
+    expect(moves?.batterTo).toBe(batterTo);
+    expect(moves?.scored).toBe(scored);
+    expect(moves?.advances).toEqual(advances);
+  });
+
+  it("a third out clears the runners: every runner ends off the bases and nobody scores", () => {
+    const { moves } = run("-23", "groundout", 2);
+    expect(moves?.after).toEqual(parseBases("---"));
+    expect(moves?.scored).toBe(0);
+    expect(moves?.advances).toEqual([
+      { from: 3, to: 0 },
+      { from: 2, to: 0 },
+    ]);
+  });
+
+  const PLATES: readonly PlateOutcome[] = [
+    "walk",
+    "strikeout",
+    "groundout",
+    "doublePlay",
+    "flyout",
+    "lineout",
+    "single",
+    "double",
+    "triple",
+    "homerun",
+    "error",
+  ];
+  const BASES_NOTATION = ["---", "1--", "-2-", "--3", "12-", "1-3", "-23", "123"] as const;
+
+  /** 規則上ありうる組(併殺は 1 塁走者あり・2 アウト未満)。 */
+  const cases = PLATES.flatMap((plate) => BASES_NOTATION.flatMap((bases) => [0, 1, 2].map((outs) => ({ plate, bases, outs })))).filter(
+    ({ plate, bases, outs }) => plate !== "doublePlay" || (bases.startsWith("1") && outs < 2),
+  );
+
+  it("for every result x bases x outs: runners keep their order, never go back, and land on distinct bases that match the bases after", () => {
+    const problems = cases.flatMap(({ plate, bases, outs }) => {
+      const { next, moves } = run(bases, plate, outs, BALL_STRONG);
+      if (moves === null) {
+        return [`${plate} ${bases} ${outs}: no record`];
+      }
+      const landed = moves.advances.map((advance) => advance.to).filter((to) => to >= 1 && to <= 3);
+      const batterOnBase = moves.batterTo >= 1 && moves.batterTo <= 3 ? [moves.batterTo] : [];
+      const occupied = [...landed, ...batterOnBase].sort();
+      const flags = [next.bases.first, next.bases.second, next.bases.third];
+      const expected = [1, 2, 3].filter((_, index) => flags.at(index) === true);
+      const backwards = moves.advances.filter((advance) => advance.to !== 0 && advance.to < advance.from);
+      const homeCount = moves.advances.filter((advance) => advance.to === 4).length + (moves.batterTo === 4 ? 1 : 0);
+      const issues: string[] = [];
+      if (JSON.stringify(occupied) !== JSON.stringify(expected)) issues.push(`occupied ${occupied.join("")} != after ${expected.join("")}`);
+      if (backwards.length > 0) issues.push("went back");
+      if (homeCount !== moves.scored) issues.push(`home ${homeCount} != scored ${moves.scored}`);
+      if (moves.scored !== next.lineScore.away.reduce((sum, v) => sum + v, 0)) issues.push("scored != runs added");
+      return issues.map((issue) => `${plate} ${bases} outs${outs}: ${issue}`);
+    });
+    expect(problems).toEqual([]);
+  });
+
+  it("is a pure derivation: equal input gives equal output, and the bases are passed through", () => {
+    const before = parseBases("12-");
+    const after = parseBases("123");
+    expect(runnerMovesOf(before, after, 0, "walk")).toEqual(runnerMovesOf(before, after, 0, "walk"));
+    expect(runnerMovesOf(before, after, 0, "walk")).toMatchObject({ before, after, scored: 0 });
   });
 });

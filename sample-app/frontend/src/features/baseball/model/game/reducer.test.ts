@@ -256,6 +256,24 @@ describe("resolution: runs, innings and the end of the game", () => {
     expect(logTexts(next)).toEqual(["ボール", "四球", "1点が入りました"]);
   });
 
+  it("records the advance of the resolved pitch in lastAdvance (seq = the pitch's seq) and clears it on the next pitch", () => {
+    const state = inFlight(BALL_FLIGHT, { count: { balls: 3, strikes: 0 }, bases: parseBases("12-") });
+    const next = reduce(state, PITCH_ARRIVED);
+    expect(next.lastAdvance).toEqual({
+      seq: BALL_FLIGHT.seq,
+      before: parseBases("12-"),
+      after: parseBases("123"),
+      scored: 0,
+      batterTo: 1,
+      advances: [
+        { from: 2, to: 3 },
+        { from: 1, to: 2 },
+      ],
+    });
+    const nextBall = reduce(inFlight(BALL_FLIGHT, { ...next, pitchSeq: 6, phase: { kind: "in-flight", flight: { ...BALL_FLIGHT, seq: 6 } } }), PITCH_ARRIVED);
+    expect(nextBall.lastAdvance).toBeNull();
+  });
+
   it("the third out ends the half inning and moves to the bottom of the same inning", () => {
     const state = inFlight(STRIKE_FLIGHT, { outs: 2, count: { balls: 0, strikes: 2 }, bases: parseBases("1--") });
     const next = reduce(state, PITCH_ARRIVED);

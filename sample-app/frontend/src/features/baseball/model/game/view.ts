@@ -142,6 +142,15 @@ function fieldMarkerOf(state: GameState): FieldMarkerView | null {
   return { seq: record.seq, result: record.result, ...computeBattedLanding(record.ball, record.result, record.seq) };
 }
 
+/** その球の進塁の事実(`lastAdvance`。`seq` が球の通し番号と一致するときだけ)。打席が続く球(ボール・ストライク・ファウル)では `null`。 */
+function runnersOf(state: GameState, seq: number): PitchOutcomeView["runners"] {
+  const record = state.lastAdvance;
+  if (record === null || record.seq !== seq) {
+    return null;
+  }
+  return { before: record.before, after: record.after, scored: record.scored, batterTo: record.batterTo, advances: record.advances };
+}
+
 /**
  * 解決した直近の1球の事実(演出用)。`state.lastResult` が `null` の間は `null`。
  * 次の投球が `in-flight` の間は `lastResult` が前の球のものなので、`seq` は `pitchSeq − 1`(それ以外は `pitchSeq`)。
@@ -152,11 +161,13 @@ function outcomeOf(state: GameState): PitchOutcomeView | null {
   if (result === null) {
     return null;
   }
+  const seq = state.phase.kind === "in-flight" ? state.pitchSeq - 1 : state.pitchSeq;
   return {
-    seq: state.phase.kind === "in-flight" ? state.pitchSeq - 1 : state.pitchSeq,
+    seq,
     kind: result.kind,
     inPlay: result.kind === "in-play" ? { result: result.result, ball: result.ball } : null,
     plate: state.lastPlate,
+    runners: runnersOf(state, seq),
   };
 }
 
