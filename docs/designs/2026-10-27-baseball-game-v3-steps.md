@@ -175,7 +175,7 @@
   - 依存: E1, E3, E4(A11 の後)。担当ファイル: `model/world/sequence/{frame,play-plan}.ts`(+test)、新規 `model/world/camera/{infield,wipe}.ts`(+test)。
   - やること: 各キャラクターの `expression`・フォーム・`CharacterPose.scale`(`framingScaleAt`)・`SceneFrame.runners`・野手の捕球/送球・送球のボール・走者が動くプレーでの内野カメラへの blend(400ms。**画角 tan 0.60**)・ワイプ(場面と対象。矩形は HUD の下端 + 20px)を合成。**打席の紹介はワイプで出す**(振り向きの動きは作らない)。`PlayPlan` に走者・送球・ワイプの区間を追加し、走者が動くとき `endMs` を最大 +3.0 秒延ばす。
   - 完了条件: 単体テスト — ワイプのカメラの前方と顔の向きの内積 ≤ −0.6、矩形が 390×844 と 390×664 でゾーン・ボールの通り道・HUD と重ならない、走者が動くプレーだけ内野カメラへ blend しカメラが連続、内野カメラの画角で一塁・三塁の走者が画面内、`CharacterPose.scale` が連続で blend 終了時に 1.0、`endMs` の上限、既存の性質を維持。各関数 60 行以内。
-- [ ] **E9: hooks — 見た目のデータの受け渡し・品質ティア**
+- [x] **E9: hooks — 見た目のデータの受け渡し・品質ティア**
   - 依存: E2。担当ファイル: 新規 `hooks/{useCharacterLooks,useQualityTier}.ts`。
   - やること: `useCharacterLooks`(スロットの `PlayerLook` が変わったら `CharacterLookData` を作り `stage.setLook`。キャッシュ。1 フレーム 1 体まで・飛行中/演出中は生成しない・先読み・無地の仮の顔)。`useQualityTier`(`useFramePerf` の窓の p95 を `nextTier` に渡し `stage.setQualityTier`。飛行中はペンディング。**初期ティアは直近のセッションのティア(`createSafeStore` 経由)を使い、起動直後 60 フレームの中央値が 22ms を超えたら T1 から始める**。`?tier=` で固定。切替をログへ)。全 effect に cleanup。
   - 完了条件: lint 0 件・typecheck 起因 0 件。`hooks/` から `three` を import していない。`useCharacterLooks` が同じ look を二度生成しない。飛行中に生成・ティア切替を呼ばない。

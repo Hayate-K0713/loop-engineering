@@ -6,8 +6,8 @@
 // - シャドウ: r186 は PCFSoftShadowMap が削除済みなので PCFShadowMap を使う。
 // 見た目が合わなければステップ G でこのファイルの値を調整する。
 import { ColorManagement, DataTexture, LinearSRGBColorSpace, NearestFilter, PCFShadowMap, RedFormat } from "three";
-import type { ShadowMapType } from "three";
-import type { UniformColors } from "../types/scene";
+import type { PerspectiveCamera, ShadowMapType } from "three";
+import type { CameraPose, CharacterLookData, CharacterSlot, QualityTier, UniformColors } from "../types/scene";
 import type { StageQuality } from "../types/stage";
 
 // 色の生成より前(モジュール読み込み時)に無効化する。`Color#setHex` は生成時に変換するため、後から切り替えると色がずれる。
@@ -118,6 +118,96 @@ export function pixelRatioFor(quality: StageQuality, devicePixelRatio: number, c
 /** 太陽光の影マップの一辺(px)。`coarsePointer` なら 1024、それ以外は `LIGHT_LOOK.sun.shadow.mapSize`。 */
 export function shadowMapSizeFor(coarsePointer: boolean): number {
   return coarsePointer ? SHADOW_MAP_SIZE.coarse : SHADOW_MAP_SIZE.fine;
+}
+
+/**
+ * 品質ティアごとの描画設定(character 分冊 §3-4-10 の表)。
+ * - `pixelRatioCap` = 画素比の上限(`pixelRatioFor` の結果との小さい方を使う)。
+ * - `shadowMapSize` = 影マップの一辺の上限(px。`Infinity` = 上限なし = `shadowMapSizeFor` の値のまま、0 = 影なし)。
+ * - `nearCasters` = 影を落とす近景の数(`NEAR_SHADOW_ORDER` の先頭から)。
+ * - `farJoints` = 遠景のボーンの回転を書くか(偽なら根の位置・向き・拡大率だけ)。
+ * - `farMovingOnly` = 遠景は動いているキャラクターだけ表示するか。
+ * - `wipe` = ワイプの第 2 パスを描くか。
+ */
+export type TierSettings = {
+  readonly pixelRatioCap: number;
+  readonly shadowMapSize: number;
+  readonly nearCasters: number;
+  readonly farJoints: boolean;
+  readonly farMovingOnly: boolean;
+  readonly wipe: boolean;
+};
+
+const TIER_0: TierSettings = { pixelRatioCap: 1.5, shadowMapSize: Number.POSITIVE_INFINITY, nearCasters: 4, farJoints: true, farMovingOnly: false, wipe: true };
+const TIER_SETTINGS: readonly TierSettings[] = [
+  TIER_0,
+  { pixelRatioCap: 1.25, shadowMapSize: 512, nearCasters: 3, farJoints: true, farMovingOnly: false, wipe: true },
+  { pixelRatioCap: 1, shadowMapSize: 0, nearCasters: 0, farJoints: false, farMovingOnly: false, wipe: true },
+  { pixelRatioCap: 0.85, shadowMapSize: 0, nearCasters: 0, farJoints: false, farMovingOnly: true, wipe: false },
+];
+
+export function tierSettingsFor(tier: QualityTier): TierSettings {
+  return TIER_SETTINGS.at(tier) ?? TIER_0;
+}
+
+/** ティア T3 で、遠景のキャラクターが止まってから消えるまでのフレーム数(動いている間と直後は残す)。 */
+export const MOVING_HOLD_FRAMES = 60;
+
+/** 描画のピクセル比(`pixelRatioFor` とティアの上限の小さい方)。 */
+export function pixelRatioForTier(quality: StageQuality, devicePixelRatio: number, coarsePointer: boolean, tier: QualityTier): number {
+  return Math.min(pixelRatioFor(quality, devicePixelRatio, coarsePointer), tierSettingsFor(tier).pixelRatioCap);
+}
+
+/** ティアでの影マップの一辺(px)。0 = 影なし。`base` は `shadowMapSizeFor` の値。 */
+export function shadowMapSizeForTier(tier: QualityTier, base: number): number {
+  return Math.min(base, tierSettingsFor(tier).shadowMapSize);
+}
+
+/** 近景のうち、ティアが下がるにつれて影を落とさなくなる順の逆(先頭ほど最後まで影を落とす)。 */
+export const NEAR_SHADOW_ORDER: readonly CharacterSlot[] = ["pitcher", "batter", "catcher", "runner0"];
+
+/** 打者側(攻撃側)のユニフォームを着るスロット。 */
+export function isOffenseSlot(slot: CharacterSlot): boolean {
+  return slot === "batter" || slot.startsWith("runner");
+}
+
+/**
+ * `setLook` を受け取るまでの仮の見た目(白いユニフォームにチーム色のアクセント。顔と背番号のテクスチャは持たない)。
+ * 造形(`createCharacterParts`)は色・髪型・体格だけを読むので、テクスチャの素データは空でよい(`applyLook` には渡さない)。
+ */
+export function placeholderLook(slot: CharacterSlot, uniforms: UniformColors): CharacterLookData {
+  const team = isOffenseSlot(slot) ? uniforms.offense : uniforms.defense;
+  return {
+    slot,
+    skin: 1,
+    build: "normal",
+    hair: { style: "short", color: 0x2a1c14 },
+    eyes: "round",
+    faceAtlas: { width: 0, height: 0, cell: 0, rgba: new Uint8Array(0) },
+    numberDecal: { width: 0, height: 0, rgba: new Uint8Array(0) },
+    uniform: { base: PALETTE.uniformWhite, pants: 0xf2f2f2, accent: team, socks: team, cap: team, helmet: team, pattern: null },
+  };
+}
+
+/** 造形をやり直す必要があるかを調べるための鍵(色・髪型・体格・肌。顔のテクスチャだけが変わるときは同じ鍵)。 */
+export function shapeKeyOf(look: CharacterLookData): string {
+  const { uniform } = look;
+  return [look.skin, look.build, look.hair.style, look.hair.color, uniform.base, uniform.pants, uniform.accent, uniform.socks, uniform.cap, uniform.helmet].join("|");
+}
+
+/** カメラを姿勢にそのまま合わせる(縦 FOV は `pose.fovDeg`、シーンを上へずらす量は `pose.lift`。どちらも model が決める)。 */
+export function placeCamera(camera: PerspectiveCamera, pose: CameraPose, size: { readonly width: number; readonly height: number }): void {
+  camera.aspect = size.height > 0 ? size.width / size.height : 1;
+  camera.fov = pose.fovDeg;
+  camera.position.set(pose.position.x, pose.position.y, pose.position.z);
+  camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
+  if (pose.lift > 0) {
+    camera.setViewOffset(size.width, size.height, 0, pose.lift * size.height, size.width, size.height);
+  } else {
+    camera.clearViewOffset();
+  }
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
 }
 
 /** `WebGLRenderer` のうち見た目に関わる設定の最小の型(node で `WebGLRenderer` を作れないため構造的に受ける)。 */

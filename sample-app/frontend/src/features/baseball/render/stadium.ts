@@ -11,6 +11,7 @@ import {
   Fog,
   Group,
   HemisphereLight,
+  Line,
   LineBasicMaterial,
   LineLoop,
   LinearFilter,
@@ -27,6 +28,7 @@ import {
 } from "three";
 import type { Material } from "three";
 import type { CrowdCell, StageGeometry } from "../types/stage";
+import { WIPE_LAYER } from "./character/parts";
 import { CROWD_PALETTE, FOG_LOOK, LIGHT_LOOK, PALETTE, SKY_HEIGHT, SKY_STOPS, gradientPixels, rgbaPixels } from "./look";
 
 const ARC_SEGMENTS = 64;
@@ -114,6 +116,7 @@ function buildGround(geometry: StageGeometry): Mesh {
   const ground = new Mesh(new PlaneGeometry(geometry.groundSize, geometry.groundSize), texturedLambert(createGrassTexture()));
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
+  ground.layers.enable(WIPE_LAYER);
   return ground;
 }
 
@@ -128,6 +131,8 @@ function buildInfield(geometry: StageGeometry): Mesh[] {
   moundMesh.receiveShadow = true;
   const plate = new Mesh(new BoxGeometry(rubber.width, rubber.height, rubber.depth), lambert(PALETTE.white));
   plate.position.set(0, rubber.y, rubber.z);
+  // ワイプの第 2 パスの背景(地面と合わせて 4 draw call)。内野の芝・塁・ライン・ラバーは描かない。
+  for (const background of [dirt, homeDirt, moundMesh]) background.layers.enable(WIPE_LAYER);
   return [dirt, grass, homeDirt, moundMesh, plate];
 }
 
@@ -194,6 +199,9 @@ function buildLights(shadowMapSize: number): { hemisphere: HemisphereLight; sun:
   const { left, right, top, bottom, near, far } = sun.shadow;
   Object.assign(light.shadow.camera, { left, right, top, bottom, near, far });
   light.shadow.camera.updateProjectionMatrix();
+  // ライトは `layers` でも選別される。ワイプ用カメラ(`WIPE_LAYER` だけ)でも照らされるよう、両方のレイヤーに置く。
+  hemi.layers.enable(WIPE_LAYER);
+  light.layers.enable(WIPE_LAYER);
   return { hemisphere: hemi, sun: light };
 }
 
@@ -202,11 +210,41 @@ type StadiumOptions = {
   readonly shadowMapSize?: number;
 };
 
-/** 球場全体(地面・内野・塁・ライン・フェンス・スタンド・屋根・ライト)。空と霧は `createSkyTexture`/`createFog` で別に作る。 */
-export function buildStadium(geometry: StageGeometry, crowd: readonly CrowdCell[], options: StadiumOptions = {}): Group {
+/**
+ * 球場と、その描画負荷の基準値。
+ * - `renderables` = 描画されるオブジェクト(`Mesh`・`Line`)の数 = 球場だけを描いたときのメインパスの draw call(1 オブジェクト 1 回)。
+ * - `shadowCasters` = 影を落とすオブジェクトの数 = 影が有効なときに影のパスで足される draw call。
+ */
+export type StadiumParts = {
+  readonly group: Group;
+  /** 太陽光(ティアで影の有無・影マップの大きさを切り替える)。 */
+  readonly sun: DirectionalLight;
+  readonly renderables: number;
+  readonly shadowCasters: number;
+};
+
+function countStadium(group: Group): { renderables: number; shadowCasters: number } {
+  let renderables = 0;
+  let shadowCasters = 0;
+  group.traverse((object) => {
+    if (!(object instanceof Mesh) && !(object instanceof Line)) return;
+    if (!object.visible) return;
+    renderables += 1;
+    if (object.castShadow) shadowCasters += 1;
+  });
+  return { renderables, shadowCasters };
+}
+
+/** 球場全体と基準値。ワイプの第 2 パスに描く背景(地面・内野の土・マウンド)とライトには `WIPE_LAYER` を有効にしてある。 */
+export function buildStadiumParts(geometry: StageGeometry, crowd: readonly CrowdCell[], options: StadiumOptions = {}): StadiumParts {
   const group = new Group();
   const { hemisphere, sun } = buildLights(options.shadowMapSize ?? LIGHT_LOOK.sun.shadow.mapSize);
   group.add(buildGround(geometry), ...buildInfield(geometry), ...buildBases(geometry), ...buildLines(geometry), ...buildWalls(geometry, crowd));
   group.add(hemisphere, sun, sun.target);
-  return group;
+  return { group, sun, ...countStadium(group) };
+}
+
+/** 球場全体(地面・内野・塁・ライン・フェンス・スタンド・屋根・ライト)。空と霧は `createSkyTexture`/`createFog` で別に作る。 */
+export function buildStadium(geometry: StageGeometry, crowd: readonly CrowdCell[], options: StadiumOptions = {}): Group {
+  return buildStadiumParts(geometry, crowd, options).group;
 }
