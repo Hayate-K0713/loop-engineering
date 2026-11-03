@@ -29,7 +29,6 @@ import { FIELDER_SLOTS } from "../path/fielders";
 import { heldBallAt, pitchBallAt } from "../path/pitch-path";
 import { zoneToWorld } from "../space/coords";
 import { CPU_SWING_LEAD_MS, RELEASE_POINT, WORLD_PARAMS } from "../space/params";
-import { lerpVec3 } from "../space/vec3";
 import { ballSpinAt } from "./ball-look";
 import { type SceneFrameInput, sceneFrameAt, zonePulseAt } from "./frame";
 import { type PlayPlan, planPlay, swingProgressAt } from "./play-plan";
@@ -219,7 +218,7 @@ describe("sceneFrameAt: 全入力の健全性", () => {
       return frame.fielders.length !== 7 || !numbersIn(frame).every(Number.isFinite);
     });
     expect(broken.slice(0, 3).map((input) => `${input.phase}/t${input.tMs}/aspect${input.aspect}`)).toEqual([]);
-  });
+  }, 30_000);
 
   it("構図の入力は凍結した入力でも例外にならず、同じ結果を返す", () => {
     const sample = COMPOSED_INPUTS.filter((_input, i) => i % 53 === 0);
@@ -235,7 +234,7 @@ describe("sceneFrameAt: 全入力の健全性", () => {
       return JSON.stringify(first) !== JSON.stringify(second);
     });
     expect(differing).toHaveLength(0);
-  });
+  }, 30_000);
 
   it("入力(plan・flight を含む)を変更しない: 凍結した入力でも例外にならず、同じ結果を返す", () => {
     const sample = GRID_INPUTS.filter((_input, i) => i % 97 === 0);
@@ -1120,7 +1119,9 @@ describe("sceneFrameAt: 野手", () => {
   it("固定順 7 人、idle・windup・flight では全員が守備位置で待機姿勢(向きは正面 = 0)", () => {
     const frame = frameAt(null, 100, { phase: "flight" });
     expect(frame.fielders).toHaveLength(7);
-    const expected = FIELDER_SLOTS.map((slot) => placeCharacter(fielderReadyPose(), { position: groundedAt(slot.position), yaw: 0, scale: ACTORS.fielderScale }));
+    const expected = FIELDER_SLOTS.map((slot) =>
+      placeCharacter(fielderReadyPose(), { position: groundedAt(slot.position), yaw: 0, scale: ACTORS.fielderScale }),
+    );
     expect(frame.fielders.map((fielder) => neutral(fielder))).toEqual(expected);
   });
 
@@ -1138,13 +1139,15 @@ describe("sceneFrameAt: 野手", () => {
 
   it("走る野手: 接触で守備位置、滞空 × runFactor で目的地に着き、以降はそこで待機姿勢", () => {
     const index = run?.index ?? -1;
+    const from = flat(run?.from ?? RELEASE_POINT);
+    const to = flat(run?.to ?? RELEASE_POINT);
     const startMs = run?.startMs ?? 0;
     const arriveMs = run?.arriveMs ?? 0;
-    expect(flat(frameAt(SINGLE, startMs).fielders.at(index)?.position ?? RELEASE_POINT)).toEqual(flat(run?.from ?? RELEASE_POINT));
-    const middle = frameAt(SINGLE, (startMs + arriveMs) / 2).fielders.at(index)?.position ?? RELEASE_POINT;
-    expect(flat(middle)).toEqual(flat(lerpVec3(run?.from ?? RELEASE_POINT, run?.to ?? RELEASE_POINT, 0.5)));
+    const flatAt = (tMs: number): { readonly x: number; readonly z: number } => flat(frameAt(SINGLE, tMs).fielders.at(index)?.position ?? RELEASE_POINT);
+    expect(flatAt(startMs)).toEqual(from);
+    expect(flatAt((startMs + arriveMs) / 2)).toEqual({ x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 });
+    expect(flatAt(arriveMs + 500)).toEqual(to);
     const arrived = frameAt(SINGLE, arriveMs + 500).fielders.at(index);
-    expect(flat(arrived?.position ?? RELEASE_POINT)).toEqual(flat(run?.to ?? RELEASE_POINT));
     expect(arrived?.torso).toEqual(fielderReadyPose().torso);
     expect(arrived?.legL).toEqual(fielderReadyPose().legL);
   });

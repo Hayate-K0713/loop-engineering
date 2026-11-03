@@ -73,7 +73,13 @@ function runnerPoints(): readonly Vec3[] {
   const stands = ([0, 1, 2, 3, 4] as const satisfies readonly BaseTo[]).map((base) => runnerStandPosition(base));
   const bases = ([1, 2, 3, 4] as const).map((base) => baseWorldPosition(base));
   const moves = [
-    { before: { first: false, second: false, third: false }, after: { first: false, second: false, third: false }, scored: 0, batterTo: 3 as const, advances: [] },
+    {
+      before: { first: false, second: false, third: false },
+      after: { first: false, second: false, third: false },
+      scored: 0,
+      batterTo: 3 as const,
+      advances: [],
+    },
     {
       before: { first: true, second: true, third: true },
       after: { first: true, second: true, third: true },

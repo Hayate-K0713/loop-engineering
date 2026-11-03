@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BattedBall, BattedType, Direction, InPlayResult, Strength, SwingInput } from "../../../types/batting";
 import type { ZonePoint } from "../../../types/common";
+import type { Bases, BaseTo, RunnerMoves } from "../../../types/game";
 import type { PitchFlight } from "../../../types/pitch";
 import type { PitchOutcomeView } from "../../../types/view";
 import { computeBattedLanding } from "../../batting/batted-landing";
@@ -685,5 +686,200 @@ describe("swingProgressAt", () => {
   it("全シナリオの swing で、contactAtMs の progress が接触姿勢の 0.66", () => {
     const atContact = (s: Scenario): boolean => s.plan.swing !== null && swingProgressAt(s.plan.swing, s.plan.swing.contactAtMs) === SWING.contactRatio;
     expect(failures([...MISSES, ...CONTACTS], atContact)).toEqual([]);
+  });
+});
+
+// ---------- 段階 E(E8): 走者・捕球と送球・内野カメラ・ワイプの区間 ----------
+
+const RUNNERS = WORLD_PARAMS.runners;
+const AFTERGLOW_MS = TELOP.afterglowMs;
+const E_FLIGHT = flightOf(5, 480, { x: 0.1, y: 0 });
+const GROUND_BALL: BattedBall = { type: "ground", strength: "medium", direction: "center" };
+const FLY_BALL: BattedBall = { type: "fly", strength: "medium", direction: "center" };
+const HR_BALL: BattedBall = { type: "fly", strength: "strong", direction: "pull" };
+const EMPTY: Bases = { first: false, second: false, third: false };
+const LOADED: Bases = { first: true, second: true, third: true };
+
+function movesOf(before: Bases, batterTo: BaseTo, advances: RunnerMoves["advances"], after: Bases = before): RunnerMoves {
+  return { before, after, scored: advances.filter((entry) => entry.to === 4).length + (batterTo === 4 ? 1 : 0), batterTo, advances };
+}
+
+function playOf(result: InPlayResult, ball: BattedBall, runners: RunnerMoves | null): PlayPlan {
+  const outcome: PitchOutcomeView = { seq: E_FLIGHT.seq, kind: "in-play", inPlay: { result, ball }, plate: result, runners };
+  return planPlay({ flight: E_FLIGHT, outcome, swing: null, resolvedAtMs: E_FLIGHT.durationMs - CPU_SWING_LEAD_MS });
+}
+
+function strikeoutPlan(): PlayPlan {
+  const outcome: PitchOutcomeView = { seq: 5, kind: "swinging-strike", inPlay: null, plate: "strikeout", runners: movesOf(EMPTY, 0, []) };
+  return planPlay({ flight: E_FLIGHT, outcome, swing: null, resolvedAtMs: 300 });
+}
+
+/** 走者を無視した基準の終了時刻(= テロップの終わり + 余韻)。 */
+function baseEndOf(plan: PlayPlan): number {
+  return plan.telop.endMs + AFTERGLOW_MS;
+}
+
+const SINGLE_WITH_RUNNER = movesOf({ first: true, second: false, third: false }, 1, [{ from: 1, to: 2 }]);
+const TRIPLE_LOADED = movesOf(LOADED, 3, [
+  { from: 1, to: 4 },
+  { from: 2, to: 4 },
+  { from: 3, to: 4 },
+]);
+
+describe("planPlay: 走者の区間(runners)・内野カメラへの blend の開始(infieldFromMs)", () => {
+  it("走者が動くプレー(安打): runners.startMs = 野手が打球に届く時刻、infieldFromMs = startMs、durationMs > 0", () => {
+    const plan = playOf("single", FLY_BALL, SINGLE_WITH_RUNNER);
+    expect(plan.runners?.startMs).toBe(plan.fielder?.arriveMs);
+    expect(plan.infieldFromMs).toBe(plan.runners?.startMs);
+    expect(plan.runners?.plan.durationMs ?? 0).toBeGreaterThan(0);
+    expect(plan.runners?.endMs).toBe((plan.runners?.startMs ?? 0) + (plan.runners?.plan.durationMs ?? 0));
+  });
+
+  it("走者が動かないプレー(三振・フライアウト・ホームラン)は内野カメラへ blend しない(infieldFromMs = null)。runners が非 null でも durationMs = 0", () => {
+    const strikeout = strikeoutPlan();
+    expect(strikeout.runners).not.toBeNull();
+    expect(strikeout.runners?.plan.durationMs).toBe(0);
+    expect(strikeout.infieldFromMs).toBeNull();
+    const flyout = playOf("flyout", FLY_BALL, movesOf(EMPTY, 0, []));
+    expect(flyout.runners?.plan.durationMs).toBe(0);
+    expect(flyout.infieldFromMs).toBeNull();
+    const homerun = playOf("homerun", HR_BALL, movesOf(LOADED, 4, TRIPLE_LOADED.advances));
+    expect(homerun.runners?.plan.durationMs).toBe(0);
+    expect(homerun.infieldFromMs).toBeNull();
+  });
+
+  it("進塁の事実(outcome.runners)が無いプレーは runners・infieldFromMs とも null", () => {
+    const plan = playOf("single", FLY_BALL, null);
+    expect(plan.runners).toBeNull();
+    expect(plan.infieldFromMs).toBeNull();
+  });
+
+  it("四球で走者が動くとき: 球の判定(テロップの開始)から走り、内野カメラへ blend する。守備の演出はない", () => {
+    const moves = movesOf(EMPTY, 1, [], { first: true, second: false, third: false });
+    const outcome: PitchOutcomeView = { seq: 5, kind: "ball", inPlay: null, plate: "walk", runners: moves };
+    const plan = planPlay({ flight: E_FLIGHT, outcome, swing: null, resolvedAtMs: E_FLIGHT.durationMs - CPU_SWING_LEAD_MS });
+    expect(plan.runners?.startMs).toBe(plan.telop.startMs);
+    expect(plan.infieldFromMs).toBe(plan.telop.startMs);
+    expect(plan.fielding).toBeNull();
+  });
+});
+
+describe("planPlay: endMs は走者が動くとき進塁の終わりまで延びる(最大 +3.0 秒)", () => {
+  const cases: readonly (readonly [string, InPlayResult, BattedBall, RunnerMoves])[] = [
+    ["単打・走者なし", "single", FLY_BALL, movesOf(EMPTY, 1, [], { first: true, second: false, third: false })],
+    ["単打・一塁走者", "single", FLY_BALL, SINGLE_WITH_RUNNER],
+    ["二塁打・一塁走者", "double", FLY_BALL, movesOf({ first: true, second: false, third: false }, 2, [{ from: 1, to: 3 }])],
+    ["三塁打・満塁", "triple", FLY_BALL, TRIPLE_LOADED],
+    ["ゴロのアウト", "groundout", GROUND_BALL, movesOf(EMPTY, 0, [])],
+    ["併殺打", "doublePlay", GROUND_BALL, movesOf({ first: true, second: false, third: false }, 0, [{ from: 1, to: 0 }])],
+  ];
+
+  it.each(cases)("%s: 基準の終了 ≤ endMs ≤ 基準の終了 + 3.0 秒で、走者の到着 + 余韻を含む(上限に収まる範囲)", (_label, result, ball, moves) => {
+    const plan = playOf(result, ball, moves);
+    const base = baseEndOf(plan);
+    expect(plan.endMs).toBeGreaterThanOrEqual(base);
+    expect(plan.endMs).toBeLessThanOrEqual(base + RUNNERS.maxMs);
+    const expected = Math.min(Math.max(base, (plan.runners?.endMs ?? 0) + AFTERGLOW_MS), base + RUNNERS.maxMs);
+    expect(plan.endMs).toBe(expected);
+  });
+
+  it("走者が動かないプレーは延びない(基準の終了のまま)。走者の事実が無いプレーも同じ", () => {
+    for (const plan of [
+      playOf("flyout", FLY_BALL, movesOf(EMPTY, 0, [])),
+      playOf("homerun", HR_BALL, movesOf(EMPTY, 4, [])),
+      playOf("single", FLY_BALL, null),
+    ]) {
+      expect(plan.endMs).toBe(baseEndOf(plan));
+    }
+  });
+
+  it("全ての安打・アウト × 塁状況の組で、延びは 0 以上 3.0 秒以下(走者が動く組では 0 を超える)", () => {
+    const results: readonly InPlayResult[] = ["single", "double", "triple", "groundout", "doublePlay", "flyout", "lineout", "error"];
+    const situations: readonly RunnerMoves[] = [
+      movesOf(EMPTY, 1, []),
+      movesOf(EMPTY, 3, []),
+      movesOf(LOADED, 1, [
+        { from: 1, to: 2 },
+        { from: 2, to: 3 },
+        { from: 3, to: 4 },
+      ]),
+      TRIPLE_LOADED,
+      movesOf(EMPTY, 0, []),
+    ];
+    const plans = results.flatMap((result) => [GROUND_BALL, FLY_BALL].flatMap((ball) => situations.map((moves) => playOf(result, ball, moves))));
+    const extensions = plans.map((plan) => plan.endMs - baseEndOf(plan));
+    expect(extensions.every((extension) => extension >= 0 && extension <= RUNNERS.maxMs)).toBe(true);
+    expect(Math.max(...extensions)).toBeGreaterThan(0);
+  });
+});
+
+describe("planPlay: 守備の演出(fielding)の時刻は表示の時刻へずれている", () => {
+  it("ゴロのアウト: 打球が野手に届く時刻(fielder.arriveMs)を 0 に、ゴロ捕球 → 一塁へ送球。送球の開始は到着の後で、アウトは打者走者の到着より前", () => {
+    const plan = playOf("groundout", GROUND_BALL, movesOf(EMPTY, 0, []));
+    const arrive = plan.fielder?.arriveMs ?? Number.NaN;
+    expect(plan.fielding?.baseMs).toBe(arrive);
+    expect(plan.fielding?.pose).toBe("scoop");
+    expect(plan.fielding?.fielderIndex).toBe(plan.fielder?.index);
+    const first = plan.fielding?.throws.at(0);
+    expect(first?.startMs ?? 0).toBeGreaterThan(arrive);
+    expect(first?.arriveMs ?? 0).toBeGreaterThan(first?.startMs ?? 0);
+    const retire = plan.fielding?.retires.at(0);
+    expect(retire?.atMs ?? Number.POSITIVE_INFINITY).toBeLessThan(plan.runners?.endMs ?? 0);
+  });
+
+  it("併殺打: 2 回送球し、時刻順(二塁 → 一塁)", () => {
+    const plan = playOf("doublePlay", GROUND_BALL, movesOf({ first: true, second: false, third: false }, 0, [{ from: 1, to: 0 }]));
+    expect(plan.fielding?.throws).toHaveLength(2);
+    const [toSecond, toFirst] = plan.fielding?.throws ?? [];
+    expect(toSecond?.target).toBe(2);
+    expect(toFirst?.target).toBe(1);
+    expect(toFirst?.startMs ?? 0).toBeGreaterThanOrEqual(toSecond?.arriveMs ?? Number.POSITIVE_INFINITY);
+  });
+
+  it("フライ・ライナーのアウトは捕球(送球なし)、安打・失策は追いつくだけ(送球なし)", () => {
+    expect(playOf("flyout", FLY_BALL, null).fielding?.pose).toBe("catch");
+    expect(playOf("lineout", FLY_BALL, null).fielding?.pose).toBe("catch");
+    for (const result of ["single", "double", "triple", "error"] as const) {
+      const fielding = playOf(result, FLY_BALL, null).fielding;
+      expect(fielding?.pose).toBe("field");
+      expect(fielding?.throws).toEqual([]);
+    }
+  });
+
+  it("ホームラン・ファウル・空振り・見逃しは守備の演出なし", () => {
+    expect(playOf("homerun", HR_BALL, null).fielding).toBeNull();
+    for (const scenario of [...FOULS, ...MISSES, ...TAKES]) {
+      expect(scenario.plan.fielding).toBeNull();
+    }
+  });
+});
+
+describe("planPlay: ワイプの区間(wipe)", () => {
+  it("ヒット = 打者の喜び(接触 + 250ms から)、ホームラン = 打者、三振 = 打者の驚き → 落胆、凡打のアウト = 投手(ナイスピッチ)", () => {
+    const single = playOf("single", FLY_BALL, null);
+    expect(single.wipe.map((stage) => [stage.scene, stage.target])).toEqual([["hit", "batter"]]);
+    expect(single.wipe.at(0)?.startMs).toBe((single.contactMs ?? 0) + 250);
+    expect(playOf("homerun", HR_BALL, null).wipe.map((stage) => stage.scene)).toEqual(["homerun"]);
+    expect(playOf("groundout", GROUND_BALL, null).wipe.map((stage) => [stage.scene, stage.target])).toEqual([["nice-pitch", "pitcher"]]);
+    expect(strikeoutPlan().wipe.map((stage) => [stage.scene, stage.target])).toEqual([["strikeout", "batter"]]);
+  });
+
+  it("全シナリオ: 区間は演出の終了(endMs)を超えず、結果の前に始まらない。途中の球(ボール・ストライク・ファウル・空振り)は出さない", () => {
+    for (const scenario of EVERYTHING) {
+      for (const stage of scenario.plan.wipe) {
+        expect(stage.endMs).toBeLessThanOrEqual(scenario.plan.endMs);
+        expect(stage.startMs).toBeGreaterThanOrEqual(scenario.plan.contactMs ?? scenario.plan.durationMs);
+      }
+    }
+    for (const scenario of [...TAKES, ...MISSES, ...FOULS]) {
+      expect(scenario.plan.wipe).toEqual([]);
+    }
+  });
+});
+
+describe("planPlay: outcome を保持する", () => {
+  it("plan.outcome は入力の outcome そのもの", () => {
+    const outcome: PitchOutcomeView = { seq: 9, kind: "called-strike", inPlay: null, plate: null, runners: null };
+    expect(planPlay({ flight: E_FLIGHT, outcome, swing: null, resolvedAtMs: 500 }).outcome).toBe(outcome);
   });
 });

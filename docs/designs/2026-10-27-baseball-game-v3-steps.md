@@ -171,7 +171,7 @@
   - 依存: E5, E6。担当ファイル: `render/{stage,look,stadium}.ts`(+test)。
   - やること: 近景 4 体・遠景 10 体のプール(`SceneFrame.runners`・各 `CharacterPose.expression`)。足元の影の円盤(遠景)は `InstancedMesh` 1 つ。`StageHandle.setLook`。**ワイプ**: 第 2 パス(対象キャラクターだけ `setWipeLayer(true)`、ワイプ用カメラは `layers.set(WIPE_LAYER)`、地面と空だけ同じレイヤー。draw call ≤ 12)。`setQualityTier`(**飛行中はペンディング、`idle`/`holding` で実行**)。`stats()` に品質ティアとワイプの有無を含む。
   - 完了条件: 単体テスト(smoke)— プールの生成・破棄、ティアの切替で遠景の更新・影・ワイプの可否が変わる、飛行中の `setQualityTier` がペンディングされ `idle` で適用される、`setLook` が未知のスロットを無視、ワイプの第 2 パスで描かれるメッシュが対象キャラクター+背景のみ、`window`/`document`/`matchMedia` を使うのは `stage.ts` のみ。
-- [ ] **E8: sequence の合成 E(表情・フォーム・走者・送球・ワイプ・内野カメラ・表示倍率)**
+- [x] **E8: sequence の合成 E(表情・フォーム・走者・送球・ワイプ・内野カメラ・表示倍率)**
   - 依存: E1, E3, E4(A11 の後)。担当ファイル: `model/world/sequence/{frame,play-plan}.ts`(+test)、新規 `model/world/camera/{infield,wipe}.ts`(+test)。
   - やること: 各キャラクターの `expression`・フォーム・`CharacterPose.scale`(`framingScaleAt`)・`SceneFrame.runners`・野手の捕球/送球・送球のボール・走者が動くプレーでの内野カメラへの blend(400ms。**画角 tan 0.60**)・ワイプ(場面と対象。矩形は HUD の下端 + 20px)を合成。**打席の紹介はワイプで出す**(振り向きの動きは作らない)。`PlayPlan` に走者・送球・ワイプの区間を追加し、走者が動くとき `endMs` を最大 +3.0 秒延ばす。
   - 完了条件: 単体テスト — ワイプのカメラの前方と顔の向きの内積 ≤ −0.6、矩形が 390×844 と 390×664 でゾーン・ボールの通り道・HUD と重ならない、走者が動くプレーだけ内野カメラへ blend しカメラが連続、内野カメラの画角で一塁・三塁の走者が画面内、`CharacterPose.scale` が連続で blend 終了時に 1.0、`endMs` の上限、既存の性質を維持。各関数 60 行以内。
