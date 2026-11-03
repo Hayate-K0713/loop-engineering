@@ -4,21 +4,44 @@
 // 寸法(ゾーン・ボール・球場)は StageOptions の StageGeometry から読み、直書きしない。
 // カメラの構図(位置・注視点・FOV・lift)は model が決めた CameraPose をそのまま適用する(縦横比による分岐は持たない)。
 // ゾーン枠の画面矩形は `options.battingCameraFor(aspect, layout, safeArea)` から求め、レイアウトまたは空き領域が変わったら再計算して `onResize` で通知する。
+// キャラクターは 14 体の固定プール(`character-pool.ts`。近景 4・遠景 10)。ワイプは第 2 パス(`wipe.ts`)。
+// 品質ティアは `setQualityTier` で切り替える。再コンパイルを伴うので、ボールが見えている間(飛行中)はペンディングにし、見えなくなった(idle/holding)フレームで適用する。
 import { PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from "three";
 import type { DataTexture } from "three";
-import type { CameraPose, SafeArea, SceneFrame, SceneLayout, UniformColors, Vec3 } from "../types/scene";
+import type { CameraPose, CharacterLookData, CharacterSlot, QualityTier, SafeArea, SceneFrame, SceneLayout, SceneWipe, Vec3 } from "../types/scene";
 import type { ScreenRect, StageGeometry, StageHandle, StageOptions, StageStats } from "../types/stage";
-import { applyUniforms, buildCharacter, createTeamMaterials } from "./character";
-import type { CharacterParts, TeamMaterials } from "./character";
+import {
+  applyPoolFrame,
+  applyPoolTier,
+  createPool,
+  disposePool,
+  entryOf,
+  meshesPerCharacter,
+  refreshPlaceholders,
+  setPoolLook,
+  setWipeTarget,
+} from "./character-pool";
+import type { CharacterPool } from "./character-pool";
 import { disposeObject3D } from "./dispose";
-import { CAMERA_FAR, CAMERA_NEAR, applyRendererLook, createToonGradient, pixelRatioFor, shadowMapSizeFor } from "./look";
+import {
+  CAMERA_FAR,
+  CAMERA_NEAR,
+  DEFAULT_UNIFORMS,
+  applyRendererLook,
+  createToonGradient,
+  placeCamera,
+  pixelRatioForTier,
+  shadowMapSizeFor,
+  shadowMapSizeForTier,
+  tierSettingsFor,
+} from "./look";
 import { applyMarkers, buildMarkers } from "./markers";
 import type { Markers } from "./markers";
-import { applyBatterPose, applyPose } from "./pose-apply";
-import { buildStadium, createFog, createSkyTexture } from "./stadium";
-
-/** 野手の人数(`SceneFrame.fielders` の固定順 7人)。 */
-const FIELDER_COUNT = 7;
+import { applyShadowState } from "./quality";
+import { buildStadiumParts, createFog, createSkyTexture } from "./stadium";
+import type { StadiumParts } from "./stadium";
+import { WIPE_NOT_DRAWN, createWipe, disposeWipe, drawWipe } from "./wipe";
+import type { Wipe, WipePass } from "./wipe";
 
 type Size = { readonly width: number; readonly height: number };
 
@@ -27,13 +50,12 @@ type World = {
   readonly scene: Scene;
   /** `scene.background` のテクスチャ。シーングラフの外なので `dispose` で直接破棄する。 */
   readonly sky: DataTexture;
+  /** トゥーンの階調テクスチャ(全キャラクターで共有。ここで破棄する)。 */
   readonly gradient: DataTexture;
-  readonly teams: TeamMaterials;
-  readonly pitcher: CharacterParts;
-  readonly catcher: CharacterParts;
-  readonly batter: CharacterParts;
-  readonly fielders: readonly CharacterParts[];
+  readonly stadium: StadiumParts;
+  readonly pool: CharacterPool;
   readonly markers: Markers;
+  readonly wipe: Wipe;
 };
 
 /** ステージの関数が共有する実行時の状態。 */
@@ -48,6 +70,8 @@ type Runtime = {
   readonly zoneCamera: PerspectiveCamera;
   readonly raycaster: Raycaster;
   readonly zonePlane: Plane;
+  /** `pointer: coarse`(タッチ端末)か(画素比・影マップの大きさに使う)。 */
+  readonly coarsePointer: boolean;
   disposed: boolean;
   /** 一度でも `apply` されたか(されるまでは初期状態のシーンを描かない)。 */
   hasFrame: boolean;
@@ -56,9 +80,15 @@ type Runtime = {
   /** ゾーン矩形の計算に使う、最後に `apply` されたフレームのレイアウトと空き領域(最初の `apply` まで `batting`・`null` = 既定の空き領域)。 */
   layout: SceneLayout;
   safeArea: SafeArea | null;
-  /** 最後に反映したユニフォーム色(変わったときだけ材質を更新する)。 */
-  uniforms: UniformColors | null;
   zoneRect: ScreenRect | null;
+  /** 現在の品質ティアと、飛行中に保留した切替先(なければ `null`)。 */
+  tier: QualityTier;
+  pendingTier: QualityTier | null;
+  /** 直近のフレームで飛行中(ボールが見えている)か。 */
+  inFlight: boolean;
+  /** 直近のフレームのワイプ(再描画に使う)と、その第 2 パスの結果。 */
+  wipe: SceneWipe | null;
+  wipePass: WipePass;
 };
 
 type ContextListeners = {
@@ -96,39 +126,20 @@ function isCoarsePointer(): boolean {
   return typeof matchMedia === "function" && matchMedia.call(window, "(pointer: coarse)").matches;
 }
 
-/** ステージ内のオブジェクトを作ってシーンに並べる。ポーズ・可視・ユニフォーム色は最初の `apply` で確定する。 */
+/** ステージ内のオブジェクトを作ってシーンに並べる。ポーズ・可視は最初の `apply` で確定する(`setLook` までキャラクターは仮の見た目)。 */
 function buildWorld(options: StageOptions, coarsePointer: boolean): World {
   const { geometry, crowd, rig } = options;
   const sky = createSkyTexture();
   const scene = new Scene();
   scene.background = sky;
   scene.fog = createFog();
-  scene.add(buildStadium(geometry, crowd, { shadowMapSize: shadowMapSizeFor(coarsePointer) }));
+  const stadium = buildStadiumParts(geometry, crowd, { shadowMapSize: shadowMapSizeFor(coarsePointer) });
+  scene.add(stadium.group);
   const gradient = createToonGradient();
-  const teams = createTeamMaterials(gradient);
-  const defense = { accent: teams.defense, gradient, glove: true, bat: false };
-  const pitcher = buildCharacter(rig, defense);
-  const catcher = buildCharacter(rig, defense);
-  const batter = buildCharacter(rig, { accent: teams.offense, gradient, glove: false, bat: true });
-  const fielders = Array.from({ length: FIELDER_COUNT }, () => buildCharacter(rig, defense));
+  const pool = createPool(scene, { rig, gradient }, DEFAULT_UNIFORMS, options.quality === "normal");
   const markers = buildMarkers(geometry, gradient);
-  scene.add(pitcher.root, catcher.root, batter.root, ...fielders.map((fielder) => fielder.root), markers.group);
-  return { scene, sky, gradient, teams, pitcher, catcher, batter, fielders, markers };
-}
-
-/** カメラを姿勢にそのまま合わせる(縦 FOV は `pose.fovDeg`、シーンを上へずらす量は `pose.lift`。どちらも model が決める)。 */
-function placeCamera(camera: PerspectiveCamera, pose: CameraPose, size: Size): void {
-  camera.aspect = aspectOf(size);
-  camera.fov = pose.fovDeg;
-  camera.position.set(pose.position.x, pose.position.y, pose.position.z);
-  camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
-  if (pose.lift > 0) {
-    camera.setViewOffset(size.width, size.height, 0, pose.lift * size.height, size.width, size.height);
-  } else {
-    camera.clearViewOffset();
-  }
-  camera.updateProjectionMatrix();
-  camera.updateMatrixWorld();
+  scene.add(markers.group);
+  return { scene, sky, gradient, stadium, pool, markers, wipe: createWipe() };
 }
 
 /** ゾーン枠の4隅をカメラで投影した画面矩形(キャンバス左上基準の CSS px)。 */
@@ -181,11 +192,13 @@ function syncZoneLayout(rt: Runtime, frame: SceneFrame): void {
   if (!sameRect(before, rt.zoneRect)) rt.options.onResize(rt.size);
 }
 
-function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, renderer: WebGLRenderer, world: World): Runtime {
+function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, renderer: WebGLRenderer, world: World, coarsePointer: boolean): Runtime {
   const { container, geometry } = options;
   const size = { width: Math.max(1, container.clientWidth), height: Math.max(1, container.clientHeight) };
   const initialPose = options.battingCameraFor(aspectOf(size), "batting", null);
   const makeCamera = (): PerspectiveCamera => new PerspectiveCamera(initialPose.fovDeg, aspectOf(size), CAMERA_NEAR, CAMERA_FAR);
+  // 第 1 パスとワイプの第 2 パスを合算して計測するため、`info` の自動リセット(render() ごと)を止めて、フレームの頭で手動リセットする。
+  renderer.info.autoReset = false;
   const rt: Runtime = {
     options,
     canvas,
@@ -195,14 +208,19 @@ function createRuntime(options: StageOptions, canvas: HTMLCanvasElement, rendere
     zoneCamera: makeCamera(),
     raycaster: new Raycaster(),
     zonePlane: new Plane(new Vector3(0, 0, 1), -geometry.zone.planeZ),
+    coarsePointer,
     disposed: false,
     hasFrame: false,
     size,
     pose: initialPose,
     layout: "batting",
     safeArea: null,
-    uniforms: null,
     zoneRect: null,
+    tier: 0,
+    pendingTier: null,
+    inFlight: false,
+    wipe: null,
+    wipePass: WIPE_NOT_DRAWN,
   };
   applySize(rt, size);
   return rt;
@@ -214,7 +232,7 @@ export type RendererInfoLike = {
   readonly memory: { readonly geometries: number; readonly textures: number };
 };
 
-/** 描画負荷の実測。`render` は `autoReset`(既定)により直近の 1 フレーム分、`memory` は生成済みの総数。 */
+/** 描画負荷の実測。`render` は `autoReset` を止めているので直近の 1 フレーム(第 1 パス + ワイプ)分、`memory` は生成済みの総数。 */
 export function readStageStats(info: RendererInfoLike): StageStats {
   return {
     drawCalls: info.render.calls,
@@ -224,30 +242,79 @@ export function readStageStats(info: RendererInfoLike): StageStats {
   };
 }
 
+/**
+ * `stats()` の実体。`StageStats`(契約。E0 が凍結)に、品質ティアとワイプ・球場の基準値を足したもの。
+ * 契約の型に無いフィールドなので、呼び出し側はこの型へ絞り込んで読む(型の追加は契約の変更になるため上申事項)。
+ * - `qualityTier`/`pendingTier` = 現在のティアと、飛行中に保留した切替先。
+ * - `wipe`/`wipeDrawCalls` = 直近のフレームでワイプの第 2 パスを描いたか・その draw call(`drawCalls` に含まれる)。
+ * - `stadiumDrawCalls`/`stadiumShadowCasters` = 球場だけの基準値(描画オブジェクト数 = メインパスの draw call、影を落とすオブジェクト数 = 影のパスの draw call)。
+ * - `meshesPerCharacter` = 1 体あたりの描画オブジェクト数(近景・遠景)。
+ */
+export type StageStatsDetail = StageStats & {
+  readonly qualityTier: QualityTier;
+  readonly pendingTier: QualityTier | null;
+  readonly wipe: boolean;
+  readonly wipeDrawCalls: number;
+  readonly stadiumDrawCalls: number;
+  readonly stadiumShadowCasters: number;
+  readonly meshesPerCharacter: { readonly near: number; readonly far: number };
+};
+
+function statsOf(rt: Runtime): StageStatsDetail {
+  const { stadium, pool } = rt.world;
+  return {
+    ...readStageStats(rt.renderer.info),
+    qualityTier: rt.tier,
+    pendingTier: rt.pendingTier,
+    wipe: rt.wipePass.drawn,
+    wipeDrawCalls: rt.wipePass.calls,
+    stadiumDrawCalls: stadium.renderables,
+    stadiumShadowCasters: stadium.shadowCasters,
+    meshesPerCharacter: meshesPerCharacter(pool),
+  };
+}
+
+/** ワイプの第 2 パス。対象が見えていない・ティアが許さない・矩形が空のときは描かない(対象の `WIPE_LAYER` も外す)。 */
+function renderWipePass(rt: Runtime): WipePass {
+  const { pool, wipe, scene } = rt.world;
+  const spec = rt.wipe;
+  const entry = spec && spec.visible && tierSettingsFor(rt.tier).wipe ? entryOf(pool, spec.target) : undefined;
+  if (!spec || !entry || !entry.parts.root.visible) {
+    setWipeTarget(pool, null);
+    return WIPE_NOT_DRAWN;
+  }
+  setWipeTarget(pool, spec.target);
+  return drawWipe(rt.renderer, scene, wipe, spec, rt.size, entry.parts.root);
+}
+
 function renderFrame(rt: Runtime): void {
-  if (rt.hasFrame) rt.renderer.render(rt.world.scene, rt.camera);
+  if (!rt.hasFrame) return;
+  rt.renderer.info.reset();
+  rt.renderer.render(rt.world.scene, rt.camera);
+  rt.wipePass = renderWipePass(rt);
 }
 
-function updateUniforms(rt: Runtime, uniforms: UniformColors): void {
-  const last = rt.uniforms;
-  if (last !== null && last.offense === uniforms.offense && last.defense === uniforms.defense) return;
-  applyUniforms(rt.world.teams, uniforms);
-  rt.uniforms = { offense: uniforms.offense, defense: uniforms.defense };
+/** ティアをレンダラ・影・キャラクターへ反映する(再コンパイルを伴うので飛行中は呼ばない)。描画はしない。 */
+function applyTier(rt: Runtime, tier: QualityTier): void {
+  rt.pendingTier = null;
+  if (tier === rt.tier) return;
+  rt.tier = tier;
+  const { options } = rt;
+  rt.renderer.setPixelRatio(pixelRatioForTier(options.quality, window.devicePixelRatio, rt.coarsePointer, tier));
+  const mapSize = options.quality === "normal" ? shadowMapSizeForTier(tier, shadowMapSizeFor(rt.coarsePointer)) : 0;
+  const shadowOn = applyShadowState(rt.renderer, rt.world.stadium.sun, rt.world.scene, mapSize);
+  applyPoolTier(rt.world.pool, tierSettingsFor(tier), shadowOn);
 }
 
-function applyWorld(world: World, frame: SceneFrame): void {
-  applyPose(world.pitcher, frame.pitcher);
-  applyPose(world.catcher, frame.catcher);
-  applyBatterPose(world.batter, frame.batter);
-  world.fielders.forEach((fielder, index) => {
-    const pose = frame.fielders.at(index);
-    if (pose) {
-      applyPose(fielder, pose);
-    } else {
-      fielder.root.visible = false;
-    }
-  });
-  applyMarkers(world.markers, frame);
+/** 飛行中なら保留し、そうでなければ適用して再描画する。 */
+function requestTier(rt: Runtime, tier: QualityTier): void {
+  if (rt.disposed) return;
+  if (rt.inFlight) {
+    rt.pendingTier = tier === rt.tier ? null : tier;
+    return;
+  }
+  applyTier(rt, tier);
+  renderFrame(rt);
 }
 
 function applyStage(rt: Runtime, frame: SceneFrame): void {
@@ -255,8 +322,14 @@ function applyStage(rt: Runtime, frame: SceneFrame): void {
   rt.pose = frame.camera;
   placeCamera(rt.camera, frame.camera, rt.size);
   syncZoneLayout(rt, frame);
-  updateUniforms(rt, frame.uniforms);
-  applyWorld(rt.world, frame);
+  // ボールが見えている間 = 飛行中(`SceneFrame` に位相は無い)。見えなくなった最初のフレームで、保留中のティアを適用する。
+  rt.inFlight = frame.ball.visible;
+  if (!rt.inFlight && rt.pendingTier !== null) applyTier(rt, rt.pendingTier);
+  const { pool, markers } = rt.world;
+  refreshPlaceholders(pool, frame.uniforms);
+  applyPoolFrame(pool, frame);
+  applyMarkers(markers, frame);
+  rt.wipe = frame.wipe;
   rt.hasFrame = true;
   renderFrame(rt);
 }
@@ -301,13 +374,13 @@ function createContextListeners(rt: Runtime): ContextListeners {
   };
 }
 
-/** geometry・material・texture を破棄する。球場・キャラクター・マーカーはシーングラフから、空とグラデーションと材質は直接。 */
+/** geometry・material・texture を破棄する。キャラクター(顔・背番号・縞・スケルトンを含む)とワイプは個別に、球場・マーカー・空・階調は直接。 */
 function disposeWorld(world: World): void {
+  disposePool(world.pool);
+  disposeWipe(world.wipe);
   disposeObject3D(world.scene);
   world.sky.dispose();
   world.gradient.dispose();
-  world.teams.offense.dispose();
-  world.teams.defense.dispose();
 }
 
 /** レンダラの破棄 → コンテキストの手放し → canvas の取り外し。`disposeStage` と、初期化の失敗時の後始末で共有する。 */
@@ -347,7 +420,11 @@ function wireStage(rt: Runtime): StageHandle {
   rt.canvas.addEventListener("webglcontextrestored", listeners.restored);
   return {
     apply: (frame) => applyStage(rt, frame),
-    stats: () => (rt.disposed ? null : readStageStats(rt.renderer.info)),
+    stats: () => (rt.disposed ? null : statsOf(rt)),
+    setLook: (slot: CharacterSlot, data: CharacterLookData) => {
+      if (!rt.disposed) setPoolLook(rt.world.pool, slot, data);
+    },
+    setQualityTier: (tier: QualityTier) => requestTier(rt, tier),
     resize: (width, height) => resizeStage(rt, width, height),
     pickPlane: (clientX, clientY) => pickPlane(rt, clientX, clientY),
     zoneScreenRect: () => (rt.disposed ? null : rt.zoneRect),
@@ -363,11 +440,11 @@ function wireStage(rt: Runtime): StageHandle {
 function assembleStage(options: StageOptions, canvas: HTMLCanvasElement, renderer: WebGLRenderer): StageHandle {
   const coarsePointer = isCoarsePointer();
   applyRendererLook(renderer, options.quality);
-  renderer.setPixelRatio(pixelRatioFor(options.quality, window.devicePixelRatio, coarsePointer));
+  renderer.setPixelRatio(pixelRatioForTier(options.quality, window.devicePixelRatio, coarsePointer, 0));
   styleCanvas(canvas);
   const world = buildWorld(options, coarsePointer);
   try {
-    return wireStage(createRuntime(options, canvas, renderer, world));
+    return wireStage(createRuntime(options, canvas, renderer, world, coarsePointer));
   } catch (error) {
     disposeWorld(world);
     throw error;

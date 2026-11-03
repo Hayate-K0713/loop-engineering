@@ -1,12 +1,12 @@
 import { BoxGeometry, BufferGeometry, DataTexture, DirectionalLight, Group, Material, Mesh, MeshBasicMaterial, RedFormat, Texture } from "three";
 import type { Object3D } from "three";
 import { describe, expect, it } from "vitest";
-import { buildCharacter, createTeamMaterials } from "./character";
+import { createCharacterParts } from "./character";
 import { disposeObject3D } from "./dispose";
 import { createToonGradient } from "./look";
 import { buildMarkers } from "./markers";
 import { buildStadium } from "./stadium";
-import { makeCrowd, makeGeometry, makeRig } from "./test-fixtures";
+import { makeCrowd, makeGeometry, makeLookData, makeRig } from "./test-fixtures";
 
 type Counter = { counts: Map<object, number>; track: (resource: BufferGeometry | Material | Texture) => void };
 
@@ -48,16 +48,16 @@ describe("disposeObject3D", () => {
     for (const count of tracker.counts.values()) expect(count).toBe(1);
   });
 
-  it("キャラクター(共有のアクセント材質・階調テクスチャを含む)でも全資源が1回ずつ", () => {
+  it("キャラクター(体・輪郭・顔・背番号と共有の階調テクスチャを含む)でも全資源が1回ずつ", () => {
     const gradient = createToonGradient();
-    const teams = createTeamMaterials(gradient);
-    const parts = buildCharacter(makeRig(), { accent: teams.defense, gradient, glove: true, bat: true });
+    const parts = createCharacterParts(makeLookData({ slot: "batter" }), "near", { rig: makeRig(), gradient });
     const tracker = counter();
     trackAll(parts.root, tracker);
     disposeObject3D(parts.root);
     expect(tracker.counts.has(gradient)).toBe(true);
     expect(gradient.format).toBe(RedFormat);
-    expect(tracker.counts.size).toBeGreaterThan(20);
+    // ジオメトリ 4 + 材質 4 + 階調テクスチャ 1。
+    expect(tracker.counts.size).toBeGreaterThanOrEqual(9);
     for (const count of tracker.counts.values()) expect(count).toBe(1);
   });
 
