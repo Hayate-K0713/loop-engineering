@@ -4,13 +4,13 @@
 import type { IgnoredInputReason } from "../../../types/batting";
 
 /** タップとみなす指の持続の上限(ms。2 つのイベントの `timeStamp` の差)。 */
-export const TAP_MAX_DURATION_MS = 180;
+export const TAP_MAX_DURATION_MS = 300;
 
 /** タップとみなす指の移動量の上限(CSS px)。 */
 export const TAP_MAX_MOVE_PX = 10;
 
 /** タップ候補の指がある間、到達通知(`PITCH_ARRIVED`)を保留する最長の時間(ms)。この後は指を離すイベントが届かなくても通知する。 */
-export const TAP_ARRIVAL_HOLD_MS = 200;
+export const TAP_ARRIVAL_HOLD_MS = 320;
 
 /**
  * pointerdown の振り分け結果。

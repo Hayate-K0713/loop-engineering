@@ -5,7 +5,17 @@ import { EMPTY_BASES } from "../game/runners";
 import { reduce } from "../game/reducer";
 import { createInitialState } from "../game/state";
 import { isStrike } from "../pitch/zone";
-import { type Condition, type HumanPlayer, type Level, type RingBiasScenario, mulberry32, planPitch, sampleHumanPlayer, stratifiedTraits } from "./human-bot";
+import {
+  type Condition,
+  type CursorStyle,
+  type HumanPlayer,
+  type Level,
+  type RingBiasScenario,
+  mulberry32,
+  planPitch,
+  sampleHumanPlayer,
+  stratifiedTraits,
+} from "./human-bot";
 
 // 人間代理ボット v2 の PA シミュレータ。`reduce`(CPU 投手 → ボットのスイング/見逃し)を直接駆動し、カウント・四球・三振を含めた打席結果を数える。
 // 人間は先攻(`humanSide: "away"`)。攻守が替わったら(裏は人間が守備になり進まない)イニングを 1 回表へ戻すだけで、打順・乱数・カウントは続ける。
@@ -292,6 +302,8 @@ type PopulationOptions = {
   readonly pitches: number;
   readonly seed: number;
   readonly ringBias?: RingBiasScenario;
+  /** 母集団のカーソル操作の型。省略は `mixed`(約 50% がタップのみ)。 */
+  readonly cursorStyle?: CursorStyle;
 };
 
 /** レベルの分布から `players` 人をサンプルし、それぞれに `pitches` 球を打たせた指標。 */
@@ -299,7 +311,7 @@ export function runPopulation(options: PopulationOptions): readonly PlayerMetric
   const { level, condition, players, pitches, seed } = options;
   const traits = stratifiedTraits(players, mulberry32(seed));
   return traits.map((trait, index) => {
-    const player = sampleHumanPlayer(level, trait, options.ringBias ?? "model");
+    const player = sampleHumanPlayer(level, trait, options.ringBias ?? "model", options.cursorStyle ?? "mixed");
     return metricsOf(playHuman(player, condition, pitches, seed * 1009 + index + 1));
   });
 }

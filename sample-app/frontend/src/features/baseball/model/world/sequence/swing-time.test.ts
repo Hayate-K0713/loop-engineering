@@ -96,6 +96,18 @@ describe("swingAtMs: イベントの時刻が使えない(now を使い、補正
   });
 });
 
+describe("swingAtMs: 処理の遅れ(重い描画でメインスレッドが詰まった)", () => {
+  it("maxEventAgeMs は 600ms 以上(250ms を超えて遅れても押下の時刻を信頼する。実測で処理の遅れが 390〜595ms になることがある)", () => {
+    expect(maxEventAgeMs).toBe(600);
+    const origin = click(START + 400, "touch");
+    expect(atMs(origin, START + 400 + 595)).toBeCloseTo(400 - BATTING_PARAMS.inputLatencyMs.touch, 9);
+  });
+
+  it("maxTapSpanMs はタップの持続の上限(300ms)と同じ", () => {
+    expect(maxTapSpanMs).toBe(300);
+  });
+});
+
 describe("swingAtMs: タップ(押下 → 離し)", () => {
   it("押下 → 離しが maxTapSpanMs ちょうどなら、押下の時刻を使う", () => {
     const down = START + 300;
@@ -103,10 +115,10 @@ describe("swingAtMs: タップ(押下 → 離し)", () => {
     expect(atMs(origin, down + maxTapSpanMs + 8)).toBeCloseTo(300 - BATTING_PARAMS.inputLatencyMs.touch, 9);
   });
 
-  it("タップの最大(180ms)でも押下の時刻を使う。ハンドラが離しから maxEventAgeMs 遅れても同じ", () => {
+  it("タップの最大(300ms)でも押下の時刻を使う。ハンドラが離しから maxEventAgeMs 遅れても同じ", () => {
     const down = START + 300;
-    const origin = tap(down, down + 180);
-    expect(atMs(origin, down + 180 + maxEventAgeMs)).toBeCloseTo(300 - BATTING_PARAMS.inputLatencyMs.touch, 9);
+    const origin = tap(down, down + 300);
+    expect(atMs(origin, down + 300 + maxEventAgeMs)).toBeCloseTo(300 - BATTING_PARAMS.inputLatencyMs.touch, 9);
   });
 
   it("押下 → 離しが maxTapSpanMs + 1 なら now を使う(補正は引く)", () => {
@@ -120,10 +132,10 @@ describe("swingAtMs: タップ(押下 → 離し)", () => {
     expect(atMs(tap(START + 400, START + 390), nowMs)).toBeCloseTo(700 - BATTING_PARAMS.inputLatencyMs.touch, 9);
   });
 
-  it("経過の判定は離し側(sourceTimeStamp)で行う: 押下からは 250ms を超えていても、離しから 250ms 以内なら押下の時刻を使う", () => {
+  it("経過の判定は離し側(sourceTimeStamp)で行う: 押下からは maxEventAgeMs を超えていても、離しから maxEventAgeMs 以内なら押下の時刻を使う", () => {
     const down = START + 300;
-    const up = down + 180;
-    const nowMs = up + 100;
+    const up = down + 300;
+    const nowMs = up + 400;
     expect(nowMs - down).toBeGreaterThan(maxEventAgeMs);
     expect(atMs(tap(down, up), nowMs)).toBeCloseTo(300 - BATTING_PARAMS.inputLatencyMs.touch, 9);
   });

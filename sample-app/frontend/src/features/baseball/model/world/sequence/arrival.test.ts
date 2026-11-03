@@ -24,8 +24,8 @@ describe("holdArrival: 保留の作成", () => {
     expect(infinite?.untilMs).toBe(NOW + TAP_ARRIVAL_HOLD_MS);
   });
 
-  it("上限は 200ms(設計の値)", () => {
-    expect(TAP_ARRIVAL_HOLD_MS).toBe(200);
+  it("上限は 320ms(設計の値。タップの持続の上限 300ms + 余裕)", () => {
+    expect(TAP_ARRIVAL_HOLD_MS).toBe(320);
   });
 
   it("ms が 0・負・NaN なら保留しない(null)", () => {

@@ -5,6 +5,8 @@ import type { BattedType, InPlayResult, Strength } from "../../types/batting";
 // H3b で人間代理ボット(sim/bot-balance.test.ts)の試算に合わせて `foulRatio`(0.7 → 0.61)・`mediumFrom`(0.38 → 0.32)・`strongFrom`(0.62 → 0.68)を調整した。
 // v3 の A14 で人間代理ボット v2(sim/human-bot.test.ts)の受け入れ帯(E 群)に合わせて `linerHalfBand`(0.14 → 0.10)・`mediumFrom`(0.32 → 0.45)・
 // `strongFrom`(0.68 → 0.60)・`foulRatio`(0.61 → 0.67)を調整した(`ASSIST_TABLE` と結果表の弱い当たりの行も。旧ボット A〜E の帯 = bot-balance.test.ts は、B・B@664 のファウル率の下限だけ 6% → 4%)。
+// A15(打撃の救済。中間試遊 T1「タイミングを合わせても打てない」)で、`maxEventAgeMs` を 250 → 600ms(重い描画でイベントの処理が遅れても押下の `event.timeStamp` を信頼する。
+// 250ms を超えると処理時刻にフォールバックして dt が +390〜+595ms ずれ空振りになっていた)、`maxTapSpanMs` を 200 → 300ms(タップの持続の上限 `TAP_MAX_DURATION_MS` と同じ。実際の指の押下時間の分布は不明で、200ms 以上は無効になっていた)にした。
 // 補助(ロックオン)の質の低下で接触の質 q が全体に下がるため、`mediumFrom` を上げて強さの段階を弱い側へ寄せ、`strongFrom` を下げて補助なしの上手い人の強い当たりを保っている。
 // 入力座標はすべてゾーン単位(ストライクゾーン = [-1, 1]²)。
 
@@ -52,7 +54,7 @@ type BattingParams = {
   readonly strongFrom: number;
   /**
    * 人間打者の見逃し確定の締切 = 到達時刻 D + この値(ms)。遅延補正前の時刻で比べる。
-   * 実装での締切の決まり方は入力によって違う: **1 本指のタップは押下の時刻**(押下の時点で `swingReady` なら、到達通知を最大 200ms 保留するので、
+   * 実装での締切の決まり方は入力によって違う: **1 本指のタップは押下の時刻**(押下の時点で `swingReady` なら、到達通知を最大 320ms(`TAP_ARRIVAL_HOLD_MS`)保留するので、
    * 離したときに見逃しが確定済みにならない)。**マウスのクリック・キー・スイングボタン・2 本目の指は、到達通知(`PITCH_ARRIVED`)をアプリが処理した時刻**
    * (これより後に処理された入力は無視される。入力イベントの時刻ではなく処理の時刻で決まる)。
    * ボット(`sim/bot-sim.ts`)は入力イベントの時刻と D + この値の比較で近似している(描画の詰まりによる処理の遅れは含まない)。
@@ -95,8 +97,8 @@ export const BATTING_PARAMS: BattingParams = {
   ballReachX: 0.23,
   ballReachY: 0.2,
   inputLatencyMs: { touch: 70, mouse: 20, key: 20 },
-  maxEventAgeMs: 250,
-  maxTapSpanMs: 200,
+  maxEventAgeMs: 600,
+  maxTapSpanMs: 300,
 };
 
 /** `lateral`(= x / y)の範囲。 */

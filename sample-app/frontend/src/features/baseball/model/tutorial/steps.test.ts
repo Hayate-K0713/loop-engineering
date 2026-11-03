@@ -32,6 +32,14 @@ describe("tutorialStepsFor", () => {
     expect(text).not.toContain("離");
   });
 
+  it("打撃の最後のカードは、カーソルを合わせてからタップ・合わせなくても届く・むずかしいは合わせる必要がある、と伝え、『動かさず』とは書かない", () => {
+    const body = tutorialStepsFor("batting").at(-1)?.body ?? "";
+    expect(body).toContain("カーソルを ● に あわせてから");
+    expect(body).toContain("あわせなくても");
+    expect(body).toContain("むずかしい");
+    expect(body).not.toContain("うごかさず");
+  });
+
   it("最後のページに音の注意が入る", () => {
     for (const mode of MODES) {
       expect(tutorialStepsFor(mode).at(-1)?.body).toContain("マナーモード");

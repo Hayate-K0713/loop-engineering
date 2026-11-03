@@ -215,18 +215,18 @@ describe("routeStageRelease: 全組み合わせ", () => {
 describe("isTapGesture", () => {
   const base = { downTimeStamp: 1000, upTimeStamp: 1100, movedPx: 4 };
 
-  it("持続 ≤ 180ms かつ移動 ≤ 10px ならタップ(180ms ちょうど・10px ちょうどを含む)", () => {
+  it("持続 ≤ 300ms かつ移動 ≤ 10px ならタップ(300ms ちょうど・10px ちょうどを含む)", () => {
     expect(isTapGesture(base)).toBe(true);
     expect(isTapGesture({ ...base, upTimeStamp: base.downTimeStamp + TAP_MAX_DURATION_MS })).toBe(true);
     expect(isTapGesture({ ...base, movedPx: TAP_MAX_MOVE_PX })).toBe(true);
     expect(isTapGesture({ ...base, upTimeStamp: base.downTimeStamp, movedPx: 0 })).toBe(true);
   });
 
-  it("定数は設計どおり(180ms・10px・到達通知の保留 200ms)", () => {
-    expect([TAP_MAX_DURATION_MS, TAP_MAX_MOVE_PX, TAP_ARRIVAL_HOLD_MS]).toEqual([180, 10, 200]);
+  it("定数は設計どおり(300ms・10px・到達通知の保留 320ms。保留は持続の上限より長い)", () => {
+    expect([TAP_MAX_DURATION_MS, TAP_MAX_MOVE_PX, TAP_ARRIVAL_HOLD_MS]).toEqual([300, 10, 320]);
   });
 
-  it("持続が 180ms を超える(長押し)と偽", () => {
+  it("持続が 300ms を超える(長押し)と偽", () => {
     expect(isTapGesture({ ...base, upTimeStamp: base.downTimeStamp + TAP_MAX_DURATION_MS + 1 })).toBe(false);
     expect(isTapGesture({ ...base, upTimeStamp: base.downTimeStamp + TAP_MAX_DURATION_MS + 0.001 })).toBe(false);
   });
@@ -245,7 +245,7 @@ describe("isTapGesture", () => {
   it("時間は 2 つのイベントの timeStamp の差で測る(絶対値が大きくても同じ)", () => {
     const epoch = 1.7e12;
     expect(isTapGesture({ downTimeStamp: epoch, upTimeStamp: epoch + 150, movedPx: 2 })).toBe(true);
-    expect(isTapGesture({ downTimeStamp: epoch, upTimeStamp: epoch + 181, movedPx: 2 })).toBe(false);
+    expect(isTapGesture({ downTimeStamp: epoch, upTimeStamp: epoch + 301, movedPx: 2 })).toBe(false);
   });
 });
 
@@ -306,8 +306,8 @@ describe("入力の境界(A4 の強化): isTapGesture", () => {
   const base = { downTimeStamp: 2000, upTimeStamp: 2100, movedPx: 0 };
   const at = (ms: number): boolean => isTapGesture({ ...base, upTimeStamp: base.downTimeStamp + ms });
 
-  it("(5) 持続: 179ms・180ms ちょうどは真、181ms は偽", () => {
-    expect([at(179), at(TAP_MAX_DURATION_MS), at(181)]).toEqual([true, true, false]);
+  it("(5) 持続: 299ms・300ms ちょうどは真、301ms は偽", () => {
+    expect([at(299), at(TAP_MAX_DURATION_MS), at(301)]).toEqual([true, true, false]);
   });
 
   it("(5) 持続: 0ms は真、負は偽", () => {
@@ -332,7 +332,7 @@ describe("入力の境界(A4 の強化): isTapGesture", () => {
   it("(5) 持続と移動の両方が境界ちょうどなら真、どちらか一方が境界を超えれば偽", () => {
     const edge = { downTimeStamp: 0, upTimeStamp: TAP_MAX_DURATION_MS, movedPx: TAP_MAX_MOVE_PX };
     expect(isTapGesture(edge)).toBe(true);
-    expect(isTapGesture({ ...edge, upTimeStamp: 181 })).toBe(false);
+    expect(isTapGesture({ ...edge, upTimeStamp: TAP_MAX_DURATION_MS + 1 })).toBe(false);
     expect(isTapGesture({ ...edge, movedPx: 10.01 })).toBe(false);
   });
 });
@@ -349,7 +349,7 @@ describe("入力の境界(A4 の強化): 離しの振り分け", () => {
   });
 });
 
-// tapReleaseReason の全 3×2×2×2×2×2×4×4 = 1536 通り(押下 2000ms 固定。持続 0/180/181/NaN × 移動 0/10/10.01/NaN)。
+// tapReleaseReason の全 3×2×2×2×2×2×4×4 = 1536 通り(押下 2000ms 固定。持続 0/300/301/NaN × 移動 0/10/10.01/NaN)。
 const DOWN_AT = 2000;
 const DURATION_UPS: readonly number[] = [DOWN_AT, DOWN_AT + TAP_MAX_DURATION_MS, DOWN_AT + TAP_MAX_DURATION_MS + 1, Number.NaN];
 const MOVES: readonly number[] = [0, TAP_MAX_MOVE_PX, 10.01, Number.NaN];
@@ -455,12 +455,12 @@ describe("tapReleaseReason: 全組み合わせ", () => {
     expect(tapReleaseReason({ ...base, enabled: false })).toBe("not-ready");
   });
 
-  it("タップ候補で持続・移動が境界内なら理由なし(180ms・10px ちょうどを含む)", () => {
+  it("タップ候補で持続・移動が境界内なら理由なし(300ms・10px ちょうどを含む)", () => {
     const edge = { ...base, upTimeStamp: DOWN_AT + TAP_MAX_DURATION_MS, movedPx: TAP_MAX_MOVE_PX };
     expect([tapReleaseReason(base), tapReleaseReason(edge)]).toEqual([null, null]);
   });
 
-  it("持続 181ms は tap-too-long、移動 10.01px は tap-moved", () => {
+  it("持続 301ms は tap-too-long、移動 10.01px は tap-moved", () => {
     const longHold = { ...base, upTimeStamp: DOWN_AT + TAP_MAX_DURATION_MS + 1 };
     const dragged = { ...base, movedPx: 10.01 };
     expect([tapReleaseReason(longHold), tapReleaseReason(dragged)]).toEqual(["tap-too-long", "tap-moved"]);
@@ -495,7 +495,7 @@ describe("到達の前後の押下(A4 完了条件 6。arrival.ts と組み合�
     enabled: true,
   };
 
-  it("到達の前の押下: タップ候補になり、保留(≤ 200ms)の内に離せば swing-here(押下の時刻で判定する経路)で、保留中は到達通知が出ない", () => {
+  it("到達の前の押下: タップ候補になり、保留(≤ 320ms)の内に離せば swing-here(押下の時刻で判定する経路)で、保留中は到達通知が出ない", () => {
     expect(routeStagePointer({ ...touchDown, swingReady: true })).toBe("drag-start");
     const hold = holdArrival({ seq: SEQ, nowMs: NOW, ms: TAP_ARRIVAL_HOLD_MS });
     const upAfter = 150;
@@ -505,7 +505,7 @@ describe("到達の前後の押下(A4 完了条件 6。arrival.ts と組み合�
     expect(arrivalDue({ elapsedMs: ARRIVE_AT + upAfter, arriveAtMs: ARRIVE_AT, hold: null, seq: SEQ, nowMs: NOW + upAfter })).toBe(true);
   });
 
-  it("到達の前の押下でも、離しが 180ms を超えれば(保留 200ms 内でも)スイングにならず tap-too-long", () => {
+  it("到達の前の押下でも、離しが 300ms を超えれば(保留 320ms 内でも)スイングにならず tap-too-long", () => {
     const slow = { ...release, upTimeStamp: DOWN_AT + TAP_MAX_DURATION_MS + 1 };
     expect(TAP_MAX_DURATION_MS + 1).toBeLessThan(TAP_ARRIVAL_HOLD_MS);
     expect(releaseActionOf(slow)).toBe("none");

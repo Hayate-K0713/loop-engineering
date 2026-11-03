@@ -1,10 +1,10 @@
-import type { SwingInput } from "../../types/batting";
+import type { AssistParams, SwingInput } from "../../types/batting";
 import type { ZonePoint } from "../../types/common";
 import type { Count, Difficulty } from "../../types/game";
 import type { PitchFlight } from "../../types/pitch";
 import type { CameraPose } from "../../types/scene";
 import { assistFor, lockOnCursor, previewCenterOf } from "../batting/assist";
-import { clampCursor } from "../batting/cursor";
+import { INITIAL_CURSOR, clampCursor } from "../batting/cursor";
 import { zoneRectOf } from "../world/camera/project";
 import { battingCameraFor } from "../world/camera/rig";
 import { pitchBallAt } from "../world/path/pitch-path";
@@ -22,6 +22,11 @@ import { isIgnoredEvent, judgeTimeOf, type Viewport } from "./bot-sim";
 //   - `chaseBall` はボールと判断した球を振る確率の基準で、判断した球は `JUDGED_BALL_SWING_FACTOR` 倍(E7 の「ボール球を振る率」は見分け誤りの分も含む)。
 //   - コンタクト率は「振ろうとした球のうち当たった割合」(到達の後の押下・長押し・移動・pointercancel は当たらなかった扱い)で、ログの定義は `swingContactRate`。
 //   - 目標の見積もりを確定する時刻は、押下の時刻から「離して置き直す遅れ + Fitts の移動時間 + 余裕」を引いた時刻(その前に `reactMs` 後)。
+//   - **タップのみ**(`tapOnly`): カーソルを動かさず、押す時刻だけ合わせる人。スマホで「タイミングだけで押す」のは自然な操作で、中間試遊 T1 で
+//     「タイミングを合わせても打てない」と不合格になった原因(中央のままだとふつうのロックオンが弱く、ストライク球でも凡打が約 80%)を再発させないための型。
+//     既定の母集団の約 50%(`TAP_ONLY_RATE`)がこの型で、全員がこの型の母集団(`CursorStyle` の `"tap-only"`)の帯もテストで守る。
+//   - **投球ごとのカーソルの再センタリング**(`useBattingControls`): 指を離している投球の開始位置は中央(`INITIAL_CURSOR`)。指を置き続ける人(2 本目の指で押す人)だけ
+//     前の球の位置が残る。ボットの `planPitch` は、その投球が 2 本目の指の型なら `start`(前の球の位置)から、そうでなければ中央から動かす。
 
 /** 乱数源(0 以上 1 未満)。 */
 type Rand = () => number;
@@ -71,7 +76,12 @@ type LevelProfile = {
   readonly cancelRate: number;
   readonly ignoreRing: number;
   readonly secondFingerRate: number;
+  /** カーソルを動かさずに押す人(タップのみ)の割合。 */
+  readonly tapOnly: number;
 };
+
+/** 既定の母集団でカーソルを動かさない(タップのみ)人の割合。 */
+const TAP_ONLY_RATE = 0.5;
 
 const BEGINNER: LevelProfile = {
   reactMs: { mean: 280, sd: 40 },
@@ -89,6 +99,7 @@ const BEGINNER: LevelProfile = {
   cancelRate: 0.02,
   ignoreRing: 0.25,
   secondFingerRate: 0.2,
+  tapOnly: TAP_ONLY_RATE,
 };
 
 const INTERMEDIATE: LevelProfile = {
@@ -107,6 +118,7 @@ const INTERMEDIATE: LevelProfile = {
   cancelRate: 0.01,
   ignoreRing: 0.15,
   secondFingerRate: 0.35,
+  tapOnly: TAP_ONLY_RATE,
 };
 
 const ADVANCED: LevelProfile = {
@@ -125,6 +137,7 @@ const ADVANCED: LevelProfile = {
   cancelRate: 0.005,
   ignoreRing: 0.05,
   secondFingerRate: 0.5,
+  tapOnly: TAP_ONLY_RATE,
 };
 
 function profileOf(level: Level): LevelProfile {
@@ -161,6 +174,8 @@ const TWO_STRIKE_MARGIN = 0.4;
 const JUDGED_BALL_SWING_FACTOR = 0.4;
 /** ボットのスイング種別(ミート打ちだけ)。 */
 const SWING_KIND = "meet";
+/** 投球ごとの再センタリングの戻し先(`INITIAL_CURSOR`。ゲーム側の定数と同じ)。 */
+const CENTER_CURSOR: ZonePoint = INITIAL_CURSOR;
 
 /** 1 人の仮想プレイヤー。 */
 export type HumanPlayer = {
@@ -183,7 +198,12 @@ export type HumanPlayer = {
   /** リングを使わず、リング無しの偏りで打つ人。 */
   readonly ignoreRing: boolean;
   readonly secondFingerRate: number;
+  /** カーソルを動かさず、押す時刻だけ合わせる人(開始位置のまま押す)。 */
+  readonly tapOnly: boolean;
 };
+
+/** 母集団のカーソル操作の型。`mixed` = 既定(約 50% がタップのみ)、`tap-only` = 全員タップのみ、`move` = 全員カーソルを動かす。 */
+export type CursorStyle = "mixed" | "tap-only" | "move";
 
 /** リング有りの偏りの前提。`pessimistic` = リング無しの値と表の値の中間(悲観シナリオ)。 */
 export type RingBiasScenario = "model" | "pessimistic";
@@ -205,10 +225,12 @@ type Traits = {
   readonly drift: number;
   readonly cancel: number;
   readonly ignoreRing: number;
+  readonly tapOnly: number;
 };
 
 const Z_KEYS: readonly (keyof Traits)[] = ["react", "ringBias", "noRingBias", "latency", "timing", "finger", "perceive", "fitts", "swing", "chase", "second"];
-const U_KEYS: readonly (keyof Traits)[] = ["slow", "drift", "cancel", "ignoreRing"];
+/** `tapOnly` は末尾に足した(先頭の項目の乱数列を変えず、既存の母集団を保つ)。 */
+const U_KEYS: readonly (keyof Traits)[] = ["slow", "drift", "cancel", "ignoreRing", "tapOnly"];
 
 /** 標準正規分布の逆累積分布(Acklam の有理近似。相対誤差 1.2e-9 程度)。`p` は 0 より大きく 1 より小さい。 */
 function inverseNormalCdf(p: number): number {
@@ -275,7 +297,7 @@ function clamp01Range(value: number, min: number, max: number): number {
 }
 
 /** レベルの分布と個人差の素 `traits` から 1 人を作る。 */
-export function sampleHumanPlayer(level: Level, traits: Traits, scenario: RingBiasScenario = "model"): HumanPlayer {
+export function sampleHumanPlayer(level: Level, traits: Traits, scenario: RingBiasScenario = "model", style: CursorStyle = "mixed"): HumanPlayer {
   const profile = profileOf(level);
   const ringMean = scenario === "pessimistic" ? (profile.ringBiasMs.mean + profile.noRingBiasMs.mean) / 2 : profile.ringBiasMs.mean;
   return {
@@ -295,6 +317,7 @@ export function sampleHumanPlayer(level: Level, traits: Traits, scenario: RingBi
     cancelRate: individualRate(traits.cancel, profile.cancelRate),
     ignoreRing: traits.ignoreRing < profile.ignoreRing,
     secondFingerRate: clamp01Range(profile.secondFingerRate + 0.1 * traits.second, 0, 1),
+    tapOnly: style === "mixed" ? traits.tapOnly < profile.tapOnly : style === "tap-only",
   };
 }
 
@@ -306,10 +329,20 @@ export type Condition = {
   readonly name: string;
   readonly difficulty: Difficulty;
   readonly assist: "table" | "off";
+  /**
+   * ボットが適用するロックオン強度の倍率(省略 = 1)。**検出力の確認用**: 「ロックオンが弱い設定」(T1 で不合格になった A14 の値に近い)を作り、
+   * タップのみの帯が弱いロックオンを検出できることを確かめる。結果表の質の低下(リデューサ側)は変わらない。
+   */
+  readonly lockScale?: number;
 };
 
 /** v2 設定(補助なし): ロックオン 0・予告 `none`・リングなし・偏りはリング無しの値。難易度は CPU 投手の強さにだけ効く(ふつう)。 */
 export const V2_CONDITION: Condition = { name: "v2 設定(補助なし)", difficulty: "normal", assist: "off" };
+
+/** ロックオンの強さだけを `scale` 倍にした条件(検出力の確認用。予告・リングは `difficulty` の表のまま)。 */
+export function weakLockCondition(difficulty: Difficulty, scale: number): Condition {
+  return { name: `v3 ${difficulty}(ロックオン強度 ×${scale})`, difficulty, assist: "table", lockScale: scale };
+}
 
 /** v3 の難易度別の条件(`ASSIST_TABLE` のロックオン・予告・リングあり)。 */
 export function v3Condition(difficulty: Difficulty): Condition {
@@ -375,6 +408,12 @@ function extrapolateLanding(flight: PitchFlight, observedMs: number, offsetGain:
 
 // ---------- 知覚と判断 ----------
 
+/** ボットが使うロックオンの表(`lockScale` で強度だけ変える)。 */
+function lockAssistOf(condition: Condition): AssistParams {
+  const assist = assistFor(condition.difficulty);
+  return condition.lockScale === undefined ? assist : { ...assist, lockStrength: assist.lockStrength * condition.lockScale };
+}
+
 function previewModeOf(condition: Condition): "exact" | "fade" | "none" {
   return condition.assist === "off" ? "none" : assistFor(condition.difficulty).preview;
 }
@@ -398,7 +437,7 @@ function decideToSwing(player: HumanPlayer, perceived: ZonePoint, count: Count, 
 
 // ---------- 1 球の計画 ----------
 
-/** 押したのにスイングにならなかった理由。`late` = 到達の後の押下(見逃し扱い)、`slow` = 180ms 超の長押し、`drift` = 10px 超の移動。 */
+/** 押したのにスイングにならなかった理由。`late` = 到達の後の押下(見逃し扱い)、`slow` = 300ms 超の長押し、`drift` = 10px 超の移動。 */
 type NoSwingReason = "late" | "slow" | "drift" | "cancel";
 
 /** 1 球のボットの行動。 */
@@ -421,7 +460,7 @@ type PlanInput = {
   readonly condition: Condition;
   readonly flight: PitchFlight;
   readonly count: Count;
-  /** 開始位置(前の球で最後にあった位置)。 */
+  /** 前の球で素のカーソルが最後にあった位置。指を置き続ける人(2 本目の指で押す人)だけ、この位置から始まる。ほかは投球ごとに中央へ戻る。 */
   readonly start: ZonePoint;
   readonly viewport?: Viewport;
 };
@@ -474,7 +513,8 @@ function failureOf(player: HumanPlayer, secondFinger: boolean, pressMs: number, 
 
 /**
  * 1 球のボットの行動を決める。押下の時刻を決め → 目標の見積もりを確定する時刻(押下の前に、合わせる動作と余裕を残す)で着弾を知覚し →
- * 振るか見送るかを判断 → 振るなら開始位置から Fitts の時間で動かし(間に合わなければ途中)、押下時刻の進行度でロックオンを適用して判定入力を作る。
+ * 振るか見送るかを判断 → 振るなら開始位置から Fitts の時間で動かし(間に合わなければ途中。タップのみの人は動かさない)、押下時刻の進行度でロックオンを適用して判定入力を作る。
+ * 開始位置は、その投球が 2 本目の指の型なら `start`(指を置き続けているので前の球の位置)、そうでなければ中央(指を離しているので再センタリング済み)。
  */
 export function planPitch(input: PlanInput, rand: Rand): PitchPlan {
   const { player, condition, flight, count, start } = input;
@@ -483,19 +523,20 @@ export function planPitch(input: PlanInput, rand: Rand): PitchPlan {
   const pressMs = pressTimeOf(player, condition, durationMs, rand);
   const secondFinger = rand() < player.secondFingerRate;
   const regripMs = secondFinger ? 0 : Math.max(0, REGRIP.mean + gauss(rand) * REGRIP.sd);
-  const planMs = fittsMs(player, distancePx(env, start, flight.landing));
+  const origin = secondFinger ? start : CENTER_CURSOR;
+  const planMs = fittsMs(player, distancePx(env, origin, flight.landing));
   const commitMs = Math.max(player.reactMs, pressMs - regripMs - planMs - COMMIT_SLACK_MS);
   const perceived = perceiveLanding(player, condition, env, flight, commitMs, rand);
   if (!decideToSwing(player, perceived, count, rand)) {
-    return takePlan(start);
+    return takePlan(origin);
   }
-  const raw = reachCursor(player, env, start, perceived, pressMs - regripMs - commitMs, rand);
+  const raw = player.tapOnly ? origin : reachCursor(player, env, origin, perceived, pressMs - regripMs - commitMs, rand);
   const base = { intent: true, cursorAfter: raw, pressOffsetMs: pressMs - durationMs, rawDistancePx: distancePx(env, raw, flight.landing) };
   const failure = failureOf(player, secondFinger, pressMs, durationMs, rand);
   if (failure !== null) {
     return { ...base, swing: null, noSwing: failure };
   }
-  const locked = condition.assist === "off" ? { cursor: raw, k: 0 } : lockOnCursor(assistFor(condition.difficulty), raw, flight.landing, pressMs / durationMs);
+  const locked = condition.assist === "off" ? { cursor: raw, k: 0 } : lockOnCursor(lockAssistOf(condition), raw, flight.landing, pressMs / durationMs);
   const swing: SwingInput = { kind: SWING_KIND, cursor: locked.cursor, atMs: judgeTimeOf(pressMs, "touch"), assistK: locked.k };
   return { ...base, swing, noSwing: null };
 }

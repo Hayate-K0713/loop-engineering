@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEventHandler, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type PointerEventHandler, type RefObject } from "react";
 import { assistFor, lockOnCursor, type LockOn } from "../model/batting/assist";
 import { INITIAL_CURSOR } from "../model/batting/cursor";
 import type { ViewSize } from "../model/world/camera/project";
@@ -87,6 +87,27 @@ export type BattingControls = {
   readonly pointerHandlers: PointerHandlers;
 };
 
+/** 投球ごとの素のカーソルの再センタリングを決める材料(指・ポインタの状態)。 */
+export type RecenterContext = {
+  /** いま画面に置かれているタッチの指の数(ドラッグ中・押しっぱなしを含む)。 */
+  readonly touchesDown: number;
+  /** 最後に見たポインタの種類(`PointerEvent.pointerType`)。まだ何も見ていなければ `null`。 */
+  readonly lastPointerType: string | null;
+};
+
+/**
+ * 投球ごとに素のカーソルを `INITIAL_CURSOR`(中央)へ戻してよいか(純関数)。
+ * - 指を置いている間(`touchesDown > 0`)は戻さない: 相対ドラッグは開始時のカーソル位置を覚えているので、戻すとその後の移動で位置が飛ぶ(押しっぱなしの指の追従を壊さない)。
+ * - 最後に操作したのがマウス/ペンのときは戻さない: 絶対位置追従なので、戻すと見えるカーソルとポインタの位置が食い違う(次に動かすまで直らない)。
+ * それ以外(タッチで指を離している・キーボード・まだ何も操作していない)は戻す。前の球の着弾点にカーソルが残って、次の球でふつうのロックオンより悪くなるのを防ぐ。
+ */
+export function shouldRecenterCursor(context: RecenterContext): boolean {
+  if (context.touchesDown > 0) {
+    return false;
+  }
+  return context.lastPointerType !== "mouse" && context.lastPointerType !== "pen";
+}
+
 const BUTTON_DETAIL: SwingDetail = { source: "button", tapHoldMs: null, tapMovePx: null, fingerTravelPx: null };
 const KEY_DETAIL: SwingDetail = { source: "key", tapHoldMs: null, tapMovePx: null, fingerTravelPx: null };
 
@@ -127,6 +148,34 @@ function clampToView(point: ZonePoint, options: UseBattingControlsOptions): Zone
     return point;
   }
   return clampCursorToView(point, zoneRect, size.width, freeBottomPxOf(options.getSafeArea(), size.height));
+}
+
+/** ポインタハンドラを包み、指・ポインタの状態を記録する(再センタリングの判定用)。元のハンドラはそのまま呼ぶ。 */
+function trackPointers(handlers: PointerHandlers, touches: RefObject<Set<number>>, lastType: RefObject<string | null>): PointerHandlers {
+  const note = (event: PointerEvent<HTMLElement>): void => {
+    lastType.current = event.pointerType;
+  };
+  return {
+    onPointerDown: (event) => {
+      note(event);
+      if (event.pointerType === "touch") {
+        touches.current.add(event.pointerId);
+      }
+      handlers.onPointerDown(event);
+    },
+    onPointerMove: (event) => {
+      note(event);
+      handlers.onPointerMove(event);
+    },
+    onPointerUp: (event) => {
+      touches.current.delete(event.pointerId);
+      handlers.onPointerUp(event);
+    },
+    onPointerCancel: (event) => {
+      touches.current.delete(event.pointerId);
+      handlers.onPointerCancel(event);
+    },
+  };
 }
 
 type LatestOptions = RefObject<UseBattingControlsOptions & { readonly swingKind: SwingKind }>;
@@ -185,7 +234,7 @@ function useLockOn(latest: LatestOptions, positionRef: RefObject<ZonePoint>, fli
 
 /**
  * 打撃操作(ポインタ・キーボード・ボタン)の合成。スイング種別(`swingKind`、初期 `"meet"`)の state もここに持つ。
- * 素のカーソル位置は ref(`INITIAL_CURSOR` から開始)に保持し、描画は director が `getCursorView()` を毎フレーム読んで `SceneFrame` に載せる
+ * 素のカーソル位置は ref(`INITIAL_CURSOR` から開始。**投球ごと**に `INITIAL_CURSOR` へ戻す: `shouldRecenterCursor`)に保持し、描画は director が `getCursorView()` を毎フレーム読んで `SceneFrame` に載せる
  * (DOM を直接更新しない)。ポインタは入力面の div に展開する。カーソルの移動は `moveCursorTo` で画面内に制限する(`clampCursorToView`)。
  * スイングの `SwingInput.cursor`/`assistK` は、素のカーソルに**入力イベントの時刻の進行度**でロックオン(`effectiveCursorAt`)を適用して作る
  * (表示する有効カーソルと判定に使うカーソルを一致させる。タップは押下の時刻)。
@@ -195,7 +244,8 @@ export function useBattingControls(options: UseBattingControlsOptions): BattingC
   const [swingKind, setSwingKind] = useState<SwingKind>("meet");
   const latest = useLatest({ ...options, swingKind });
   const positionRef = useRef<ZonePoint>(INITIAL_CURSOR);
-  const { getCursorView, swingNow, swingFromButton, swingFromKey } = useLockOn(latest, positionRef, options.flight === null ? null : options.flight.seq);
+  const flightSeq = options.flight === null ? null : options.flight.seq;
+  const { getCursorView, swingNow, swingFromButton, swingFromKey } = useLockOn(latest, positionRef, flightSeq);
 
   const getCursor = useCallback((): ZonePoint => positionRef.current, []);
   const moveCursorTo = useCallback(
@@ -208,7 +258,25 @@ export function useBattingControls(options: UseBattingControlsOptions): BattingC
   const reportIgnored = useCallback((reason: IgnoredInputReason): void => latest.current.onIgnoredInput?.(reason), [latest]);
   const reportPointerCancel = useCallback((): void => latest.current.onPointerCancel?.(), [latest]);
 
-  const pointerHandlers = usePointerInput({
+  const touchesRef = useRef<Set<number>>(new Set());
+  const lastPointerTypeRef = useRef<string | null>(null);
+  const getRecenterContext = useCallback((): RecenterContext => ({ touchesDown: touchesRef.current.size, lastPointerType: lastPointerTypeRef.current }), []);
+
+  // 投球ごとに素のカーソルを中央へ戻す(表示 `getCursorView` と判定は同じ `positionRef` を読むので一致したまま)。layout effect なので、新しい球の最初の描画前に反映される。
+  useLayoutEffect(() => {
+    if (flightSeq !== null && shouldRecenterCursor(getRecenterContext())) {
+      positionRef.current = INITIAL_CURSOR;
+    }
+  }, [flightSeq, getRecenterContext]);
+
+  // 打撃中でなくなったら、取りこぼした「指が下りている」記録を捨てる(離しのイベントが届かないまま再センタリングが止まり続けないように)。
+  useEffect(() => {
+    if (!enabled) {
+      touchesRef.current.clear();
+    }
+  }, [enabled]);
+
+  const basePointerHandlers = usePointerInput({
     enabled,
     holding,
     swingReady,
@@ -223,6 +291,7 @@ export function useBattingControls(options: UseBattingControlsOptions): BattingC
     holdArrivalFor,
     releaseArrival,
   });
+  const pointerHandlers = trackPointers(basePointerHandlers, touchesRef, lastPointerTypeRef);
   useKeyboardInput({ enabled, swingReady, getCursor, moveCursorTo, onSwing: swingFromKey, onSelectSwingKind: setSwingKind });
 
   const currentRadii = swingKind === "meet" ? cursorRadii.meet : cursorRadii.power;

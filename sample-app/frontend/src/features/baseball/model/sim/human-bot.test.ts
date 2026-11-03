@@ -3,6 +3,7 @@ import type { ZonePoint } from "../../types/common";
 import type { PitchFlight } from "../../types/pitch";
 import {
   type Condition,
+  type CursorStyle,
   type HumanPlayer,
   LEVELS,
   type Level,
@@ -15,6 +16,7 @@ import {
   sampleHumanPlayer,
   stratifiedTraits,
   v3Condition,
+  weakLockCondition,
 } from "./human-bot";
 import { type PopulationMetrics, metricsOf, playHuman, quantileOf, runPopulation, summarizePopulation } from "./human-game";
 
@@ -24,6 +26,8 @@ import { type PopulationMetrics, metricsOf, playHuman, quantileOf, runPopulation
 // 実際の人間の手触りを保証するものではない(T1・T2 の試遊ログで較正し、ゲート2の主観で確認する。[[game-feel-needs-playability-check]])。
 // 母集団のサイズ: 打率の P10(E2 の下限 .13)は下位 10% の個人の寄せ集めで標本ぶれが大きいので、ふつうの初心者だけは 250 人 × 各 1200 球
 // (P10 の標本の SD が約 .008)にし、他は 40 人 × 各 2000 球。`BOT_FULL=1` で人数・球数を 2 倍にする。標準で約 20 秒(1 ファイル 60 秒以内)。
+// A15(打撃の救済。中間試遊 T1「タイミングを合わせても打てない」)で、カーソルを動かさずタイミングだけで押す「タップのみ」を母集団の失敗の型に足した
+// (既定の母集団の約 50%。全員がタップのみ・全員が動かす母集団も作れる)。スマホの人のふつうの操作を帯で守る(今回の再発防止の核)。
 // `BOT_SEED=<数>` でシードを変えて頑健性を確かめられる(帯が特定のシードの当たり外れに依存していないかの診断用)。
 
 const FULL = process.env.BOT_FULL === "1";
@@ -33,18 +37,18 @@ const POPULATION_TIMEOUT_MS = 180_000;
 
 // ---------- 母集団の実行と表 ----------
 
-type PopulationKey = { readonly level: Level; readonly condition: Condition; readonly ring?: RingBiasScenario };
+type PopulationKey = { readonly level: Level; readonly condition: Condition; readonly ring?: RingBiasScenario; readonly style?: CursorStyle };
 
 /** 母集団のサイズ。ふつうの初心者(P10 の判定がある)だけ人数を増やす。 */
 function sizeOf(key: PopulationKey): { readonly players: number; readonly pitches: number } {
-  const wide = key.level === "beginner" && key.condition.name === v3Condition("normal").name && key.ring === undefined;
+  const wide = key.level === "beginner" && key.condition.name.startsWith(v3Condition("normal").name) && key.ring === undefined;
   return wide ? { players: 250 * SCALE, pitches: 1200 * SCALE } : { players: 40 * SCALE, pitches: 2000 * SCALE };
 }
 
 const cache = new Map<string, PopulationMetrics>();
 
 function keyOf(key: PopulationKey): string {
-  return `${key.level}|${key.condition.name}|${key.ring ?? "model"}`;
+  return `${key.level}|${key.condition.name}|${key.ring ?? "model"}|${key.style ?? "mixed"}`;
 }
 
 function populationOf(key: PopulationKey): PopulationMetrics {
@@ -54,7 +58,15 @@ function populationOf(key: PopulationKey): PopulationMetrics {
   }
   const { players, pitches } = sizeOf(key);
   const summary = summarizePopulation(
-    runPopulation({ level: key.level, condition: key.condition, players, pitches, seed: SEED, ringBias: key.ring ?? "model" }),
+    runPopulation({
+      level: key.level,
+      condition: key.condition,
+      players,
+      pitches,
+      seed: SEED,
+      ringBias: key.ring ?? "model",
+      cursorStyle: key.style ?? "mixed",
+    }),
   );
   cache.set(keyOf(key), summary);
   return summary;
@@ -63,6 +75,8 @@ function populationOf(key: PopulationKey): PopulationMetrics {
 const NORMAL = v3Condition("normal");
 const HARD = v3Condition("hard");
 const EASY = v3Condition("easy");
+/** 検出力の確認用: ロックオン強度を ×0.68(ふつうの 0.96 → 0.65。T1 で不合格になった A14 の強度)にした条件。 */
+const WEAK_LOCK = weakLockCondition("normal", 0.68);
 
 function fixed(value: number, digits = 3): string {
   return value.toFixed(digits);
@@ -133,6 +147,7 @@ function steadyPlayer(overrides: Partial<HumanPlayer> = {}): HumanPlayer {
     cancelRate: 0,
     ignoreRing: false,
     secondFingerRate: 1,
+    tapOnly: false,
     ...overrides,
   };
 }
@@ -211,6 +226,45 @@ describe("1 球の計画(planPitch)", () => {
     expect(distance(on.swing?.cursor ?? start, landing)).toBeLessThan(distance(on.cursorAfter, landing));
   });
 
+  it("タップのみ: カーソルを動かさず(開始位置のまま)押す。時刻は同じ規則、有効カーソルはロックオンで着弾点へ寄る", () => {
+    const landing = { x: 0.6, y: -0.4 };
+    const plan = planOf(steadyPlayer({ tapOnly: true, secondFingerRate: 0 }), NORMAL, landing);
+    expect(plan.intent).toBe(true);
+    expect(plan.cursorAfter).toEqual(CENTER);
+    expect(plan.swing?.assistK ?? 0).toBeGreaterThan(0.8);
+    expect(distance(plan.swing?.cursor ?? CENTER, landing)).toBeLessThan(distance(CENTER, landing) * 0.2);
+    expect(plan.pressOffsetMs).toBeCloseTo(70, 6);
+    const mover = planOf(steadyPlayer({ tapOnly: false, secondFingerRate: 0 }), NORMAL, landing);
+    expect(distance(mover.cursorAfter, landing)).toBeLessThan(0.01);
+  });
+
+  it("投球ごとの再センタリング: 指を離している投球は中央から、2 本目の指の型だけ前の球の位置から始まる(タップのみは動かさないので開始位置のまま)", () => {
+    const landing = { x: 0.2, y: 0.1 };
+    const start = { x: 1.2, y: 1.2 };
+    const slowHand = { fittsB: 10_000 };
+    const lifted = planOf(steadyPlayer({ ...slowHand, secondFingerRate: 0 }), V2_CONDITION, landing, start);
+    const held = planOf(steadyPlayer({ ...slowHand, secondFingerRate: 1 }), V2_CONDITION, landing, start);
+    expect(distance(lifted.cursorAfter, CENTER)).toBeLessThan(0.1);
+    expect(distance(held.cursorAfter, start)).toBeLessThan(0.1);
+    const tapLifted = planOf(steadyPlayer({ tapOnly: true, secondFingerRate: 0 }), NORMAL, landing, start);
+    const tapHeld = planOf(steadyPlayer({ tapOnly: true, secondFingerRate: 1 }), NORMAL, landing, start);
+    expect(tapLifted.cursorAfter).toEqual(CENTER);
+    expect(tapHeld.cursorAfter).toEqual(start);
+    const taken = planOf(steadyPlayer({ secondFingerRate: 0 }), NORMAL, { x: 2.2, y: 0 }, start);
+    expect(taken.intent).toBe(false);
+    expect(taken.cursorAfter).toEqual(CENTER);
+  });
+
+  it("ロックオンの強さの倍率(検出力の確認用): 0 なら有効カーソルは素のカーソルのまま", () => {
+    const landing = { x: 0.6, y: -0.4 };
+    const off = planOf(steadyPlayer({ tapOnly: true }), weakLockCondition("normal", 0), landing);
+    expect(off.swing?.assistK).toBe(0);
+    expect(off.swing?.cursor).toEqual(CENTER);
+    const half = planOf(steadyPlayer({ tapOnly: true }), weakLockCondition("normal", 0.5), landing);
+    const full = planOf(steadyPlayer({ tapOnly: true }), NORMAL, landing);
+    expect(half.swing?.assistK ?? 0).toBeCloseTo((full.swing?.assistK ?? 0) / 2, 6);
+  });
+
   it("指の移動時間(Fitts): 遅い人は目標まで届かない", () => {
     const landing = { x: 0.9, y: -0.9 };
     const start = { x: -0.9, y: 0.9 };
@@ -258,7 +312,7 @@ function sdOf(values: readonly number[]): number {
   return Math.sqrt(meanOf(values.map((value) => (value - mean) * (value - mean))));
 }
 
-/** 本体 §4-1 の表の値(ignoreRing の割合と反応時間の平均)。 */
+/** 本体 §4-1 の表の値(ignoreRing の割合と反応時間の平均)。タップのみの割合は全レベルで 50%。 */
 function tableValuesOf(level: Level): { readonly ignoreRing: number; readonly reactMs: number } {
   switch (level) {
     case "beginner":
@@ -299,6 +353,19 @@ describe("個人差の母集団(層化抽出)", () => {
     const { ignoreRing, reactMs } = tableValuesOf(level);
     expect(Math.abs(players.filter((player) => player.ignoreRing).length / SIZE - ignoreRing)).toBeLessThan(0.01);
     expect(Math.abs(meanOf(players.map((player) => player.reactMs)) - reactMs)).toBeLessThan(2);
+  });
+
+  it.each(LEVELS)("%s: 既定の母集団の約 50% がタップのみ。全員タップのみ・全員が動かす母集団も作れる", (level) => {
+    const share = (style: CursorStyle): number => traits.filter((trait) => sampleHumanPlayer(level, trait, "model", style).tapOnly).length / SIZE;
+    expect(Math.abs(share("mixed") - 0.5)).toBeLessThan(0.01);
+    expect(share("tap-only")).toBe(1);
+    expect(share("move")).toBe(0);
+  });
+
+  it("母集団の型(mixed / move)の違いは tapOnly の項目だけ(ほかの個人差は同じ)", () => {
+    const mixed = traits.map((trait) => sampleHumanPlayer("beginner", trait, "model", "mixed"));
+    const moving = traits.map((trait) => sampleHumanPlayer("beginner", trait, "model", "move"));
+    expect(mixed.map((player) => ({ ...player, tapOnly: false }))).toEqual(moving);
   });
 
   it("「リング無し」の偏りは調査の値(初心者・中級 N(130, 50)、上級 N(100, 40))で、悲観シナリオでも動かない", () => {
@@ -379,6 +446,9 @@ describe("PA シミュレータ(reduce を直接駆動)", () => {
 
 // ---------- 受け入れ帯(tests 分冊 E 群) ----------
 
+const MOVE = { style: "move" } as const;
+const TAP_ONLY = { style: "tap-only" } as const;
+
 describe("E 群: 受け入れ帯", () => {
   const rows: string[] = [];
 
@@ -389,12 +459,28 @@ describe("E 群: 受け入れ帯", () => {
       ...LEVELS.map((level) => [`v3 むずかしい ${labelOf(level)}`, { level, condition: HARD }] as const),
       ...LEVELS.map((level) => [`v3 かんたん ${labelOf(level)}`, { level, condition: EASY }] as const),
       ...LEVELS.map((level) => [`悲観(リング有りの偏りを中間値) ふつう ${labelOf(level)}`, { level, condition: NORMAL, ring: "pessimistic" }] as const),
+      ...(["beginner", "intermediate"] as const).map(
+        (level) => [`[タップのみ] v3 ふつう ${labelOf(level)}`, { level, condition: NORMAL, ...TAP_ONLY }] as const,
+      ),
+      ["[タップのみ] v3 かんたん 初心者", { level: "beginner", condition: EASY, ...TAP_ONLY }],
+      ["[タップのみ] v3 むずかしい 中級", { level: "intermediate", condition: HARD, ...TAP_ONLY }],
+      ["[タップのみ] 悲観 ふつう 初心者", { level: "beginner", condition: NORMAL, ring: "pessimistic", ...TAP_ONLY }],
+      ["[タップのみ] v2 設定(補助なし) 初心者", { level: "beginner", condition: V2_CONDITION, ...TAP_ONLY }],
+      ["[タップのみ] ロックオンが弱い設定(強度 ×0.68) ふつう 初心者", { level: "beginner", condition: WEAK_LOCK, ...TAP_ONLY }],
+      ...LEVELS.map((level) => [`[カーソルを動かす] v3 ふつう ${labelOf(level)}`, { level, condition: NORMAL, ...MOVE }] as const),
+      ["[カーソルを動かす] v3 むずかしい 中級", { level: "intermediate", condition: HARD, ...MOVE }],
+      ["[カーソルを動かす] v3 かんたん 初心者", { level: "beginner", condition: EASY, ...MOVE }],
+      ["[カーソルを動かす] 悲観 ふつう 初心者", { level: "beginner", condition: NORMAL, ring: "pessimistic", ...MOVE }],
     ];
     for (const [label, key] of plan) {
       rows.push(rowOf(label, populationOf(key)));
     }
     console.info(
-      [`人間代理ボット v2(40 人 × 2000 球、ふつうの初心者だけ 250 人 × 1200 球。倍率 ${SCALE}、シード ${SEED})`, ...TABLE_HEADER, ...rows].join("\n"),
+      [
+        `人間代理ボット v2(40 人 × 2000 球、ふつうの初心者だけ 250 人 × 1200 球。倍率 ${SCALE}、シード ${SEED}。[タップのみ] = 全員がカーソルを動かさない、[カーソルを動かす] = 全員が動かす、無印 = 約 50% がタップのみ)`,
+        ...TABLE_HEADER,
+        ...rows,
+      ].join("\n"),
     );
   }, POPULATION_TIMEOUT_MS);
 
@@ -414,7 +500,7 @@ describe("E 群: 受け入れ帯", () => {
     expect(v3.average.p50).toBeGreaterThan(v2.average.p50 + 0.07);
   });
 
-  it("E2 ふつうの打率 P50: 初心者 .20〜.30、中級 .26〜.34、上級 .32〜.45。どのレベルも P10 ≥ .13、P90 ≤ .52", () => {
+  it("E2 ふつうの打率 P50: 初心者 .20〜.30、中級 .26〜.34、上級 .32〜.45。どのレベルも P10 ≥ .13、P90 ≤ .52(既定の母集団 = 約 50% がタップのみ)", () => {
     const bands: readonly (readonly [Level, number, number])[] = [
       ["beginner", 0.2, 0.3],
       ["intermediate", 0.26, 0.34],
@@ -429,37 +515,78 @@ describe("E 群: 受け入れ帯", () => {
     }
   });
 
-  it("E3 ふつうのコンタクト率 P50 / 三振率 P50: 初心者 ≥ 55% / ≤ 35%、中級 ≥ 70% / ≤ 25%、上級 ≥ 82% / ≤ 18%", () => {
+  it("E2(カーソルを動かす人だけ): 動かして合わせても帯を超えない(初心者 ≤ .31、中級 ≤ .35、上級 ≤ .45。P90 ≤ .52)。下限と P10 ≥ .13 は既定と同じ", () => {
+    // 緩めた帯: 初心者の上限 .30 → .31、中級の上限 .34 → .35。タップのみの初心者 P10 ≥ .15 を守るためにふつうのロックオンを強くした結果、
+    // 動かす人も約 .31(初心者)・.335(中級)になる(動かしても質の低下で頭打ち)。動かす意味は むずかしい(E5)と、動かす人の P10 が高いことに残る。
+    const bands: readonly (readonly [Level, number, number])[] = [
+      ["beginner", 0.2, 0.31],
+      ["intermediate", 0.26, 0.35],
+      ["advanced", 0.32, 0.45],
+    ];
+    for (const [level, min, max] of bands) {
+      const average = populationOf({ level, condition: NORMAL, ...MOVE }).average;
+      expect(average.p50, `${level} P50`).toBeGreaterThanOrEqual(min);
+      expect(average.p50, `${level} P50`).toBeLessThanOrEqual(max);
+      expect(average.p10, `${level} P10`).toBeGreaterThanOrEqual(0.13);
+      expect(average.p90, `${level} P90`).toBeLessThanOrEqual(0.52);
+    }
+  });
+
+  it("E3 ふつうのコンタクト率 P50 / 三振率 P50: 初心者 ≥ 55% / ≤ 35%、中級 ≥ 70% / ≤ 25%、上級 ≥ 82% / ≤ 18%(既定の母集団・動かす人だけ・タップのみだけのどれも)", () => {
     const bands: readonly (readonly [Level, number, number])[] = [
       ["beginner", 0.55, 0.35],
       ["intermediate", 0.7, 0.25],
       ["advanced", 0.82, 0.18],
     ];
-    for (const [level, contact, strikeout] of bands) {
-      const summary = populationOf({ level, condition: NORMAL });
-      expect(summary.contactRate.p50, `${level} コンタクト率`).toBeGreaterThanOrEqual(contact);
-      expect(summary.strikeoutRate.p50, `${level} 三振率`).toBeLessThanOrEqual(strikeout);
+    for (const style of ["mixed", "move"] as const) {
+      for (const [level, contact, strikeout] of bands) {
+        const summary = populationOf({ level, condition: NORMAL, style });
+        expect(summary.contactRate.p50, `${style} ${level} コンタクト率`).toBeGreaterThanOrEqual(contact);
+        expect(summary.strikeoutRate.p50, `${style} ${level} 三振率`).toBeLessThanOrEqual(strikeout);
+      }
+    }
+    for (const [level, contact, strikeout] of bands.slice(0, 2)) {
+      const summary = populationOf({ level, condition: NORMAL, ...TAP_ONLY });
+      expect(summary.contactRate.p50, `tap-only ${level} コンタクト率`).toBeGreaterThanOrEqual(contact);
+      expect(summary.strikeoutRate.p50, `tap-only ${level} 三振率`).toBeLessThanOrEqual(strikeout);
     }
   });
 
-  it("E4 技量の勾配: 上級 − 中級 ≥ .04、中級 − 初心者 ≥ .03(ふつうの打率 P50)", () => {
-    const average = (level: Level): number => populationOf({ level, condition: NORMAL }).average.p50;
-    expect(average("advanced") - average("intermediate")).toBeGreaterThanOrEqual(0.04);
-    expect(average("intermediate") - average("beginner")).toBeGreaterThanOrEqual(0.03);
+  it("E4 技量の勾配(ふつうの打率 P50): 中級 − 初心者 ≥ .02、上級 − 中級 ≥ 0(既定の母集団・動かす人だけ)", () => {
+    // 緩めた帯: 上級 − 中級 ≥ .04 → 0(逆転しない)、中級 − 初心者 ≥ .03 → .02。ふつうのロックオンが強く(0.96)、着弾点へほぼ寄るため、
+    // 接触の質は「押す時刻の精度」だけで決まり、上級と中級の差(約 .01〜.02。40 人の P50 の標本ぶれは約 .005)が縮む。技量の差は、動かして合わせる むずかしい(E5)に残る。
+    for (const style of ["mixed", "move"] as const) {
+      const average = (level: Level): number => populationOf({ level, condition: NORMAL, style }).average.p50;
+      expect(average("advanced") - average("intermediate"), `${style} 上級 − 中級`).toBeGreaterThanOrEqual(0);
+      expect(average("intermediate") - average("beginner"), `${style} 中級 − 初心者`).toBeGreaterThanOrEqual(0.02);
+    }
   });
 
-  it("E5 むずかしいの中級の打率 P50 は .20〜.28 で、ふつうより .04 以上低い", () => {
-    const hard = populationOf({ level: "intermediate", condition: HARD }).average.p50;
-    const normal = populationOf({ level: "intermediate", condition: NORMAL }).average.p50;
+  it("E5 むずかしい(カーソルを動かして合わせる人)の中級の打率 P50 は .20〜.28 で、ふつうより .04 以上低い", () => {
+    const hard = populationOf({ level: "intermediate", condition: HARD, ...MOVE }).average.p50;
+    const normal = populationOf({ level: "intermediate", condition: NORMAL, ...MOVE }).average.p50;
     expect(hard).toBeGreaterThanOrEqual(0.2);
     expect(hard).toBeLessThanOrEqual(0.28);
     expect(normal - hard).toBeGreaterThanOrEqual(0.04);
   });
 
-  it("E6 かんたんの初心者の打率 P50 は、ふつうの初心者 + .02 以上", () => {
-    const easy = populationOf({ level: "beginner", condition: EASY }).average.p50;
-    const normal = populationOf({ level: "beginner", condition: NORMAL }).average.p50;
-    expect(easy - normal).toBeGreaterThanOrEqual(0.02);
+  it("E5 の裏付け(動かす意味): むずかしいでは、動かさない(タップのみ)中級の打率が、動かす中級より .08 以上低い。ふつうでは動かす人のほうが低くならない", () => {
+    const hardMove = populationOf({ level: "intermediate", condition: HARD, ...MOVE }).average.p50;
+    const hardTap = populationOf({ level: "intermediate", condition: HARD, ...TAP_ONLY }).average.p50;
+    expect(hardMove - hardTap).toBeGreaterThanOrEqual(0.08);
+    for (const level of ["beginner", "intermediate"] as const) {
+      const move = populationOf({ level, condition: NORMAL, ...MOVE }).average.p50;
+      const tapOnly = populationOf({ level, condition: NORMAL, ...TAP_ONLY }).average.p50;
+      expect(move, `${level} ふつう`).toBeGreaterThanOrEqual(tapOnly);
+    }
+  });
+
+  it("E6 かんたんの初心者の打率 P50 は、ふつうの初心者 + .02 以上(既定の母集団・動かす人だけ・タップのみだけのどれも)", () => {
+    for (const style of ["mixed", "move", "tap-only"] as const) {
+      const easy = populationOf({ level: "beginner", condition: EASY, style }).average.p50;
+      const normal = populationOf({ level: "beginner", condition: NORMAL, style }).average.p50;
+      expect(easy - normal, style).toBeGreaterThanOrEqual(0.02);
+    }
   });
 
   it("E7 ボール球を振ろうとした率(中級) ≤ 30%、ストライクを振ろうとした率 ≥ 70%(全レベル)、実際にスイングになった率は中級・上級で ≥ 70%", () => {
@@ -471,10 +598,12 @@ describe("E 群: 受け入れ帯", () => {
     expect(populationOf({ level: "advanced", condition: NORMAL }).strikeSwingRate.p50).toBeGreaterThanOrEqual(0.7);
   });
 
-  it("E10 悲観シナリオ(リング有りの偏りを中間値 = 初心者 +85): 初心者の打率 P50 ≥ .15・コンタクト率 P50 ≥ 45%", () => {
-    const pessimistic = populationOf({ level: "beginner", condition: NORMAL, ring: "pessimistic" });
-    expect(pessimistic.average.p50).toBeGreaterThanOrEqual(0.15);
-    expect(pessimistic.contactRate.p50).toBeGreaterThanOrEqual(0.45);
+  it("E10 悲観シナリオ(リング有りの偏りを中間値 = 初心者 +85): 初心者の打率 P50 ≥ .15・コンタクト率 P50 ≥ 45%(既定の母集団・動かす人だけ・タップのみだけのどれも)", () => {
+    for (const style of ["mixed", "move", "tap-only"] as const) {
+      const pessimistic = populationOf({ level: "beginner", condition: NORMAL, ring: "pessimistic", style });
+      expect(pessimistic.average.p50, style).toBeGreaterThanOrEqual(0.15);
+      expect(pessimistic.contactRate.p50, style).toBeGreaterThanOrEqual(0.45);
+    }
   });
 
   it("E10 の整合: 悲観シナリオは楽観の設定より打てない(打率・コンタクト率が低い)が、v2 設定よりは打てる", () => {
@@ -495,9 +624,39 @@ describe("E 群: 受け入れ帯", () => {
     expect(rate("advanced")).toBeGreaterThan(0);
   });
 
-  it("T2 の目安(ログの客観値)と同じ定義の指標が範囲に収まる: 押下の dt の SD ≤ 100ms、素のカーソルと着弾点の距離の中央値 ≤ 60px(初心者・ふつう)", () => {
-    const beginner = populationOf({ level: "beginner", condition: NORMAL });
+  it("T2 の目安(ログの客観値)と同じ定義の指標が範囲に収まる: 押下の dt の SD ≤ 100ms、素のカーソルと着弾点の距離の中央値 ≤ 60px(初心者・ふつう。カーソルを動かす人)", () => {
+    const beginner = populationOf({ level: "beginner", condition: NORMAL, ...MOVE });
     expect(beginner.pressSdMs.p50).toBeLessThanOrEqual(100);
     expect(beginner.distanceMedianPx.p50).toBeLessThanOrEqual(60);
+  });
+});
+
+// ---------- タップのみの帯(A15。中間試遊 T1「タイミングを合わせても打てない」の再発防止) ----------
+
+describe("タップのみの帯: カーソルを動かさず、押す時刻だけ合わせる人(スマホの人のふつうの操作)", () => {
+  it("ふつうの初心者の打率: P50 ≥ .22、P10 ≥ .15(T1 の時点の値では P50 .148・P10 .093 で、ここを割っていた)。コンタクト率 P50 ≥ 55%", () => {
+    const summary = populationOf({ level: "beginner", condition: NORMAL, ...TAP_ONLY });
+    expect(summary.average.p50).toBeGreaterThanOrEqual(0.22);
+    expect(summary.average.p10).toBeGreaterThanOrEqual(0.15);
+    expect(summary.contactRate.p50).toBeGreaterThanOrEqual(0.55);
+  });
+
+  it("ふつうの中級の打率: P50 ≥ .24(T1 の時点の値では .166)", () => {
+    expect(populationOf({ level: "intermediate", condition: NORMAL, ...TAP_ONLY }).average.p50).toBeGreaterThanOrEqual(0.24);
+  });
+
+  it("かんたんの初心者の打率: P50 ≥ .28", () => {
+    expect(populationOf({ level: "beginner", condition: EASY, ...TAP_ONLY }).average.p50).toBeGreaterThanOrEqual(0.28);
+  });
+
+  it("定義の確認: タップのみは素のカーソルが着弾点から遠い(距離の中央値 > 60px)が、動かす人は近い(≤ 40px)", () => {
+    expect(populationOf({ level: "beginner", condition: NORMAL, ...TAP_ONLY }).distanceMedianPx.p50).toBeGreaterThan(60);
+    expect(populationOf({ level: "beginner", condition: NORMAL, ...MOVE }).distanceMedianPx.p50).toBeLessThanOrEqual(40);
+  });
+
+  it("検出力: ロックオンが弱い設定(強度 ×0.68 = T1 の A14 の値に近い)・補助なし(v2 設定)では、この帯を割る(打率 P50 < .22 または P10 < .15)", () => {
+    const weak = populationOf({ level: "beginner", condition: WEAK_LOCK, ...TAP_ONLY }).average;
+    expect(weak.p50 < 0.22 || weak.p10 < 0.15).toBe(true);
+    expect(populationOf({ level: "beginner", condition: V2_CONDITION, ...TAP_ONLY }).average.p50).toBeLessThan(0.22);
   });
 });
