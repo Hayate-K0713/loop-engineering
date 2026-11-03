@@ -192,7 +192,18 @@ export function placeholderLook(slot: CharacterSlot, uniforms: UniformColors): C
 /** 造形をやり直す必要があるかを調べるための鍵(色・髪型・体格・肌。顔のテクスチャだけが変わるときは同じ鍵)。 */
 export function shapeKeyOf(look: CharacterLookData): string {
   const { uniform } = look;
-  return [look.skin, look.build, look.hair.style, look.hair.color, uniform.base, uniform.pants, uniform.accent, uniform.socks, uniform.cap, uniform.helmet].join("|");
+  return [
+    look.skin,
+    look.build,
+    look.hair.style,
+    look.hair.color,
+    uniform.base,
+    uniform.pants,
+    uniform.accent,
+    uniform.socks,
+    uniform.cap,
+    uniform.helmet,
+  ].join("|");
 }
 
 /** カメラを姿勢にそのまま合わせる(縦 FOV は `pose.fovDeg`、シーンを上へずらす量は `pose.lift`。どちらも model が決める)。 */

@@ -18,11 +18,11 @@ function landingOf(distance: number, lateral: number): BattedLanding {
 const CENTER_LANDING = landingOf(60, 0);
 
 function inPlayOutcome(result: InPlayResult): PitchOutcomeView {
-  return { seq: 1, kind: "in-play", inPlay: { result, ball: BALL }, plate: result };
+  return { seq: 1, kind: "in-play", inPlay: { result, ball: BALL }, plate: result, runners: null };
 }
 
 function otherOutcome(kind: (typeof NON_CONTACT_KINDS)[number], plate: PlateOutcome | null): PitchOutcomeView {
-  return { seq: 1, kind, inPlay: null, plate };
+  return { seq: 1, kind, inPlay: null, plate, runners: null };
 }
 
 describe("telopFor: 全組み合わせで空でない文言", () => {
@@ -108,7 +108,7 @@ describe("telopFor: インプレー", () => {
   });
 
   it("inPlay が無い in-play(想定外)でも空でない文言を返す", () => {
-    expect(telopFor({ seq: 1, kind: "in-play", inPlay: null, plate: null }, null)).not.toBe("");
+    expect(telopFor({ seq: 1, kind: "in-play", inPlay: null, plate: null, runners: null }, null)).not.toBe("");
   });
 });
 

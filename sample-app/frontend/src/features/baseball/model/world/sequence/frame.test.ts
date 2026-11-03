@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AssistParams, BattedBall, InPlayResult, SwingInput } from "../../../types/batting";
+import type { Bases } from "../../../types/game";
 import type { PitchFlight } from "../../../types/pitch";
 import type { CameraPose, SafeArea, SceneFrame, SceneLayout, ScenePhase, UniformColors, Vec3 } from "../../../types/scene";
 import type { PitchOutcomeView } from "../../../types/view";
@@ -18,7 +19,8 @@ import {
 } from "../camera/rig";
 import { batterStancePose, batterSwingPose } from "../motion/batter";
 import { batLengthScaleFor, batterRootFor } from "../motion/batter-layout";
-import { catcherPose, fielderIdlePose } from "../motion/fielder";
+import { catcherPose } from "../motion/fielder";
+import { fielderReadyPose, groundDropOf } from "../motion/forms";
 import { pitcherFollowPose, pitcherWindupPose } from "../motion/pitcher";
 import { type BatterJoints, placeBatter, placeCharacter } from "../motion/pose";
 import { BAT_FOLLOW_LIFT, BAT_STANCE_HEIGHT } from "../motion/rig";
@@ -54,6 +56,7 @@ const FLIGHT: PitchFlight = {
   durationMs: 480,
   quality: "normal",
 };
+const NO_RUNNERS: Bases = { first: false, second: false, third: false };
 const NORMAL = ASSIST_TABLE.normal;
 const HARD = ASSIST_TABLE.hard;
 const BALL = WORLD_PARAMS.ball;
@@ -63,7 +66,7 @@ const CPU_RESOLVED_MS = FLIGHT.durationMs - CPU_SWING_LEAD_MS;
 const LATE_SWING: SwingInput = { kind: "meet", cursor: { x: 0.3, y: -0.2 }, atMs: FLIGHT.durationMs - 10 };
 
 function outcomeOf(kind: PitchOutcomeView["kind"], inPlay: PitchOutcomeView["inPlay"] = null): PitchOutcomeView {
-  return { seq: FLIGHT.seq, kind, inPlay, plate: null };
+  return { seq: FLIGHT.seq, kind, inPlay, plate: null, runners: null };
 }
 
 function inPlayOutcome(result: InPlayResult, ball: BattedBall): PitchOutcomeView {
@@ -114,6 +117,11 @@ function inputOf(overrides: Partial<SceneFrameInput> = {}): SceneFrameInput {
     cursor: { visible: true, point: { x: 0.25, y: -0.4 }, raw: { x: 0.25, y: -0.4 }, radii: { rx: 0.5, ry: 0.3 } },
     assist: NORMAL,
     grid: true,
+    forms: { pitch: "over", bat: "square" },
+    bases: NO_RUNNERS,
+    clockMs: 0,
+    introMs: null,
+    viewHeightPx: 844,
     ...overrides,
   };
 }
@@ -170,6 +178,11 @@ function near(a: number, b: number): boolean {
 
 function distance(a: Vec3, b: Vec3): number {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+/** 表情だけを無視して比べるための正規化(表情は別の describe で検査する)。 */
+function neutral<T extends SceneFrame["pitcher"]>(pose: T): T {
+  return { ...pose, expression: "neutral" };
 }
 
 function frameAt(plan: PlayPlan | null, tMs: number, overrides: Partial<SceneFrameInput> = {}): SceneFrame {
@@ -607,7 +620,7 @@ describe("sceneFrameAt: 捕手の表示", () => {
   });
 
   it("表示されるときの捕手は、捕手の位置・向き・ポーズ", () => {
-    expect(frameAt(SINGLE, chaseFrom(SINGLE) + 2000).catcher).toEqual(placeCharacter(catcherPose(), ACTORS.catcher, true));
+    expect(neutral(frameAt(SINGLE, chaseFrom(SINGLE) + 2000).catcher)).toEqual(placeCharacter(catcherPose(), ACTORS.catcher, true));
   });
 });
 
@@ -839,14 +852,14 @@ describe("sceneFrameAt: ball の見え方(回転・ハロー・縁取り)", () =
 describe("sceneFrameAt: 投手", () => {
   it("idle は待機姿勢、windup は windupU のポーズ、flight・play はリリースからのフォロースルー", () => {
     const place = (joints: ReturnType<typeof pitcherWindupPose>): SceneFrame["pitcher"] => placeCharacter(joints, ACTORS.pitcher);
-    expect(frameAt(null, 0, { phase: "idle" }).pitcher).toEqual(place(pitcherWindupPose(0)));
-    expect(frameAt(null, 0, { phase: "windup", windupU: 0.4 }).pitcher).toEqual(place(pitcherWindupPose(0.4)));
-    expect(frameAt(null, 120, { phase: "flight" }).pitcher).toEqual(place(pitcherFollowPose(120)));
-    expect(frameAt(SINGLE, 300).pitcher).toEqual(place(pitcherFollowPose(300)));
+    expect(neutral(frameAt(null, 0, { phase: "idle" }).pitcher)).toEqual(place(pitcherWindupPose(0)));
+    expect(neutral(frameAt(null, 0, { phase: "windup", windupU: 0.4 }).pitcher)).toEqual(place(pitcherWindupPose(0.4)));
+    expect(neutral(frameAt(null, 120, { phase: "flight" }).pitcher)).toEqual(place(pitcherFollowPose(120)));
+    expect(neutral(frameAt(SINGLE, 300).pitcher)).toEqual(place(pitcherFollowPose(300)));
   });
 
   it("連続性: windup の u = 1 とリリース直後(flight, t = 0)の投手が一致する", () => {
-    expect(frameAt(null, 0, { phase: "windup", windupU: 1 }).pitcher).toEqual(frameAt(null, 0, { phase: "flight" }).pitcher);
+    expect(neutral(frameAt(null, 0, { phase: "windup", windupU: 1 }).pitcher)).toEqual(neutral(frameAt(null, 0, { phase: "flight" }).pitcher));
   });
 });
 
@@ -859,9 +872,9 @@ function worldBatHeight(pose: SceneFrame["batter"]): number {
  * 打者が motion の `joints` どおりに配置されている: バットの高さ・長さ以外は `placeBatter(joints, batterRootFor(aspect))` と一致し、
  * バット軸の長さは `batLengthScaleFor(aspect)`、バットのワールドでの高さ(root の位置と拡大率を考慮)は motion が意図した高さ(`joints.bat.height`)と一致する。
  */
-function expectBatterAt(actual: SceneFrame["batter"], joints: BatterJoints, aspect = 16 / 9): void {
-  const withoutHeight = (pose: SceneFrame["batter"]): SceneFrame["batter"] => ({ ...pose, bat: { ...pose.bat, height: 0, lengthScale: 1 } });
-  expect(withoutHeight(actual)).toEqual(withoutHeight(placeBatter(joints, batterRootFor(aspect))));
+function expectBatterAt(actual: SceneFrame["batter"], joints: BatterJoints, aspect = 16 / 9, scale = batterRootFor(aspect).scale): void {
+  const withoutHeight = (pose: SceneFrame["batter"]): SceneFrame["batter"] => neutral({ ...pose, bat: { ...pose.bat, height: 0, lengthScale: 1 } });
+  expect(withoutHeight(actual)).toEqual(withoutHeight(placeBatter(joints, { ...batterRootFor(aspect), scale })));
   expect(actual.bat.lengthScale).toBe(batLengthScaleFor(aspect));
   expect(worldBatHeight(actual)).toBeCloseTo(joints.bat.height, 9);
 }
@@ -878,7 +891,7 @@ describe("sceneFrameAt: 打者", () => {
     const poseAt = (tMs: number): BatterJoints => batterSwingPose(swingProgressAt(swing, tMs), swing.height);
     expectBatterAt(frameAt(SINGLE, swing.contactAtMs).batter, poseAt(swing.contactAtMs));
     expectBatterAt(frameAt(SINGLE, swing.contactAtMs).batter, batterSwingPose(SWING.contactRatio, swing.height));
-    expectBatterAt(frameAt(SINGLE, swing.contactAtMs + 3000).batter, batterSwingPose(SWING.followEndProgress, swing.height));
+    expectBatterAt(frameAt(SINGLE, swing.contactAtMs + 3000).batter, batterSwingPose(SWING.followEndProgress, swing.height), 16 / 9, 1);
     expectBatterAt(frameAt(SINGLE, swing.startMs - 10).batter, batterStancePose());
   });
 
@@ -1090,6 +1103,16 @@ describe("sceneFrameAt: 落下点のリング(landingMark)", () => {
   });
 });
 
+/** 構え(膝に手)は足が浮くので、根を `groundDropOf × scale` だけ下げて描く。 */
+function groundedAt(position: Vec3): Vec3 {
+  return { ...position, y: position.y - groundDropOf(fielderReadyPose()) * ACTORS.fielderScale };
+}
+
+/** 足元の水平位置(x・z)。 */
+function flat(position: Vec3): { readonly x: number; readonly z: number } {
+  return { x: position.x, z: position.z };
+}
+
 describe("sceneFrameAt: 野手", () => {
   const run = SINGLE.fielder;
   const slotPosition = (index: number): Vec3 => FIELDER_SLOTS.at(index)?.position ?? RELEASE_POINT;
@@ -1097,8 +1120,8 @@ describe("sceneFrameAt: 野手", () => {
   it("固定順 7 人、idle・windup・flight では全員が守備位置で待機姿勢(向きは正面 = 0)", () => {
     const frame = frameAt(null, 100, { phase: "flight" });
     expect(frame.fielders).toHaveLength(7);
-    const expected = FIELDER_SLOTS.map((slot) => placeCharacter(fielderIdlePose(), { position: slot.position, yaw: 0, scale: ACTORS.fielderScale }));
-    expect(frame.fielders).toEqual(expected);
+    const expected = FIELDER_SLOTS.map((slot) => placeCharacter(fielderReadyPose(), { position: groundedAt(slot.position), yaw: 0, scale: ACTORS.fielderScale }));
+    expect(frame.fielders.map((fielder) => neutral(fielder))).toEqual(expected);
   });
 
   it("インプレー: 最寄りの 1 人だけが走り、他は守備位置でボールの方を向く", () => {
@@ -1108,21 +1131,22 @@ describe("sceneFrameAt: 野手", () => {
     const frame = frameAt(SINGLE, tMs);
     const ball = battedBallAt(battedOf(SINGLE), tMs - (SINGLE.contactMs ?? 0));
     const others = frame.fielders.filter((_fielder, i) => i !== index);
-    expect(others.map((fielder) => fielder.position)).toEqual(FIELDER_SLOTS.filter((_slot, i) => i !== index).map((slot) => slot.position));
+    expect(others.map((fielder) => flat(fielder.position))).toEqual(FIELDER_SLOTS.filter((_slot, i) => i !== index).map((slot) => flat(slot.position)));
     expect(others.every((fielder) => near(fielder.yaw, Math.atan2(ball.x - fielder.position.x, ball.z - fielder.position.z)))).toBe(true);
-    expect(frame.fielders.at(index)?.position).not.toEqual(slotPosition(index));
+    expect(flat(frame.fielders.at(index)?.position ?? RELEASE_POINT)).not.toEqual(flat(slotPosition(index)));
   });
 
   it("走る野手: 接触で守備位置、滞空 × runFactor で目的地に着き、以降はそこで待機姿勢", () => {
     const index = run?.index ?? -1;
     const startMs = run?.startMs ?? 0;
     const arriveMs = run?.arriveMs ?? 0;
-    expect(frameAt(SINGLE, startMs).fielders.at(index)?.position).toEqual(run?.from);
-    expect(frameAt(SINGLE, (startMs + arriveMs) / 2).fielders.at(index)?.position).toEqual(lerpVec3(run?.from ?? RELEASE_POINT, run?.to ?? RELEASE_POINT, 0.5));
+    expect(flat(frameAt(SINGLE, startMs).fielders.at(index)?.position ?? RELEASE_POINT)).toEqual(flat(run?.from ?? RELEASE_POINT));
+    const middle = frameAt(SINGLE, (startMs + arriveMs) / 2).fielders.at(index)?.position ?? RELEASE_POINT;
+    expect(flat(middle)).toEqual(flat(lerpVec3(run?.from ?? RELEASE_POINT, run?.to ?? RELEASE_POINT, 0.5)));
     const arrived = frameAt(SINGLE, arriveMs + 500).fielders.at(index);
-    expect(arrived?.position).toEqual(run?.to);
-    expect(arrived?.torso).toEqual(fielderIdlePose().torso);
-    expect(arrived?.legL).toEqual(fielderIdlePose().legL);
+    expect(flat(arrived?.position ?? RELEASE_POINT)).toEqual(flat(run?.to ?? RELEASE_POINT));
+    expect(arrived?.torso).toEqual(fielderReadyPose().torso);
+    expect(arrived?.legL).toEqual(fielderReadyPose().legL);
   });
 
   it("走る野手の向きは目的地の方向", () => {
@@ -1135,7 +1159,7 @@ describe("sceneFrameAt: 野手", () => {
 
   it("ホームラン・ファウルでは誰も走らない(全員が守備位置のまま)", () => {
     const moved = [HOMERUN, FOUL].flatMap((plan) =>
-      TIMES.filter((tMs) => frameAt(plan, tMs).fielders.some((fielder, i) => JSON.stringify(fielder.position) !== JSON.stringify(slotPosition(i)))),
+      TIMES.filter((tMs) => frameAt(plan, tMs).fielders.some((fielder, i) => JSON.stringify(flat(fielder.position)) !== JSON.stringify(flat(slotPosition(i))))),
     );
     expect(moved).toHaveLength(0);
   });

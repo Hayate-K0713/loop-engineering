@@ -53,7 +53,7 @@ type Scenario = {
 };
 
 function outcomeOf(kind: PitchOutcomeView["kind"], seq: number, inPlay: PitchOutcomeView["inPlay"] = null): PitchOutcomeView {
-  return { seq, kind, inPlay, plate: null };
+  return { seq, kind, inPlay, plate: null, runners: null };
 }
 
 function scenarioOf(flight: PitchFlight, outcome: PitchOutcomeView, swing: SwingInput | null, resolvedAtMs: number, tag: string): Scenario {

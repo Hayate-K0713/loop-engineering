@@ -47,11 +47,12 @@ type PixelRect = { readonly x: number; readonly y: number; readonly width: numbe
 
 /** 矩形(キャンバス左上基準の CSS px)を整数にして、キャンバスの内側に収める。空なら `null`。 */
 function clampRect(rect: SceneWipe["rect"], canvas: Size): PixelRect | null {
+  if (![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)) return null;
   const left = Math.max(0, Math.floor(rect.x));
   const top = Math.max(0, Math.floor(rect.y));
   const right = Math.min(canvas.width, Math.ceil(rect.x + rect.width));
   const bottom = Math.min(canvas.height, Math.ceil(rect.y + rect.height));
-  if (!(right - left >= 1) || !(bottom - top >= 1)) return null;
+  if (right - left < 1 || bottom - top < 1) return null;
   // three のビューポートは左下基準。
   return { x: left, y: canvas.height - bottom, width: right - left, height: bottom - top };
 }
@@ -106,7 +107,7 @@ function renderDirect(renderer: WebGLRenderer, scene: Scene, wipe: Wipe, rect: P
  */
 export function drawWipe(renderer: WebGLRenderer, scene: Scene, wipe: Wipe, spec: SceneWipe, canvas: Size, targetRoot: Object3D): WipePass {
   const rect = clampRect(spec.rect, canvas);
-  if (rect === null || !(spec.alpha > 0)) return WIPE_NOT_DRAWN;
+  if (rect === null || !Number.isFinite(spec.alpha) || spec.alpha <= 0) return WIPE_NOT_DRAWN;
   placeCamera(wipe.camera, spec.camera, rect);
   const before = renderer.info.render.calls;
   const scale = targetRoot.scale.x;

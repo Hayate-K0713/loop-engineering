@@ -5,7 +5,7 @@ import type { BatterPose, SafeArea, SceneFrame, SceneLayout, Vec3 } from "../../
 import type { PitchOutcomeView } from "../../../types/view";
 import { ASSIST_TABLE } from "../../batting/assist";
 import { projectPoint, zoneRectOf, type ViewSize, type ZoneBox } from "../camera/project";
-import { handPosition, rotateEuler } from "../motion/fk";
+import { elbowPosition, handPosition, rotateEuler, shoulderPosition } from "../motion/fk";
 import { batterStancePose } from "../motion/batter";
 import { batTipX } from "../motion/batter-layout";
 import { placeBatter } from "../motion/pose";
@@ -64,6 +64,11 @@ function frameFor(
     cursor: { visible: false, point: { x: 0, y: 0 }, raw: { x: 0, y: 0 }, radii: { rx: 0.5, ry: 0.3 } },
     assist: ASSIST_TABLE.normal,
     grid: layout === "pitching",
+    forms: { pitch: "over", bat: "square" },
+    bases: { first: false, second: false, third: false },
+    clockMs: 0,
+    introMs: null,
+    viewHeightPx: height,
   });
   return frame;
 }
@@ -86,16 +91,39 @@ function blobOf(frame: SceneFrame, size: ViewSize, name: string, point: Vec3, ra
   return { name, x: center.x, y: center.y, radius: Math.abs(edge.x - center.x) };
 }
 
-/** 打者の両手・両腕の中点・バットの軸(根元から先端まで 5 点)の画面の円。 */
+/** 2 点の中点。 */
+function middleOf(a: Vec3, b: Vec3): Vec3 {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
+}
+
+/** 打者の両手・両肘・前腕(肘と手の中点)・上腕(肩と肘の中点)・バットの軸(根元から先端まで 5 点)の画面の円。肘の回転を含めた FK で計算する。 */
 function batterBlobs(frame: SceneFrame, size: ViewSize): readonly Blob[] {
   const batter = frame.batter;
   const root = { position: batter.position, yaw: batter.yaw, scale: batter.scale };
-  const bare = { torso: batter.torso, head: batter.head, armL: batter.armL, armR: batter.armR, legL: batter.legL, legR: batter.legR };
+  const joints = {
+    torso: batter.torso,
+    head: batter.head,
+    armL: batter.armL,
+    armR: batter.armR,
+    elbowL: batter.elbowL,
+    elbowR: batter.elbowR,
+    legL: batter.legL,
+    legR: batter.legR,
+    kneeL: batter.kneeL,
+    kneeR: batter.kneeR,
+  };
   const arms = (["armL", "armR"] as const).flatMap((side) => {
-    const hand = handPosition(bare, CHARACTER_RIG, root, side);
-    const shoulder = handPosition(bare, { ...CHARACTER_RIG, armLength: 0 }, root, side);
-    const middle = { x: (hand.x + shoulder.x) / 2, y: (hand.y + shoulder.y) / 2, z: (hand.z + shoulder.z) / 2 };
-    return [blobOf(frame, size, `${side} 手`, hand, HAND_RADIUS * batter.scale), blobOf(frame, size, `${side} 腕`, middle, SLEEVE_RADIUS * batter.scale)];
+    const key = side === "armL" ? "L" : "R";
+    const hand = handPosition(joints, CHARACTER_RIG, root, side);
+    const elbow = elbowPosition(joints, CHARACTER_RIG, root, key);
+    const shoulder = shoulderPosition(joints, CHARACTER_RIG, root, key);
+    const sleeve = SLEEVE_RADIUS * batter.scale;
+    return [
+      blobOf(frame, size, `${side} 手`, hand, HAND_RADIUS * batter.scale),
+      blobOf(frame, size, `${side} 肘`, elbow, sleeve),
+      blobOf(frame, size, `${side} 前腕`, middleOf(elbow, hand), sleeve),
+      blobOf(frame, size, `${side} 上腕`, middleOf(shoulder, elbow), sleeve),
+    ];
   });
   const bats = [0.025, 0.25, 0.5, 0.75, 0.975].map((s) =>
     blobOf(frame, size, `バット ${s}`, batPoint(batter, s), (0.028 + ((0.05 - 0.028) * s) / 0.95) * batter.scale),
@@ -140,7 +168,7 @@ describe("縦長の構えの手・腕・バットは、ゾーン枠(打撃)・5�
   }
 
   it("振らない(見逃し・投球中)の間も構えのまま掛からない(plan なし・見逃しの plan のどちらも)", () => {
-    const outcome: PitchOutcomeView = { seq: FLIGHT.seq, kind: "called-strike", inPlay: null, plate: null };
+    const outcome: PitchOutcomeView = { seq: FLIGHT.seq, kind: "called-strike", inPlay: null, plate: null, runners: null };
     const take = planPlay({ flight: FLIGHT, outcome, swing: null, resolvedAtMs: FLIGHT.durationMs });
     for (const viewport of VIEWPORTS) {
       const [width, height] = viewport;
@@ -180,6 +208,7 @@ function contactFrameAt(width: number, height: number, overlayTop: number, landi
     kind: "in-play",
     inPlay: { result: "single" satisfies InPlayResult, ball: { type: "fly", strength: "medium", direction: "center" } },
     plate: null,
+    runners: null,
   };
   const plan = planPlay({ flight, outcome, swing: { kind: "meet", cursor: landing, atMs: flight.durationMs }, resolvedAtMs: flight.durationMs });
   const swing = plan.swing;

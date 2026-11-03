@@ -6,7 +6,7 @@ import { isHolding, isPlayFinished, phaseOf, planSwingOf, recordSwing, swingForO
 const BOOLS: readonly boolean[] = [true, false];
 
 function outcomeOf(seq: number): PitchOutcomeView {
-  return { seq, kind: "ball", inPlay: null, plate: null };
+  return { seq, kind: "ball", inPlay: null, plate: null, runners: null };
 }
 
 function swingAt(atMs: number): SwingInput {

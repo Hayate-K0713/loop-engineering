@@ -1,11 +1,13 @@
-import type { BattedLanding, SwingInput } from "../../../types/batting";
+import type { BattedLanding, PlateOutcome, SwingInput } from "../../../types/batting";
 import type { PitchFlight } from "../../../types/pitch";
 import type { Vec3 } from "../../../types/scene";
 import type { PitchOutcomeView } from "../../../types/view";
 import { computeBattedLanding } from "../../batting/batted-landing";
 import { swingWindowMs } from "../../batting/contact";
+import { planWipeStages, type WipeStage } from "../camera/wipe";
 import { type BattedPlan, planBattedBall, planFoul } from "../path/batted-path";
-import { FIELDER_SLOTS, pickFielder } from "../path/fielders";
+import { FIELDER_SLOTS, type FieldingPose, pickFielder, planFielding, type RetireEvent, type ThrowPlan } from "../path/fielders";
+import { planRunners, type RunnersPlan } from "../path/runners";
 import { zoneToWorld } from "../space/coords";
 import { WORLD_PARAMS } from "../space/params";
 import { telopFor, type TelopWindow } from "./telop";
@@ -20,6 +22,7 @@ const TELOP = WORLD_PARAMS.telop;
 const FIELDER_RUN = WORLD_PARAMS.fielderRun;
 const CATCH = WORLD_PARAMS.catch;
 const CUE = WORLD_PARAMS.cue;
+const RUNNERS = WORLD_PARAMS.runners;
 
 /** バットの振り。`startMs` から構え→接触姿勢、`contactAtMs` が接触姿勢、`height` が接触位置の高さ(m)。 */
 export type PlaySwing = {
@@ -37,9 +40,36 @@ export type PlayFielder = {
   readonly arriveMs: number;
 };
 
+/**
+ * 走者の動き。`plan` の時刻 0 = 表示の `startMs`(打球が野手に届く時刻。打球のないプレー = 四球はテロップの開始)。`endMs` = `startMs + plan.durationMs`。
+ * 動かない走者(塁上にとどまる・ホームラン)は `plan.motions` に `durationMs = 0` の動きで入る。
+ */
+export type PlayRunners = {
+  readonly startMs: number;
+  readonly plan: RunnersPlan;
+  readonly endMs: number;
+};
+
+/**
+ * 野手の守備の演出(捕球・ゴロ捕球・送球)。時刻はすべて表示の時刻(計画の t = 0 に `baseMs` を足したもの)。
+ * `throws`/`retires` は `planFielding` の結果をずらしたもの。
+ */
+export type PlayFielding = {
+  readonly pose: FieldingPose;
+  readonly fielderIndex: number;
+  /** 野手が打球を処理する足元。 */
+  readonly stop: Vec3;
+  readonly baseMs: number;
+  readonly throws: readonly ThrowPlan[];
+  readonly retires: readonly RetireEvent[];
+  readonly endMs: number;
+};
+
 export type PlayPlan = {
   /** 解決した球の通し番号(= `outcome.seq`)。 */
   readonly seq: number;
+  /** 解決した球の事実(表情・走者・ワイプの場面を決める)。 */
+  readonly outcome: PitchOutcomeView;
   readonly kind: PitchOutcomeView["kind"];
   /** ボールがゾーンに届く時刻(= `flight.durationMs`)。 */
   readonly durationMs: number;
@@ -58,10 +88,18 @@ export type PlayPlan = {
   readonly fielder: PlayFielder | null;
   /** 中継カメラへ移り始める時刻。打球がないときは `null`。 */
   readonly chaseFromMs: number | null;
+  /** 走者の動き。走者が関与しない球(打席が終わっていない)は `null`。動くかは `runners.plan.durationMs > 0` で判定する。 */
+  readonly runners: PlayRunners | null;
+  /** 捕球・送球の演出。野手が動かない結果(四球・三振・ホームラン・ファウル・空振り・見逃し)は `null`。 */
+  readonly fielding: PlayFielding | null;
+  /** 内野カメラへ移り始める時刻。走者が動くプレー(`runners.plan.durationMs > 0`)のみ、それ以外は `null`。 */
+  readonly infieldFromMs: number | null;
+  /** ワイプ(顔アップ)の区間。出さない結果は空。 */
+  readonly wipe: readonly WipeStage[];
   readonly telop: TelopWindow;
   /** 人間のスイングの早い/ジャスト/遅いの表示(判定時刻 `atMs` で計算)。見逃し・CPU 打者は `null`。 */
   readonly timing: PlayTiming | null;
-  /** 演出の終了時刻(= テロップの終わり + 余韻)。`holding` はここで解除される。 */
+  /** 演出の終了時刻(= テロップの終わり + 余韻。走者が動くときは進塁が終わるまで最大 `runners.maxMs` 延びる)。`holding` はここで解除される。 */
   readonly endMs: number;
 };
 
@@ -233,22 +271,84 @@ function timingOf(input: PlanInput): PlayTiming | null {
   return { ...timingCueOf(swing.atMs - flight.durationMs, swingWindowMs(swing.kind)), startMs, endMs: startMs + CUE.timingMs };
 }
 
+/** 打席の結果(`outcome.plate`。未設定のインプレーは `inPlay.result`)。不明は `null`。 */
+function plateOf(outcome: PitchOutcomeView): PlateOutcome | null {
+  return outcome.plate ?? outcome.inPlay?.result ?? null;
+}
+
+/** 走者の動き。進塁の事実(`outcome.runners`)と結果が揃うときだけ作る。表示の時刻 0 は打球が野手に届く時刻(打球のないプレーはテロップの開始)。 */
+function runnersOf(outcome: PitchOutcomeView, startMs: number): PlayRunners | null {
+  const plate = plateOf(outcome);
+  if (outcome.runners === null || plate === null) {
+    return null;
+  }
+  const plan = planRunners(outcome.runners, plate);
+  return { startMs, plan, endMs: startMs + plan.durationMs };
+}
+
+/** 守備の演出。野手が打球を処理するインプレー(ホームランでない)のみ。計画の時刻 0 を `fielder.arriveMs` に合わせる。 */
+function fieldingOf(outcome: PitchOutcomeView, batted: BattedPlan | null, fielder: PlayFielder | null): PlayFielding | null {
+  const plate = plateOf(outcome);
+  if (outcome.kind !== "in-play" || plate === null || batted === null || fielder === null) {
+    return null;
+  }
+  const plan = planFielding(plate, batted.end);
+  if (plan === null) {
+    return null;
+  }
+  const baseMs = fielder.arriveMs;
+  return {
+    pose: plan.pose,
+    fielderIndex: plan.fielderIndex,
+    stop: plan.stop,
+    baseMs,
+    throws: plan.throws.map((entry) => ({ ...entry, startMs: entry.startMs + baseMs, arriveMs: entry.arriveMs + baseMs })),
+    retires: plan.retires.map((entry) => ({ slot: entry.slot, atMs: entry.atMs + baseMs })),
+    endMs: plan.endMs + baseMs,
+  };
+}
+
+/** 走者が動くとき、演出の終了を走者の進塁が終わるまで延ばす(基準の終了 + `maxMs` が上限)。動かないときは基準のまま。 */
+function extendedEndMs(baseEndMs: number, runners: PlayRunners | null, fielding: PlayFielding | null): number {
+  if (runners === null || runners.plan.durationMs <= 0) {
+    return baseEndMs;
+  }
+  const motionEndMs = Math.max(runners.endMs, fielding?.endMs ?? 0) + TELOP.afterglowMs;
+  return Math.min(Math.max(baseEndMs, motionEndMs), baseEndMs + RUNNERS.maxMs);
+}
+
+/** 結果の時刻(ワイプの基準)。接触あり = 接触、なし = 到達と空振りの接触姿勢のうち遅い方。 */
+function resultMsOf(durationMs: number, contactMs: number | null, swing: PlaySwing | null): number {
+  return contactMs ?? Math.max(durationMs, swing?.contactAtMs ?? 0);
+}
+
 /**
  * 1球の演出の時刻表を作る(純関数・決定論)。どの種別でも `telop.startMs ≥ durationMs`(ボールが通過してからテロップを出す)。
- * `endMs = telop.endMs + afterglowMs`。
+ * `endMs = telop.endMs + afterglowMs`。走者が動くプレーは、走者の進塁が終わる時刻 + 余韻まで延びる(最大 +3.0 秒)。
+ * 走者・捕球・送球の時刻は、打球が野手に届く時刻(`fielder.arriveMs`)を計画の 0 として表示の時刻へずらす。
  */
 export function planPlay(input: PlanInput): PlayPlan {
   const { flight, outcome, resolvedAtMs } = input;
   const { telopStartMs, telopLengthMs, ...motion } = segmentOf(input);
   const telopEndMs = telopStartMs + telopLengthMs;
+  const runStartMs = motion.fielder?.arriveMs ?? telopStartMs;
+  const runners = runnersOf(outcome, runStartMs);
+  const fielding = fieldingOf(outcome, motion.batted, motion.fielder);
+  const endMs = extendedEndMs(telopEndMs + TELOP.afterglowMs, runners, fielding);
+  const resultMs = resultMsOf(flight.durationMs, motion.contactMs, motion.swing);
   return {
     seq: outcome.seq,
+    outcome,
     kind: outcome.kind,
     durationMs: flight.durationMs,
     resolvedAtMs,
     ...motion,
+    runners,
+    fielding,
+    infieldFromMs: runners !== null && runners.plan.durationMs > 0 ? runStartMs : null,
+    wipe: planWipeStages({ plate: plateOf(outcome), resultMs, contactMs: motion.contactMs, endMs }),
     telop: { text: telopFor(outcome, landingOf(outcome)), startMs: telopStartMs, endMs: telopEndMs },
     timing: timingOf(input),
-    endMs: telopEndMs + TELOP.afterglowMs,
+    endMs,
   };
 }

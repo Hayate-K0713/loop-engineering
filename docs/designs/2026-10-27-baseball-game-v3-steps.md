@@ -167,7 +167,7 @@
 
 #### ウェーブ E-2(4 並列)
 
-- [ ] **E7: render — ステージ(14 体のプール・ワイプ・品質ティア)**
+- [x] **E7: render — ステージ(14 体のプール・ワイプ・品質ティア)**
   - 依存: E5, E6。担当ファイル: `render/{stage,look,stadium}.ts`(+test)。
   - やること: 近景 4 体・遠景 10 体のプール(`SceneFrame.runners`・各 `CharacterPose.expression`)。足元の影の円盤(遠景)は `InstancedMesh` 1 つ。`StageHandle.setLook`。**ワイプ**: 第 2 パス(対象キャラクターだけ `setWipeLayer(true)`、ワイプ用カメラは `layers.set(WIPE_LAYER)`、地面と空だけ同じレイヤー。draw call ≤ 12)。`setQualityTier`(**飛行中はペンディング、`idle`/`holding` で実行**)。`stats()` に品質ティアとワイプの有無を含む。
   - 完了条件: 単体テスト(smoke)— プールの生成・破棄、ティアの切替で遠景の更新・影・ワイプの可否が変わる、飛行中の `setQualityTier` がペンディングされ `idle` で適用される、`setLook` が未知のスロットを無視、ワイプの第 2 パスで描かれるメッシュが対象キャラクター+背景のみ、`window`/`document`/`matchMedia` を使うのは `stage.ts` のみ。

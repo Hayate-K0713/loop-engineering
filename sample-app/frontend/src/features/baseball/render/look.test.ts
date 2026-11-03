@@ -1,5 +1,6 @@
-import { BasicShadowMap, ColorManagement, Color, LinearSRGBColorSpace, NearestFilter, PCFShadowMap, RedFormat } from "three";
+import { BasicShadowMap, ColorManagement, Color, LinearSRGBColorSpace, NearestFilter, PCFShadowMap, PerspectiveCamera, RedFormat } from "three";
 import { describe, expect, it } from "vitest";
+import type { QualityTier } from "../types/scene";
 import {
   LIGHT_LOOK,
   LEGACY_LIGHT_SCALE,
@@ -8,8 +9,14 @@ import {
   createToonGradient,
   gradientPixels,
   pixelRatioFor,
+  pixelRatioForTier,
+  placeCamera,
+  placeholderLook,
   rgbaPixels,
   shadowMapSizeFor,
+  shadowMapSizeForTier,
+  shapeKeyOf,
+  tierSettingsFor,
 } from "./look";
 import type { RendererLookTarget } from "./look";
 
@@ -54,6 +61,62 @@ describe("shadowMapSizeFor", () => {
   it("coarse は 1024、それ以外は LIGHT_LOOK.sun.shadow.mapSize", () => {
     expect(shadowMapSizeFor(true)).toBe(1024);
     expect(shadowMapSizeFor(false)).toBe(LIGHT_LOOK.sun.shadow.mapSize);
+  });
+});
+
+describe("品質ティア", () => {
+  it("画素比の上限は T0 1.5・T1 1.25・T2 1.0・T3 0.85(デバイス比とも小さい方を取る)", () => {
+    expect([0, 1, 2, 3].map((tier) => tierSettingsFor(tier as QualityTier).pixelRatioCap)).toEqual([1.5, 1.25, 1, 0.85]);
+    expect(pixelRatioForTier("normal", 3, false, 0)).toBe(1.5);
+    expect(pixelRatioForTier("normal", 1.2, false, 0)).toBeCloseTo(1.2, 9);
+    expect(pixelRatioForTier("normal", 3, false, 3)).toBeCloseTo(0.85, 9);
+    expect(pixelRatioForTier("low", 3, false, 0)).toBe(1);
+  });
+
+  it("影マップは T0 = 基準値・T1 = 512・T2 以降 = 0(影なし)", () => {
+    expect([0, 1, 2, 3].map((tier) => shadowMapSizeForTier(tier as QualityTier, 1024))).toEqual([1024, 512, 0, 0]);
+    expect(shadowMapSizeForTier(0, 2048)).toBe(2048);
+    expect(shadowMapSizeForTier(1, 256)).toBe(256);
+  });
+
+  it("近景で影を落とす数は 4・3・0・0、遠景の関節は T2 から止まり、ワイプは T3 でなくなる", () => {
+    const settings = [0, 1, 2, 3].map((tier) => tierSettingsFor(tier as QualityTier));
+    expect(settings.map((item) => item.nearCasters)).toEqual([4, 3, 0, 0]);
+    expect(settings.map((item) => item.farJoints)).toEqual([true, true, false, false]);
+    expect(settings.map((item) => item.farMovingOnly)).toEqual([false, false, false, true]);
+    expect(settings.map((item) => item.wipe)).toEqual([true, true, true, false]);
+  });
+});
+
+describe("placeholderLook / shapeKeyOf", () => {
+  it("攻撃側のスロットは offense、他は defense の色を着る", () => {
+    const uniforms = { offense: 0x112233, defense: 0x445566 };
+    expect(placeholderLook("batter", uniforms).uniform.helmet).toBe(0x112233);
+    expect(placeholderLook("runner2", uniforms).uniform.cap).toBe(0x112233);
+    expect(placeholderLook("pitcher", uniforms).uniform.cap).toBe(0x445566);
+    expect(placeholderLook("fielder3", uniforms).uniform.accent).toBe(0x445566);
+  });
+
+  it("造形の鍵は色・髪型・体格・肌で変わり、顔のテクスチャ(素データ)では変わらない", () => {
+    const base = placeholderLook("pitcher", { offense: 1, defense: 2 });
+    expect(shapeKeyOf(base)).toBe(shapeKeyOf({ ...base, faceAtlas: { ...base.faceAtlas, rgba: new Uint8Array(4) } }));
+    expect(shapeKeyOf(base)).not.toBe(shapeKeyOf({ ...base, build: "stocky" }));
+    expect(shapeKeyOf(base)).not.toBe(shapeKeyOf({ ...base, hair: { ...base.hair, style: "long" } }));
+    expect(shapeKeyOf(base)).not.toBe(shapeKeyOf({ ...base, uniform: { ...base.uniform, cap: 0x123456 } }));
+  });
+});
+
+describe("placeCamera", () => {
+  it("姿勢の FOV・位置・縦横比を写し、lift があれば viewOffset を付ける", () => {
+    const camera = new PerspectiveCamera();
+    const pose = { position: { x: 1, y: 2, z: 3 }, target: { x: 0, y: 0, z: 0 }, fovDeg: 30, lift: 0.1 };
+    placeCamera(camera, pose, { width: 200, height: 100 });
+    expect(camera.fov).toBe(30);
+    expect(camera.aspect).toBe(2);
+    expect(camera.position.toArray()).toEqual([1, 2, 3]);
+    expect(camera.view?.enabled).toBe(true);
+    placeCamera(camera, { ...pose, lift: 0 }, { width: 200, height: 100 });
+    expect(camera.view?.enabled ?? false).toBe(false);
   });
 });
 
