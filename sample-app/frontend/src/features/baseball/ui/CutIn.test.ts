@@ -56,6 +56,12 @@ describe("CutIn: 操作を受けない・動きの抑制", () => {
     expect(css).toMatch(/\.bb-cutin__number \{[^}]*pointer-events: none;/);
   });
 
+  it("名前・役割の帯は矩形の下の外側に付き(top: 100%)、顔に重ならない。縁は帯を切らない(overflow: hidden にしない)", () => {
+    expect(css).toMatch(/\.bb-cutin__caption \{[^}]*top: 100%;/);
+    expect(css).not.toMatch(/\.bb-cutin__caption \{[^}]*bottom: 0;/);
+    expect(css).not.toMatch(/\.bb-cutin \{[^}]*overflow: hidden;/);
+  });
+
   it("prefers-reduced-motion では出現のアニメを止める", () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.bb-cutin \{\s*animation: none;/);
   });

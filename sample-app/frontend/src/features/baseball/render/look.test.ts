@@ -30,6 +30,19 @@ describe("色管理", () => {
     expect(LIGHT_LOOK.sun.intensity).toBeCloseTo(0.7 * LEGACY_LIGHT_SCALE, 12);
     expect(LIGHT_LOOK.hemisphere.intensity).toBeCloseTo(0.55 * LEGACY_LIGHT_SCALE, 12);
   });
+
+  it("太陽は打者の背中の右上から。打者(ゾーンの左)の影は左の画面外へ伸び、ゾーン・ボールの上に落ちない", () => {
+    const { position, target } = LIGHT_LOOK.sun;
+    const travel = { x: target.x - position.x, y: target.y - position.y, z: target.z - position.z };
+    // 影は光の進む向きの水平成分へ伸びる。x が負 = 左(ゾーンと反対側)。
+    expect(travel.x).toBeLessThan(0);
+    expect(Math.abs(travel.x)).toBeGreaterThan(Math.abs(travel.z));
+    // 背中側(+z)から照らす(後ろ姿が暗くならない)。
+    expect(position.z).toBeGreaterThan(0);
+    // 仰角が高く、影は短い(打者の身長 1.8m の影が 1.6m 以内)。
+    const elevation = Math.atan2(-travel.y, Math.hypot(travel.x, travel.z));
+    expect(1.8 / Math.tan(elevation)).toBeLessThan(1.6);
+  });
 });
 
 describe("pixelRatioFor", () => {

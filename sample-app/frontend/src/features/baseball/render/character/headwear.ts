@@ -8,6 +8,9 @@ const HALF = Math.PI / 2;
 /** 前半分の円盤(つば)。円柱の周方向を −90°〜+90°(+z 側)にする。 */
 const FRONT_HALF = [-HALF, Math.PI] as const;
 
+/** ヘルメットの殻の前上がりの傾き(rad)。 */
+const HELMET_TILT = -0.2;
+
 function cap(ctx: PartContext): SkinPart[] {
   const { colors, detail } = ctx;
   const dome = ellipsoid([0.485, 0.42, 0.495], anchor(ctx, "head", [0, 0.12, 0]), detail.dome, { theta: [0, HALF], rotation: [-0.08, 0, 0] });
@@ -30,10 +33,15 @@ function cap(ctx: PartContext): SkinPart[] {
 
 function helmet(ctx: PartContext): SkinPart[] {
   const { colors, detail } = ctx;
-  const dome = ellipsoid([0.505, 0.45, 0.51], anchor(ctx, "head", [0, 0.06, 0]), detail.dome, { theta: [0, HALF + 0.28] });
-  const brim = tube({ top: 0.28, bottom: 0.28 }, 0.03, anchor(ctx, "head", [0, 0.08, 0.4]), detail.radial + 2, {
+  // 殻を前上がりに傾ける(x 回転が負 = 前が上がり、後ろが下がる)。前の縁は帽子と同じ y≈0.12 で止め、顔のパッチの目・眉(y≈−0.03〜0.12)を隠さない。
+  // 後ろの縁は y≈−0.07 まで下げ、打者の後ろ姿で髪・耳を従来どおり縁の下に見せる。
+  const dome = ellipsoid([0.505, 0.45, 0.51], anchor(ctx, "head", [0, 0.12, 0]), detail.dome, {
+    theta: [0, HALF + 0.2],
+    rotation: [HELMET_TILT, 0, 0],
+  });
+  const brim = tube({ top: 0.28, bottom: 0.28 }, 0.03, anchor(ctx, "head", [0, 0.13, 0.38]), detail.radial + 2, {
     depth: 0.6,
-    rotation: [0.1, 0, 0],
+    rotation: [0.15, 0, 0],
     theta: FRONT_HALF,
   });
   const flap = ellipsoid([0.06, 0.17, 0.19], anchor(ctx, "head", [0.465, -0.07, -0.02]), detail.small);

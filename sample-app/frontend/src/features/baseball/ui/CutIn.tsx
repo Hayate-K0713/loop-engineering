@@ -31,7 +31,7 @@ function secondLine(detail: CutInDetail | null): string | null {
 
 /**
  * ワイプ(顔アップ)の縁取り・名前・背番号・役割ラベル。顔そのものは canvas の第 2 パスが `wipe.rect` に描くので、
- * ここは同じ矩形に縁と帯を重ねるだけ(新しい描画はしない)。操作は受けず(`pointer-events: none`)、支援技術にも読ませない。
+ * ここは同じ矩形に縁を重ね、名前・役割の帯は矩形の**下の外側**に付けるだけ(顔の目・口に帯を重ねない。新しい描画はしない)。操作は受けず(`pointer-events: none`)、支援技術にも読ませない。
  * 位置と大きさは props の矩形のまま(model が HUD の下端などから決める)。区間外・矩形が不正なときは何も描かない。
  */
 export function CutIn({ wipe, detail = null }: CutInProps) {

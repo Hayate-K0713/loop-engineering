@@ -69,6 +69,20 @@ describe("ヘルメット・帽子", () => {
     expect(side(cap).left).toBeCloseTo(side(cap).right, 6);
   });
 
+  it("ヘルメットの前の縁は顔の目・眉(頭の中心から y −0.03〜0.09)より上で、帽子と同じ高さ。後ろの縁は下がって髪・耳を見せる", () => {
+    const head = makeContext("near").origins.get("head") ?? [0, 0, 0];
+    const rim = (batter: boolean, front: boolean): number => {
+      const wear = mergeGeometries(headwearParts(makeContext("near", { batter })));
+      const found = points(wear)
+        .filter((point) => (front ? point.z - head[2] > 0.3 : point.z - head[2] < -0.3) && Math.abs(point.x - head[0]) < 0.2)
+        .map((point) => point.y - head[1]);
+      return Math.min(...found);
+    };
+    expect(rim(true, true)).toBeGreaterThan(0.08);
+    expect(Math.abs(rim(true, true) - rim(false, true))).toBeLessThan(0.05);
+    expect(rim(true, false)).toBeLessThan(0);
+  });
+
   it("頭の外径は素の頭より 4〜12% 大きい(ヘルメット・帽子込み)", () => {
     for (const batter of [true, false]) {
       const ctx = makeContext("near", { batter });

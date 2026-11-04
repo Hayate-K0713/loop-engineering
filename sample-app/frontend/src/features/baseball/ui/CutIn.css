@@ -1,12 +1,13 @@
 /* ワイプ(顔アップ)の縁取り・名前・背番号・役割ラベル。顔そのものは canvas の第 2 パスが同じ矩形に描く。
    位置と大きさ(left/top/width/height)は CutIn が props の矩形から style で与える。
-   操作は一切受けない(pointer-events: none)。ステージ(bb-stage)の中・ゾーンやボールの上には掛からない矩形を model が選ぶ */
+   操作は一切受けない(pointer-events: none)。ステージ(bb-stage)の中・ゾーンやボールの上には掛からない矩形を model が選ぶ。
+   名前・役割の帯は顔(矩形の中)に重ねず、矩形のすぐ下(外側)に付ける(顔の目・口を隠さない)。帯の分だけ矩形の下に余白が要るが、
+   矩形の下(390×844 で y 269 以降・右端)には HUD も操作バーもない(帯の高さは 2 行で約 34px) */
 
 .bb-cutin {
   position: absolute;
   z-index: 2;
   box-sizing: border-box;
-  overflow: hidden;
   border: 3px solid var(--bb-accent, #ffd23f);
   border-radius: 6px;
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
@@ -22,7 +23,7 @@
   box-sizing: border-box;
   min-width: 22px;
   padding: 1px 5px 2px;
-  border-radius: 0 0 6px;
+  border-radius: 3px 0 6px;
   background: rgba(8, 20, 34, 0.85);
   color: #ffffff;
   font-size: 12px;
@@ -33,17 +34,22 @@
   pointer-events: none;
 }
 
-/* 下の帯(名前と、背番号または役割ラベル) */
+/* 縁の下の帯(名前と、背番号または役割ラベル)。縁(3px)の外側に出し、縁と同じ幅・同じ色の縁取りでつなぐ */
 .bb-cutin__caption {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  top: 100%;
+  right: -3px;
+  left: -3px;
   display: grid;
+  box-sizing: border-box;
   gap: 0;
-  margin: 0;
+  margin: 3px 0 0;
   padding: 2px 4px 3px;
-  background: rgba(8, 20, 34, 0.88);
+  border: 3px solid var(--bb-accent, #ffd23f);
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  background: rgba(8, 20, 34, 0.92);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
   font-weight: 900;
   line-height: 1.2;
   pointer-events: none;

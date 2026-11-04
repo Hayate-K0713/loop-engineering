@@ -66,7 +66,9 @@ export const LIGHT_LOOK = {
   sun: {
     color: 0xfff4e0,
     intensity: 0.7 * LEGACY_LIGHT_SCALE,
-    position: { x: -40, y: 80, z: 30 },
+    // 太陽の位置: 打者の背中側(+z)の右上。影は左(−x)と少し前(−z)へ伸びる = 打者の影がゾーン・ボールの上に落ちず、画面の左の外へ出る。
+    // 仰角を約 52° に上げて影を短くし(1.8m の打者で約 1.4m)、足元の接地感だけ残す。旧値(−40, 80, 30)は影が本塁前からゾーンの下に広がった。
+    position: { x: 60, y: 100, z: 20 },
     target: { x: 0, y: 0, z: -30 },
     shadow: { mapSize: 2048, left: -70, right: 70, top: 70, bottom: -110, near: 10, far: 220, normalBias: 0.02 },
   },
