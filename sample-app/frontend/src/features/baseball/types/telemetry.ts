@@ -5,6 +5,7 @@ import type { Difficulty } from "./game";
 import type { IgnoredInputReason, PreviewMode, SwingKind, SwingSource } from "./batting";
 import type { ZonePoint } from "./common";
 import type { PitchKind, PitchQuality } from "./pitch";
+import type { QualityTier } from "./scene";
 
 /** 端末情報。縮小表示の疑い(`innerWidth ≥ 900` かつ `pointerCoarse`)の検出にも使う。 */
 export type PlaytestDevice = {
@@ -35,6 +36,9 @@ export type PlaytestSwing = {
   readonly tapHoldMs: number | null;
   readonly tapMovePx: number | null;
 };
+
+/** 品質ティアを切り替えた理由。`restore` = 前回のティアの復元、`fixed` = `?tier=` による固定、`startup` = 起動直後の判定、`auto` = 窓ごとの自動降格。 */
+export type PlaytestTierReason = "restore" | "fixed" | "startup" | "auto";
 
 /** 試遊ログの 1 件。`type` で判別する。 */
 export type PlaytestRecord =
@@ -69,7 +73,16 @@ export type PlaytestRecord =
       readonly quality: PitchQuality;
       readonly result: PlaytestResultKind;
     }
-  | { readonly type: "perf"; readonly atMs: number; readonly fpsMedian: number; readonly p95Ms: number; readonly longFrameRatio: number };
+  | { readonly type: "perf"; readonly atMs: number; readonly fpsMedian: number; readonly p95Ms: number; readonly longFrameRatio: number }
+  | {
+      readonly type: "tier";
+      readonly atMs: number;
+      readonly fromTier: QualityTier;
+      readonly toTier: QualityTier;
+      readonly reason: PlaytestTierReason;
+      /** `auto` のときに降格を決めた窓の p95(ms)。それ以外は `null`。 */
+      readonly windowP95Ms: number | null;
+    };
 
 /**
  * `summarize(records)` の出力(診断表の元)。平均・中央値・SD などは、該当する記録が無いとき `null`。
@@ -91,4 +104,6 @@ export type PlaytestSummary = {
   readonly pitchesThrown: number;
   readonly niceRate: number | null;
   readonly fpsP95Ms: number | null;
+  /** 品質ティアを切り替えた回数(復元・固定・起動判定・自動降格の合計)。 */
+  readonly tierSwitches: number;
 };

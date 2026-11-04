@@ -70,7 +70,7 @@ function perfP95(records: readonly PlaytestRecord[]): number | null {
  * - `contactRate` = スイングのうち結果が空振り(`swinging-strike`)でない割合(ファウル・インプレーは接触)。
  * - `swingAtStrikeRate`/`swingAtBallRate` = 着弾がゾーン内/外の打撃の球のうちスイングした割合。
  * - `dtMeanMs`/`dtSdMs` = スイングの `dtMs` の平均と母標準偏差。`distancePxMedian` = `distancePx` の中央値(`null` は除く)。
- * - `fpsP95Ms` = `perf` 記録(窓ごとの p95)の中央値。
+ * - `fpsP95Ms` = `perf` 記録(窓ごとの p95)の中央値。`tierSwitches` = `tier` 記録(品質ティアの切替)の件数。
  * 該当する記録が無い値は `null`。
  */
 export function summarize(records: readonly PlaytestRecord[]): PlaytestSummary {
@@ -92,5 +92,6 @@ export function summarize(records: readonly PlaytestRecord[]): PlaytestSummary {
     sources: countSwingSources(swings),
     ...pitchSummary(records),
     fpsP95Ms: perfP95(records),
+    tierSwitches: records.filter((record) => record.type === "tier").length,
   };
 }

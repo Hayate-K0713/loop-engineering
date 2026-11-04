@@ -3,6 +3,7 @@ import type { Side, ZonePoint } from "./common";
 import type { Bases, Difficulty, LogEntry, RunnerMoves } from "./game";
 import type { PitchFlight, PitchKind } from "./pitch";
 import type { UniformColors, WipeRect } from "./scene";
+import type { Team } from "./team";
 
 /** スコアボードの1行(チーム)。`cells` は整形済み文字列で、未到達は「-」、スキップされた裏は「x」。 */
 export type ScoreRowView = {
@@ -180,4 +181,17 @@ export type GameView = {
   readonly teamColors: { readonly away: number; readonly home: number };
   /** 攻撃側チームの色と守備側チームの色(描画用)。 */
   readonly uniforms: UniformColors;
+  /**
+   * 画面のキャラクター(顔・髪・背番号・フォーム)の元になるデータ。攻撃側・守備側のチーム(選手の `PlayerLook` を持つ)と、攻撃側の現在の打者番号。
+   * 表示専用で、判定・乱数には影響しない。`hooks/useCharacterLooks` と director の `forms`・ワイプの名前が読む。
+   */
+  readonly cast: CastView;
+};
+
+/** 画面のキャラクターの元データ(`GameView.cast`)。 */
+export type CastView = {
+  readonly offense: Team;
+  readonly defense: Team;
+  /** 攻撃側の現在の打者番号(0〜8)。 */
+  readonly lineupIndex: number;
 };

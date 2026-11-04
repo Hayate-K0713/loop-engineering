@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RngState } from "../../types/common";
 import type { PitchCommand, PitchFlight, PitchKind, PitchQuality } from "../../types/pitch";
 import type { PitcherProfile } from "../../types/team";
+import { FIXTURE_LOOK } from "../game/test-fixtures";
 import { createRng } from "../rng/rng";
 import { nextGaussian } from "../rng/sampling";
 import { type DeliverPitchInput, deliverPitch, fatigueOf, staminaRatio } from "./delivery";
@@ -21,6 +22,7 @@ function pitcherWith(overrides: Partial<PitcherProfile> = {}): PitcherProfile {
     control: 90,
     stamina: 100,
     repertoire: ["straight", "slider", "curve", "fork", "shoot"],
+    look: FIXTURE_LOOK,
     ...overrides,
   };
 }

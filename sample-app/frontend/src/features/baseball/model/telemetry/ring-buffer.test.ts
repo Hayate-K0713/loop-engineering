@@ -50,6 +50,8 @@ describe("ring-buffer", () => {
       { type: "pointercancel", atMs: 4000 },
       makePitch(),
       makePerf(),
+      { type: "tier", atMs: 12000, fromTier: 0, toTier: 1, reason: "auto", windowP95Ms: 31.5 },
+      { type: "tier", atMs: 100, fromTier: 0, toTier: 2, reason: "restore", windowP95Ms: null },
     ];
     expect(parseRecords(serializeRecords(records))).toEqual(records);
   });

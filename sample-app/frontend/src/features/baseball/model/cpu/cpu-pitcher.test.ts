@@ -3,6 +3,7 @@ import type { RngState } from "../../types/common";
 import type { Count } from "../../types/game";
 import type { CpuPitchChoice, PitchKind } from "../../types/pitch";
 import type { PitcherProfile } from "../../types/team";
+import { FIXTURE_LOOK } from "../game/test-fixtures";
 import { PITCH_PARAMS } from "../pitch/params";
 import { ALL_CELLS, isStrikeCell } from "../pitch/zone";
 import { createRng, nextFloat } from "../rng/rng";
@@ -15,7 +16,7 @@ const DRAWS = 10000;
 const ALL_KINDS: readonly PitchKind[] = ["straight", "slider", "curve", "fork", "shoot"];
 
 function pitcherWith(repertoire: readonly PitchKind[]): PitcherProfile {
-  return { id: "p", name: "テスト投手", speedKmh: 145, control: 70, stamina: 70, repertoire };
+  return { id: "p", name: "テスト投手", speedKmh: 145, control: 70, stamina: 70, repertoire, look: FIXTURE_LOOK };
 }
 
 function inputWith(overrides: Partial<ChooseCpuPitchInput> = {}): ChooseCpuPitchInput {

@@ -207,11 +207,28 @@ export type StageStats = {
   readonly textures: number;
 };
 
+/**
+ * `StageHandle.stats()` の実体。`StageStats` に、品質ティアとワイプ・球場の基準値を足したもの(E7 が実装し、E11 が契約へ加算)。
+ * - `qualityTier`/`pendingTier` = 現在のティアと、飛行中に保留した切替先。
+ * - `wipe`/`wipeDrawCalls` = 直近のフレームでワイプの第 2 パスを描いたか・その draw call(`drawCalls` に含まれる)。
+ * - `stadiumDrawCalls`/`stadiumShadowCasters` = 球場だけの基準値(描画オブジェクト数 = メインパスの draw call、影を落とすオブジェクト数 = 影のパスの draw call)。
+ * - `meshesPerCharacter` = 1 体あたりの描画オブジェクト数(近景・遠景)。
+ */
+export type StageStatsDetail = StageStats & {
+  readonly qualityTier: QualityTier;
+  readonly pendingTier: QualityTier | null;
+  readonly wipe: boolean;
+  readonly wipeDrawCalls: number;
+  readonly stadiumDrawCalls: number;
+  readonly stadiumShadowCasters: number;
+  readonly meshesPerCharacter: { readonly near: number; readonly far: number };
+};
+
 export type StageHandle = {
   /** 1フレーム分の状態を three に適用して描画する。 */
   apply(frame: SceneFrame): void;
   /** 描画負荷の実測。破棄後は `null`。 */
-  stats(): StageStats | null;
+  stats(): StageStatsDetail | null;
   /** キャラクターの見た目(顔・髪・ユニフォーム・背番号)を差し替える。破棄後は何もしない。 */
   setLook(slot: CharacterSlot, data: CharacterLookData): void;
   /** 品質ティアを切り替える。飛行中は保留し、`idle`/`holding` で適用する(再コンパイルを伴うため)。破棄後は何もしない。 */

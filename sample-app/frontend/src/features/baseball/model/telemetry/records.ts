@@ -4,7 +4,8 @@ import type { Difficulty } from "../../types/game";
 import type { IgnoredInputReason, PitchResult, PreviewMode, SwingKind, SwingMeta } from "../../types/batting";
 import type { ZonePoint } from "../../types/common";
 import type { PitchKind, PitchQuality } from "../../types/pitch";
-import type { PlaytestDevice, PlaytestRecord, PlaytestResultKind, PlaytestSwing } from "../../types/telemetry";
+import type { QualityTier } from "../../types/scene";
+import type { PlaytestDevice, PlaytestRecord, PlaytestResultKind, PlaytestSwing, PlaytestTierReason } from "../../types/telemetry";
 import { isStrike } from "../pitch/zone";
 
 type RecordOf<T extends PlaytestRecord["type"]> = Extract<PlaytestRecord, { readonly type: T }>;
@@ -133,6 +134,14 @@ export function buildSessionRecord(atMs: number, sessionId: string, device: Play
 /** 起動時 1 回のステージ統計(`StageHandle.stats()`)の記録。 */
 export function buildStageRecord(atMs: number, drawCalls: number, triangles: number): RecordOf<"stage"> {
   return { type: "stage", atMs, drawCalls, triangles };
+}
+
+/** 品質ティアの切替の記録(`useQualityTier` の `onSwitch`)。 */
+export function buildTierRecord(
+  atMs: number,
+  change: { readonly fromTier: QualityTier; readonly toTier: QualityTier; readonly reason: PlaytestTierReason; readonly windowP95Ms: number | null },
+): RecordOf<"tier"> {
+  return { type: "tier", atMs, fromTier: change.fromTier, toTier: change.toTier, reason: change.reason, windowP95Ms: change.windowP95Ms };
 }
 
 /** 縮小表示の疑い(`innerWidth ≥ 900` かつ粗いポインタ)。画面で警告を出すのに使う。 */

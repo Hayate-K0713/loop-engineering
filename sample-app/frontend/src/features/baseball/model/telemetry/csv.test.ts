@@ -29,6 +29,7 @@ describe("toCsv", () => {
       makeIgnored("tap-moved"),
       { type: "pointercancel", atMs: 1 },
       { type: "stage", atMs: 2, drawCalls: 100, triangles: 9000 },
+      { type: "tier", atMs: 3, fromTier: 0, toTier: 1, reason: "auto", windowP95Ms: 30.2 },
     ];
     for (const line of lines(toCsv(records))) {
       expect(fieldsOf(line)).toHaveLength(CSV_COLUMNS.length);
@@ -51,6 +52,20 @@ describe("toCsv", () => {
     expect(valueAt(csv, 1, "reason")).toBe("tap-too-long");
     expect(valueAt(csv, 2, "quality")).toBe("nice");
     expect(valueAt(csv, 2, "stopAtMs")).toBe("");
+  });
+
+  it("品質ティアの切替の行は前後のティアと理由と窓の p95 を持ち、自動降格以外の p95 は空欄", () => {
+    const csv = toCsv([
+      { type: "tier", atMs: 5, fromTier: 0, toTier: 1, reason: "auto", windowP95Ms: 30.2 },
+      { type: "tier", atMs: 6, fromTier: 0, toTier: 2, reason: "restore", windowP95Ms: null },
+    ]);
+    expect(valueAt(csv, 1, "type")).toBe("tier");
+    expect(valueAt(csv, 1, "fromTier")).toBe("0");
+    expect(valueAt(csv, 1, "toTier")).toBe("1");
+    expect(valueAt(csv, 1, "tierReason")).toBe("auto");
+    expect(valueAt(csv, 1, "windowP95Ms")).toBe("30.2");
+    expect(valueAt(csv, 2, "tierReason")).toBe("restore");
+    expect(valueAt(csv, 2, "windowP95Ms")).toBe("");
   });
 
   it("カンマや引用符を含む値は二重引用符で囲む", () => {

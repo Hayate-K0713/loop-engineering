@@ -44,6 +44,10 @@ export const CSV_COLUMNS: readonly string[] = [
   "longFrameRatio",
   "drawCalls",
   "triangles",
+  "fromTier",
+  "toTier",
+  "tierReason",
+  "windowP95Ms",
   "sessionId",
 ];
 
@@ -118,6 +122,13 @@ function specificCells(record: PlaytestRecord): readonly (readonly [string, Cell
         ["fpsMedian", record.fpsMedian],
         ["p95Ms", record.p95Ms],
         ["longFrameRatio", record.longFrameRatio],
+      ];
+    case "tier":
+      return [
+        ["fromTier", record.fromTier],
+        ["toTier", record.toTier],
+        ["tierReason", record.reason],
+        ["windowP95Ms", record.windowP95Ms],
       ];
   }
 }

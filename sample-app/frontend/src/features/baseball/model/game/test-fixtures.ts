@@ -6,7 +6,7 @@ import type { BatterProfile, PlayerLook, Team } from "../../types/team";
 const LINEUP_SIZE = 9;
 
 /** 全員同じ見た目(表示専用。game のルールのテストでは使わない)。 */
-const FIXTURE_LOOK: PlayerLook = {
+export const FIXTURE_LOOK: PlayerLook = {
   number: 1,
   skin: 1,
   hair: { style: "short", color: 0 },

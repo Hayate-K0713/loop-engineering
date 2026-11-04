@@ -23,6 +23,7 @@ const SUMMARY: PlaytestSummary = {
   pitchesThrown: 0,
   niceRate: null,
   fpsP95Ms: 22.5,
+  tierSwitches: 1,
 };
 
 const JSON_TEXT = '[{"type":"session","atMs":0}]';

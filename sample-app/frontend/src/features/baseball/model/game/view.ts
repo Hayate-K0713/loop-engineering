@@ -183,6 +183,16 @@ function colorsOf(state: GameState): Pick<GameView, "teamColors" | "uniforms"> {
   };
 }
 
+/** 画面のキャラクターの元データ。攻撃側・守備側のチームと、攻撃側の現在の打者番号。 */
+function castOf(state: GameState): GameView["cast"] {
+  const offense = offenseSide(state.half);
+  return {
+    offense: bySide(state.teams, offense),
+    defense: bySide(state.teams, defenseSide(state.half)),
+    lineupIndex: bySide(state.lineupIndex, offense),
+  };
+}
+
 /** 人間視点の勝敗。CPU 同士の試合では `null`。 */
 function humanOutcomeOf(humanSide: Side | null, winner: Side | null): ResultView["humanOutcome"] {
   if (humanSide === null) {
@@ -276,5 +286,6 @@ export function toGameView(state: GameState): GameView {
     result: resultOf(state),
     outcome: outcomeOf(state),
     ...colorsOf(state),
+    cast: castOf(state),
   };
 }

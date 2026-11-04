@@ -3,9 +3,10 @@ import type { BatterProfile } from "../../types/team";
 import { PITCH_PARAMS } from "../pitch/params";
 import { INITIAL_CURSOR, clampCursor, clientToZonePoint, cursorRadii, moveCursor } from "./cursor";
 import { BATTING_PARAMS } from "./params";
+import { FIXTURE_LOOK } from "../game/test-fixtures";
 
 function batterWith(meet: number): BatterProfile {
-  return { id: "b", name: "テスト打者", meet, power: 50, trajectory: 2 };
+  return { id: "b", name: "テスト打者", meet, power: 50, trajectory: 2, look: FIXTURE_LOOK };
 }
 
 describe("INITIAL_CURSOR", () => {

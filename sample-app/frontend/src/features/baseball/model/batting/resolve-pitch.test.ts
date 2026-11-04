@@ -4,12 +4,13 @@ import type { RngState } from "../../types/common";
 import type { Bases } from "../../types/game";
 import type { PitchFlight } from "../../types/pitch";
 import type { BatterProfile } from "../../types/team";
+import { FIXTURE_LOOK } from "../game/test-fixtures";
 import { createRng, nextFloat } from "../rng/rng";
 import { ASSIST_TABLE } from "./assist";
 import { effectiveRadii } from "./contact";
 import { type ResolvePitchInput, resolvePitch } from "./resolve-pitch";
 
-const BATTER: BatterProfile = { id: "b", name: "テスト打者", meet: 60, power: 80, trajectory: 2 };
+const BATTER: BatterProfile = { id: "b", name: "テスト打者", meet: 60, power: 80, trajectory: 2, look: FIXTURE_LOOK };
 const EMPTY_BASES: Bases = { first: false, second: false, third: false };
 const FIRST_BASE: Bases = { first: true, second: false, third: false };
 const DURATION_MS = 1300;

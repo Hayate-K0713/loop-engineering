@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { buildPerfRecord } from "../model/telemetry/frame-perf";
-import { buildBatRecord, buildIgnoredRecord, buildPlaytestSwing, buildPointerCancelRecord, buildStageRecord } from "../model/telemetry/records";
+import {
+  buildBatRecord,
+  buildIgnoredRecord,
+  buildPlaytestSwing,
+  buildPointerCancelRecord,
+  buildStageRecord,
+  buildTierRecord,
+} from "../model/telemetry/records";
 import { summarize } from "../model/telemetry/summary";
 import type { IgnoredInputReason, PitchResult, SwingInput, SwingMeta } from "../types/batting";
 import type { PitchFlight } from "../types/pitch";
@@ -11,6 +18,7 @@ import type { GameView, PitchOutcomeView } from "../types/view";
 import { useFramePerf } from "./useFramePerf";
 import { useLatest } from "./useLatest";
 import type { PlaytestLogApi } from "./usePlaytestLog";
+import type { TierSwitchEvent } from "./useQualityTier";
 
 /** 直近の人間のスイング(試遊ログ用)。`seq` はスイング時点の `flight.seq`。1 つの `seq` につき最初の 1 回だけ記録する。 */
 export type SwingLogEntry = {
@@ -164,6 +172,12 @@ export function useInputRecorder(log: PlaytestLogApi): InputRecorder {
   );
   const recordPointerCancel = useCallback((): void => latestLog.current.record(buildPointerCancelRecord(latestLog.current.elapsedMs())), [latestLog]);
   return { recordIgnored, recordPointerCancel };
+}
+
+/** 品質ティアを切り替えたときの記録(`useQualityTier` の `onSwitch` に渡す)。`log.enabled` が偽なら何もしない。 */
+export function useTierRecorder(log: PlaytestLogApi): (event: TierSwitchEvent) => void {
+  const latestLog = useLatest(log);
+  return useCallback((event: TierSwitchEvent): void => latestLog.current.record(buildTierRecord(latestLog.current.elapsedMs(), event)), [latestLog]);
 }
 
 /**

@@ -186,7 +186,7 @@
 
 #### ウェーブ E-3
 
-- [ ] **E11: 統合 E と全体確認(キャラクター)**(直列)
+- [x] **E11: 統合 E と全体確認(キャラクター)**(直列)
   - 依存: E7〜E10。担当ファイル: `hooks/{useStageDirector,useGameStage,useStage3d}.ts`、`ui/GameScreen.tsx`、必要最小限の修正(**`model/world/sequence/*` は対象外**。必要な修正は編集せず上申する)。
   - やること: director が `runners`・`wipe`・表情・フォームの入力を渡し、`useGameStage` が `useCharacterLooks`・`useQualityTier` を結線する。全体の typecheck・lint・test・build を通す。**`renderer.info` で描画予算を実測**(`stats()`: ティア T0〜T3 の draw call・三角形・キャラクター 1 体あたりのメッシュ数・ワイプの第 2 パスの draw call。**球場の既存の draw call の基準値を確定する**)し、character 分冊 §3-4-10 の目標に対する結果を完了報告に書く。knip・バンドルサイズを記録。**`model/sim` のボットのテストを再実行**し、帯を外れたら値を触らず上申(A14b)。**キャラクターの確認用のスクリーンショット**(打撃・守備・表情シート・個性・フォーム・走者・ワイプ。390×844 と 390×664)を撮り、`docs/tests/assets/2026-10-27-baseball-game-v3/characters/` に保存する(1 枚 500KB 以下)。
   - 完了条件: 全体の typecheck・lint・test・build が成功。構造検査 1〜15 が pass。描画予算の目標を満たす(満たさない項目は理由と対策を報告)。`model/sim` のテストの結果を報告。

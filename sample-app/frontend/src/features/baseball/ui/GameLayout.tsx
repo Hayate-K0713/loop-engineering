@@ -2,7 +2,9 @@ import type { PointerEventHandler, ReactNode } from "react";
 import type { GameStageViewProps, PitchSelection } from "../hooks/useGameStage";
 import type { ContactQuality, SwingKind } from "../types/batting";
 import type { CourseCell, PitchInputPhase, PitchKind } from "../types/pitch";
+import type { CharacterSlot, FaceExpression } from "../types/scene";
 import type { GameView } from "../types/view";
+import type { CutInDetail } from "./CutIn";
 import { NamePlates } from "./NamePlates";
 import { PitchingControls, type StopHandler } from "./PitchingControls";
 import { ScoreHud } from "./ScoreHud";
@@ -10,6 +12,9 @@ import { StageView } from "./StageView";
 import { SwingControls } from "./SwingControls";
 import { Ticker } from "./Ticker";
 import { ZoneFeedback } from "./ZoneFeedback";
+
+/** 表情を渡されなかったとき(`data-expr-*` を出さない)。 */
+const NO_EXPRESSIONS: Readonly<Partial<Record<CharacterSlot, FaceExpression>>> = {};
 
 type ActionBarProps = {
   /** **表示用**(保持される)view。操作バーの種類と球種の一覧に使う。操作可否は下の `pitchReady`・`swingReady` を使う。 */
@@ -43,6 +48,10 @@ type GameLayoutProps = ActionBarProps & {
   readonly stageProps: GameStageViewProps;
   /** タイミングのピルの 2 行目(接触の質)。省略・`null` ならピルは 1 行。`StageView` へそのまま渡す。 */
   readonly contactQuality?: ContactQuality | null;
+  /** 投手・打者などの今の表情(`StageView` の `data-expr-*`。E2E・手動確認用)。省略なら属性を出さない。 */
+  readonly expressions?: Readonly<Partial<Record<CharacterSlot, FaceExpression>>>;
+  /** ワイプの帯の補足(背番号・役割ラベル)。省略・`null` なら名前の 1 行だけ。 */
+  readonly cutInDetail?: CutInDetail | null;
   /** 説明(チュートリアル)のカード(`<Tutorial>`)。表示中だけ渡す。試合画面の全面に重なる。 */
   readonly tutorial?: ReactNode;
   /** 試遊ログの画面(`<PlaytestPanel>`)。開いている間だけ渡す。試合画面の全面に重なる。 */
@@ -100,11 +109,11 @@ function ActionBar(props: ActionBarProps & { readonly inputState: PitchInputPhas
  * 位置ずれのミニ図(`ZoneFeedback`)はステージとオーバーレイの間に重ね(操作は受けない)、説明のカード(`tutorial`)と試遊ログの画面(`playtest`)は
  * オーバーレイの上に全面で重ねる(渡されたときだけ)。
  */
-export function GameLayout({ stageProps, contactQuality, tutorial, playtest, ...bar }: GameLayoutProps) {
+export function GameLayout({ stageProps, contactQuality, expressions, cutInDetail, tutorial, playtest, ...bar }: GameLayoutProps) {
   const { view } = bar;
   return (
     <div className={`bb-game bb-game--${barVariant(view.mode)}`} data-safe-area-root>
-      <StageView {...stageProps} contactQuality={contactQuality ?? null} />
+      <StageView {...stageProps} contactQuality={contactQuality ?? null} expressions={expressions ?? NO_EXPRESSIONS} cutInDetail={cutInDetail ?? null} />
       <ZoneFeedback feedback={stageProps.zoneFeedback} zoneRect={stageProps.zoneRect} />
       <div className="bb-overlay">
         <div className="bb-overlay__top" data-inset="top">

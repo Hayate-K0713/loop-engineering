@@ -514,6 +514,17 @@ describe("toGameView: team colors and short names", () => {
     expect(after.teamColors).toEqual(before.teamColors);
   });
 
+  it("gives the characters' source data: the batting team, the fielding team and the batting team's lineup index", () => {
+    const top = toGameView(makeState({ half: "top", lineupIndex: { away: 3, home: 5 } })).cast;
+    expect(top.offense).toBe(FIXTURE_AWAY_TEAM);
+    expect(top.defense).toBe(FIXTURE_HOME_TEAM);
+    expect(top.lineupIndex).toBe(3);
+    const bottom = toGameView(makeState({ half: "bottom", lineupIndex: { away: 3, home: 5 } })).cast;
+    expect(bottom.offense).toBe(FIXTURE_HOME_TEAM);
+    expect(bottom.defense).toBe(FIXTURE_AWAY_TEAM);
+    expect(bottom.lineupIndex).toBe(5);
+  });
+
   it("adds each team's short name to the scoreboard rows and keeps the team names", () => {
     const rows = toGameView(makeState()).scoreboard.rows;
     expect(rows.map((row) => row.shortName)).toEqual([FIXTURE_AWAY_TEAM.shortName, FIXTURE_HOME_TEAM.shortName]);

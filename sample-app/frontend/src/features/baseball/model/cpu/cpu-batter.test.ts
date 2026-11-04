@@ -4,6 +4,7 @@ import type { CpuBatDecision, SwingInput } from "../../types/batting";
 import type { Count } from "../../types/game";
 import type { PitchFlight, PitchKind } from "../../types/pitch";
 import type { BatterProfile, PitcherProfile } from "../../types/team";
+import { FIXTURE_LOOK } from "../game/test-fixtures";
 import { getPitchSpec } from "../pitch/kinds";
 import { PITCH_PARAMS } from "../pitch/params";
 import { createRng, nextFloat } from "../rng/rng";
@@ -17,10 +18,18 @@ const BALL_ZONE: ZonePoint = { x: 1.6, y: 0.2 };
 const NO_COUNT: Count = { balls: 0, strikes: 0 };
 const TWO_STRIKES: Count = { balls: 0, strikes: 2 };
 
-const PITCHER: PitcherProfile = { id: "p", name: "テスト投手", speedKmh: 145, control: 70, stamina: 70, repertoire: ["straight", "slider", "curve"] };
+const PITCHER: PitcherProfile = {
+  id: "p",
+  name: "テスト投手",
+  speedKmh: 145,
+  control: 70,
+  stamina: 70,
+  repertoire: ["straight", "slider", "curve"],
+  look: FIXTURE_LOOK,
+};
 
 function batterWith(power: number): BatterProfile {
-  return { id: "b", name: "テスト打者", meet: 60, power, trajectory: 2 };
+  return { id: "b", name: "テスト打者", meet: 60, power, trajectory: 2, look: FIXTURE_LOOK };
 }
 
 /** 球種ごとの球速から飛行時間を求めた投球(CPU 打者の判断に必要な項目のみ)。 */

@@ -59,6 +59,16 @@ describe("summarize", () => {
     expect(summary.fpsP95Ms).toBeCloseTo(30, 12);
   });
 
+  it("品質ティアの切替の件数を数える", () => {
+    const records: readonly PlaytestRecord[] = [
+      ...SAMPLE,
+      { type: "tier", atMs: 100, fromTier: 0, toTier: 1, reason: "startup", windowP95Ms: null },
+      { type: "tier", atMs: 9000, fromTier: 1, toTier: 2, reason: "auto", windowP95Ms: 33 },
+    ];
+    expect(summarize(records).tierSwitches).toBe(2);
+    expect(summarize(SAMPLE).tierSwitches).toBe(0);
+  });
+
   it("空のログは件数 0・割合と統計は null", () => {
     const summary = summarize([]);
     expect(summary.battingPitches).toBe(0);
@@ -72,6 +82,7 @@ describe("summarize", () => {
     expect(summary.niceRate).toBeNull();
     expect(summary.fpsP95Ms).toBeNull();
     expect(summary.pointerCancels).toBe(0);
+    expect(summary.tierSwitches).toBe(0);
     expect(summary.ignoredByReason["tap-too-long"]).toBe(0);
     expect(summary.sources.tap).toBe(0);
   });

@@ -70,6 +70,7 @@ function summaryRows(summary: PlaytestSummary): readonly SummaryRow[] {
     { label: "投球数", value: String(summary.pitchesThrown) },
     { label: "ナイスピッチ率", value: percent(summary.niceRate) },
     { label: "フレーム間隔 p95", value: fixed(summary.fpsP95Ms, " ms") },
+    { label: "描画品質の切替", value: String(summary.tierSwitches) },
   ];
 }
 

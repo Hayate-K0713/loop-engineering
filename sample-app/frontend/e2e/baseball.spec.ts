@@ -120,6 +120,15 @@ async function expectScoresShown(page: Page): Promise<void> {
   await expect(page.getByTestId("score-home")).toHaveText(/^\d+$/);
 }
 
+// 初回の説明のカード(tutorial)と最初の数球のヒントは、操作と次の投球を止める(段階 A の A13 で追加)。tutorial 自体の E2E は D2 で足すので、
+// ここでは既読にしてから始める(`bb-tutorial-v1`・`bb-prefs-v1` は `model/prefs/prefs.ts` の保存キー)。
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("bb-tutorial-v1", "1");
+    window.localStorage.setItem("bb-prefs-v1", JSON.stringify({ hintCounts: { batting: 99, pitching: 99, tap: 99 } }));
+  });
+});
+
 test("navigates from the home page to the baseball game screen", async ({ page }) => {
   await page.goto("/");
   await page.getByTestId("open-baseball").click();
@@ -314,22 +323,22 @@ const CONTACT_WINDOW_MS = 150;
 const KEY_INPUT_LATENCY_MS = 20;
 
 /** `BATTING_PARAMS.maxEventAgeMs`: `event.timeStamp` を判定に使ってよい、イベントから処理までの経過の上限(ms)。これを超えると処理時刻を使う。 */
-const MAX_EVENT_AGE_MS = 250;
+const MAX_EVENT_AGE_MS = 600;
 
 /** 「確実に早い」と言い切るための余裕(ms)。トレースの飛行開始時刻とアプリの開始時刻の差(同じ commit で同期的に反映されるので数 ms)を吸収する。 */
 const EARLY_SAFETY_MARGIN_MS = 50;
 
 /**
- * タップ系の試行で「確実にタップ」と言える押下→離しの長さの上限(ms)。`TAP_MAX_DURATION_MS`(`input-route.ts`)は 180ms。
- * 到達通知の保留(`TAP_ARRIVAL_HOLD_MS` 200ms)に収まる長さでもある。
+ * タップ系の試行で「確実にタップ」と言える押下→離しの長さの上限(ms)。`TAP_MAX_DURATION_MS`(`input-route.ts`)は 300ms。
+ * 到達通知の保留(`TAP_ARRIVAL_HOLD_MS` 320ms)に収まる長さでもある。
  */
 const SURE_TAP_MS = 150;
 
 /** `TAP_MAX_DURATION_MS`(`input-route.ts`): タップとみなす押下→離しの上限(ms)。2 つのイベントの `timeStamp` の差で測る。 */
-const TAP_MAX_DURATION_MS = 180;
+const TAP_MAX_DURATION_MS = 300;
 
 /** `TAP_ARRIVAL_HOLD_MS`(`input-route.ts`): タップ候補の指がある間、到達通知を保留する最長の時間(ms)。押下の処理から数える。 */
-const TAP_ARRIVAL_HOLD_MS = 200;
+const TAP_ARRIVAL_HOLD_MS = 320;
 
 /** `BATTING_PARAMS.lateCutoffMs`: 到達時刻 D から見逃し確定(到達通知の処理)までの時間(ms)。 */
 const LATE_CUTOFF_MS = 250;
@@ -355,7 +364,7 @@ const INITIAL_LATENCY_GUESS_MS = 400;
 /**
  * 保留の経路を通すタップ(`playHeldTap`)の時刻(ms)。押下を D + 215ms(見逃し確定 D + 250ms の 35ms 前)に送り、そこから 60ms 後(= D + 275ms。確定の後)に
  * 描画のフレームを 1 回だけ流し(アプリの到達通知の判定がこのフレームで走る)、そのフレームの直後に離す。実際の押下→離しは、この 60ms に
- * フレームの描画時間(SwiftShader で約 80〜100ms)を足した長さになり、`TAP_MAX_DURATION_MS`(180ms)に収まる。
+ * フレームの描画時間(SwiftShader で約 80〜100ms)を足した長さになり、`TAP_MAX_DURATION_MS`(300ms)に収まる。
  */
 const HELD_TAP_AIM_AFTER_D_MS = 215;
 const HELD_TAP_FRAME_AFTER_DOWN_MS = 60;
@@ -631,7 +640,7 @@ async function startBattingWithTrace(page: Page): Promise<void> {
 // 合成イベント(`dispatchEvent`)はリスナ間にマイクロタスクが挟まらず再現しないので、Playwright の実キー入力(`keyboard.down`)で送る。
 //
 // 有効な試行の条件(アプリの `swingAtMs` と同じ計算): keydown がスイング可能な間(`swingReady`)に届き、
-// `atMs の見積もり = (keydown.timeStamp, ただし処理が 250ms より遅れたなら処理時刻) − 飛行の開始時刻 − 20 < D − 150(判定窓) − 50(余裕)`。
+// `atMs の見積もり = (keydown.timeStamp, ただし処理が 600ms より遅れたなら処理時刻) − 飛行の開始時刻 − 20 < D − 150(判定窓) − 50(余裕)`。
 // つまり「確実に早いスイング」と言える試行だけを検証する(早いスイングは必ず空振り)。
 const spaceSwingScenario: SwingScenario = {
   name: "Space swing",
@@ -690,7 +699,7 @@ function tapOf(trace: FlightTrace): { readonly down: InputRecord; readonly up: I
 }
 
 /**
- * 確実にタップと言える試行: 押下がスイング可能な間(到達通知の十分前)に処理され、押下→離しが 150ms 以内(`TAP_MAX_DURATION_MS` 180ms 未満、
+ * 確実にタップと言える試行: 押下がスイング可能な間(到達通知の十分前)に処理され、押下→離しが 150ms 以内(`TAP_MAX_DURATION_MS` 300ms 未満、
  * イベントの時刻と処理の時刻のどちらも)。Playwright の遅れでこれを満たさない試行は無効にする。
  */
 function isSureTap(trace: FlightTrace): boolean {
@@ -710,7 +719,7 @@ function isSureTap(trace: FlightTrace): boolean {
 /**
  * 到達通知の保留(`holdArrivalFor`)の経路を通したと言える試行(`isSureTap` とは別の条件。`isSureTap` の押下→離しは D + 250ms に届かないので保留が働かない):
  * (1) 押下がスイング可能な間に、見逃し確定(D + 250ms)より `HOLD_PATH_MARGIN_MS` 以上前に処理された。
- * (2) 押下→離しが `TAP_MAX_DURATION_MS`(180ms)以内(アプリの `isTapGesture` と同じ、2 つのイベントの時刻の差)で、離しは確定より後。
+ * (2) 押下→離しが `TAP_MAX_DURATION_MS`(300ms)以内(アプリの `isTapGesture` と同じ、2 つのイベントの時刻の差)で、離しは確定より後。
  * (3) 確定の後(`HOLD_PATH_MARGIN_MS` の余裕つき)から離しの前までに、描画のフレームが 1 回以上あった。到達通知の判定はフレームごとに走るので、
  *     保留が無ければこのフレームで見逃しが確定し、離しのスイングは捨てられる。しかも保留が切れる前(押下の処理から `TAP_ARRIVAL_HOLD_MS` 未満)のフレーム。
  *     フレームの時刻は記録用のコールバックが走った時刻で、フレームは 1 つのタスクとして走り切るので、これが離しの処理より前なら、
@@ -752,7 +761,7 @@ function expectSwingAccepted(trace: FlightTrace): void {
  * 到達通知の保留の確認用に、描画のフレームを手動にする(`window.requestAnimationFrame`/`cancelAnimationFrame` を差し替える)。
  * 普通は 16ms ごとにフレームを流す(ゲームは普通に進む)。`paused` の間は流さない。`flush()` は溜まったフレームのコールバックを 1 回流す。
  * アプリの到達通知の判定・描画はどちらも `window.requestAnimationFrame` のループなので、`paused` の間は「フレームが 1 回も走らない」ことになり、
- * 押下 → フレーム 1 回 → 離し、の順序と時刻をこちらで決められる(SwiftShader の実フレームは約 100ms 間隔で、押下→離しの上限 180ms と近く、
+ * 押下 → フレーム 1 回 → 離し、の順序と時刻をこちらで決められる(SwiftShader の実フレームは約 100ms 間隔で、押下→離しの上限 300ms より短く、
  * 実際の入力の遅れも重なって、実フレームのままでは保留の経路をほとんど通せない)。
  */
 const MANUAL_FRAMES_KEY = "__manualFrames";
@@ -922,11 +931,11 @@ test.describe("touch swing on phone portrait 390x844", () => {
     expectSwingAccepted(trace);
   });
 
-  // (4) 到達通知の保留: 指を D + 250ms(見逃し確定)の前に置き、確定の後に描画のフレームを 1 回通してから離す(押下→離しは 180ms 以内)
+  // (4) 到達通知の保留: 指を D + 250ms(見逃し確定)の前に置き、確定の後に描画のフレームを 1 回通してから離す(押下→離しは 300ms 以内)
   // → 見逃しにならずスイングの結果になる。保留が無ければ、そのフレームで到達通知が処理されて見逃しが確定し、離しのスイングは捨てられる
   // (`data-swing-dropped` が増え、結果は `called-strike`/`ball`)。ページ内で押下・フレーム・離しの順序と時刻を決めるので(`playHeldTap`)、
   // Playwright の入力の遅れに左右されない。有効な試行の条件は `isHoldPathTap`(押下が確定の前・タップ・確定の後から離しの前にフレームがある)。
-  // 環境が遅くて条件を満たせない試行(フレームの描画が長すぎて 180ms を超える等)は無効にして次の投球で再試行し、有効な試行で期待が崩れたら必ず失敗する。
+  // 環境が遅くて条件を満たせない試行(フレームの描画が長すぎて 300ms を超える等)は無効にして次の投球で再試行し、有効な試行で期待が崩れたら必ず失敗する。
   test("a tap held across the cutoff (D+250ms) still swings because the arrival notice is held until release", async ({ page }) => {
     test.setTimeout(150_000);
     await startBattingWithTrace(page);

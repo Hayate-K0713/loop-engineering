@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { scaleRadiiForPitch } from "../model/batting/contact";
+import type { ViewSize } from "../model/world/camera/project";
 import { sceneFrameAt, type SceneFrameInput } from "../model/world/sequence/frame";
 import { planPlay, type PlayPlan } from "../model/world/sequence/play-plan";
 import { isPlayFinished, phaseOf, planSwingOf, windupProgress, type SwingRecord } from "../model/world/sequence/session";
@@ -11,9 +12,27 @@ import type { ContactQuality, TimingCue } from "../types/batting";
 import type { ZonePoint } from "../types/common";
 import type { PlaybackSpeed } from "../types/game";
 import type { CourseCell, PitchFlight } from "../types/pitch";
-import type { SafeArea, SceneLayout, ScenePhase, UniformColors } from "../types/scene";
+import type { SafeArea, SceneFrame, SceneLayout, ScenePhase } from "../types/scene";
 import type { ScreenRect, StageHandle } from "../types/stage";
-import type { GameView, PitchOutcomeView, ZoneFeedbackView } from "../types/view";
+import type { CastView, GameView, PitchOutcomeView, WipeView, ZoneFeedbackView } from "../types/view";
+import {
+  castLooksOf,
+  expressionsOf,
+  INITIAL_INTRO_CLOCK,
+  introKeyOf,
+  NO_WIPE_DISPLAY,
+  sameDetail,
+  sameExpressions,
+  sameWipeView,
+  stepIntro,
+  wipeDisplayOf,
+  wipeSceneOf,
+  type CastLooks,
+  type IntroClock,
+  type StageCutInDetail,
+  type StageExpressions,
+  type WipeDisplay,
+} from "./stage-cast";
 import { useAnimationFrame, type FrameResult } from "./useAnimationFrame";
 import type { CursorView } from "./useBattingControls";
 import { useLatest } from "./useLatest";
@@ -48,8 +67,13 @@ type UseStageDirectorOptions = {
   readonly swingRecordRef: RefObject<SwingRecord | null>;
   /** 人間守備のとき選択中のセル。`null` なら5×5の格子も狙いのハイライトも出さない。 */
   readonly aimCell: CourseCell | null;
-  /** 描画するユニフォーム色。**保持される表示用 view のもの**(3アウト目の演出中は旧配色のまま)。 */
-  readonly uniforms: UniformColors;
+  /**
+   * 表示用に保持された view。ユニフォーム色(`uniforms`)・キャラクターの元データ(`cast`: フォーム・背番号)・塁上の走者(`bases`)・
+   * ワイプの名前(`batter`・`pitcher`)を読む。**最新の view ではない**(3アウト目の演出中は旧配色・旧打者のまま)。
+   */
+  readonly heldView: GameView;
+  /** `useStage3d` の `getViewSize`。ステージの高さ(CSS px)を `SceneFrameInput.viewHeightPx` に渡す(ワイプの矩形)。測れなければ `null`(model が既定値を使う)。 */
+  readonly getViewSize: () => ViewSize | null;
   /** スイングカーソルを出すか(表示用 view が人間打撃)。 */
   readonly cursorVisible: boolean;
   readonly speed: PlaybackSpeed;
@@ -75,6 +99,12 @@ export type StageDirector = {
   readonly contactQuality: ContactQuality | null;
   /** スイング後の位置ずれ表示(判定に使った有効カーソルと着弾点。`zoneFeedback.swingMs` の間だけ)。なければ `null`。 */
   readonly zoneFeedback: ZoneFeedbackView | null;
+  /** ワイプ(顔アップ)の DOM 側の表示(縁取り・名前)。出していないときは `null`。 */
+  readonly wipe: WipeView | null;
+  /** ワイプの帯の補足(背番号・役割ラベル)。ワイプを出していないときは `null`。 */
+  readonly cutInDetail: StageCutInDetail | null;
+  /** 投手・打者の今の表情(`data-expr-pitcher`・`data-expr-batter` 用)。 */
+  readonly expressions: StageExpressions;
   /** 人間守備: windup を始め、`cpuWaitMs` 後に `onRelease()`(投球の dispatch)を呼ぶ。投げられない状況では何もしない。 */
   readonly startThrow: (onRelease: () => void) => void;
   /** 演出のスキップ。`holding` 中だけ有効で、表示だけを飛ばす(reducer・`GameState` に触れない。冪等)。 */
@@ -93,6 +123,10 @@ type Session = {
   droppedSwings: number;
   /** 演出中の人間のスイングの有効カーソル(位置ずれ表示の十字)。スイングがなければ `null`。plan と一緒に破棄する。 */
   swingCursor: ZonePoint | null;
+  /** 打席の紹介(ワイプ)の時計。 */
+  intro: IntroClock;
+  /** 投手・打者の見た目(フォーム・背番号)。`cast` が変わったときだけ作り直す。 */
+  looks: { readonly cast: CastView; readonly value: CastLooks } | null;
 };
 
 /** 再描画を伴う表示用の state(DOM の `data-*` ミラー、テロップ、「投げる」の可否に使う)。 */
@@ -107,6 +141,9 @@ type Shown = {
   readonly droppedSwings: number;
   readonly contactQuality: ContactQuality | null;
   readonly zoneFeedback: ZoneFeedbackView | null;
+  readonly wipe: WipeView | null;
+  readonly cutInDetail: StageCutInDetail | null;
+  readonly expressions: StageExpressions;
 };
 
 type PatchShown = (change: Partial<Shown>) => void;
@@ -122,6 +159,9 @@ const INITIAL_SHOWN: Shown = {
   droppedSwings: 0,
   contactQuality: null,
   zoneFeedback: null,
+  wipe: null,
+  cutInDetail: null,
+  expressions: {},
 };
 
 /** タイミング表示の同値判定。`timingAt` は毎フレーム新しいオブジェクトを返すので、参照ではなく値で比べる(再描画を増やさない)。 */
@@ -162,7 +202,10 @@ function sameShown(a: Shown, b: Shown): boolean {
     sameCue(a.lastTiming, b.lastTiming) &&
     a.droppedSwings === b.droppedSwings &&
     a.contactQuality === b.contactQuality &&
-    sameFeedback(a.zoneFeedback, b.zoneFeedback)
+    sameFeedback(a.zoneFeedback, b.zoneFeedback) &&
+    sameWipeView(a.wipe, b.wipe) &&
+    sameDetail(a.cutInDetail, b.cutInDetail) &&
+    sameExpressions(a.expressions, b.expressions)
   );
 }
 
@@ -311,9 +354,30 @@ function cursorOf(options: UseStageDirectorOptions, session: Session): SceneFram
   return { visible: options.cursorVisible, point, raw, radii: session.flight === null ? radii : scaleRadiiForPitch(radii, session.flight.kind) };
 }
 
+/** 1 フレームの時刻の入力。`introMs` = 打席の紹介を始めてからの経過(出さないときは `null`)。 */
+type FrameTiming = {
+  readonly phase: ScenePhase;
+  readonly tMs: number;
+  readonly nowMs: number;
+  readonly introMs: number | null;
+};
+
+/** 投手・打者の見た目(フォーム・背番号)。表示用 view の `cast` が変わったときだけ作り直す。 */
+function looksOf(options: UseStageDirectorOptions, session: Session): CastLooks {
+  const cast = options.heldView.cast;
+  if (session.looks === null || session.looks.cast !== cast) {
+    session.looks = { cast, value: castLooksOf(cast) };
+  }
+  return session.looks.value;
+}
+
 /** 時刻 `tMs` の `sceneFrameAt` の入力を組み立てる。`play` 中も session に保持した `flight` を渡す(接触前の投球を描くため)。 */
-function frameInputOf(options: UseStageDirectorOptions, session: Session, phase: ScenePhase, tMs: number, nowMs: number): SceneFrameInput {
+function frameInputOf(options: UseStageDirectorOptions, session: Session, timing: FrameTiming): SceneFrameInput {
+  const { phase, tMs, nowMs, introMs } = timing;
+  const { heldView } = options;
   const windupStartedAtMs = session.windupStartedAtMs;
+  const looks = looksOf(options, session);
+  const viewSize = options.getViewSize();
   return {
     phase,
     tMs,
@@ -323,10 +387,15 @@ function frameInputOf(options: UseStageDirectorOptions, session: Session, phase:
     aspect: options.getAspect(),
     layout: layoutOf(options.aimCell),
     safeArea: options.getSafeArea(),
-    uniforms: options.uniforms,
+    uniforms: heldView.uniforms,
     cursor: cursorOf(options, session),
     assist: options.view.assist,
     grid: options.aimCell !== null,
+    forms: { pitch: looks.pitcher.pitchForm, bat: looks.batter.batStance },
+    bases: heldView.bases,
+    clockMs: nowMs,
+    introMs,
+    viewHeightPx: viewSize === null ? Number.NaN : viewSize.height,
   };
 }
 
@@ -348,6 +417,15 @@ function feedbackOf(options: UseStageDirectorOptions, session: Session, tMs: num
   });
 }
 
+/** ワイプの帯(縁取り・名前・背番号・役割)の表示。場面は打席の紹介か `plan.wipe` の区間。 */
+function wipeFrom(options: UseStageDirectorOptions, session: Session, frame: SceneFrame, timing: Pick<FrameTiming, "phase" | "tMs" | "introMs">): WipeDisplay {
+  const scene = wipeSceneOf({ phase: timing.phase, plan: session.plan, tMs: timing.tMs, introMs: timing.introMs });
+  if (scene === null) {
+    return NO_WIPE_DISPLAY;
+  }
+  return wipeDisplayOf({ scene, frameWipe: frame.wipe, view: options.heldView, looks: looksOf(options, session) });
+}
+
 /**
  * 毎フレーム: 演出の終了判定 → フェーズ決定 → `sceneFrameAt` → `stage.apply` → 表示用 state の反映。
  * `stage` が `null` でも終了判定と反映は行い、`apply` だけを省く(これが止まると `holding` が解除されず試合が止まる)。
@@ -366,12 +444,19 @@ function useDirectorLoop(
       finishPlay(session.plan.seq);
     }
     const phase = phaseOf({ hasPlan: session.plan !== null, hasFlight: session.flight !== null, windupActive: session.windupStartedAtMs !== null });
-    options.stage?.apply(sceneFrameAt(frameInputOf(options, session, phase, tMs, nowMs)));
+    const step = stepIntro(session.intro, { key: introKeyOf(options.heldView.cast), phase, paused: options.paused, nowMs });
+    session.intro = step.clock;
+    const frame = sceneFrameAt(frameInputOf(options, session, { phase, tMs, nowMs, introMs: step.introMs }));
+    options.stage?.apply(frame);
+    const wipe = wipeFrom(options, session, frame, { phase, tMs, introMs: step.introMs });
     patch({
       phase,
       telop: session.plan === null ? null : telopAt(session.plan, tMs),
       timingCue: session.plan === null ? null : timingAt(session.plan, tMs),
       zoneFeedback: feedbackOf(options, session, tMs),
+      wipe: wipe.wipe,
+      cutInDetail: wipe.detail,
+      expressions: expressionsOf(frame),
     });
     return "continue";
   }, "stage");
@@ -385,7 +470,15 @@ function useDirectorLoop(
 export function useStageDirector(options: UseStageDirectorOptions): StageDirector {
   const [shown, patch] = useShown();
   const latest = useLatest(options);
-  const sessionRef = useRef<Session>({ flight: null, plan: null, windupStartedAtMs: null, droppedSwings: 0, swingCursor: null });
+  const sessionRef = useRef<Session>({
+    flight: null,
+    plan: null,
+    windupStartedAtMs: null,
+    droppedSwings: 0,
+    swingCursor: null,
+    intro: INITIAL_INTRO_CLOCK,
+    looks: null,
+  });
   const { view, paused } = options;
 
   // 演出を終える(終了判定・スキップ・想定外の共通処理)。plan・flight・テロップを破棄して idle に戻し、`finishedSeq` の更新を依頼する。

@@ -334,7 +334,7 @@ function handleCancel(event: PointerEvent<HTMLElement>, refs: GestureRefs, optio
  * ステージの入力面のポインタ操作。pointerdown/move/up は `routeStagePointer`/`routeStageMove`/`routeStageRelease` の結果だけで振り分ける
  * (`holding` はそれらに渡すだけで、ここでは直接分岐しない)。
  * - マウス/ペン: 動かすとカーソルが追従し、押すとその位置で即スイング。
- * - タッチ: 1 本目の指は相対ドラッグでカーソルを動かす。移動 ≤10px かつ ≤180ms のタップは、押下時点のカーソル位置でスイング(離したときに発火)。
+ * - タッチ: 1 本目の指は相対ドラッグでカーソルを動かす。移動 ≤10px かつ ≤300ms のタップは、押下時点のカーソル位置でスイング(離したときに発火)。
  *   2 本目以降の指は、カーソルを動かさず現在の位置で即スイング。演出中に置いた指は、演出が終わった後の最初の move でドラッグを始める。
  * タップ候補の指がある間は到達通知を保留し(`holdArrivalFor`)、離す・キャンセル・10px 超の移動・unmount で解く(`releaseArrival`)。
  * ハンドラは毎レンダーで作り直されるので、クロージャは常に最新の props を見る。ジェスチャの状態は ref に持つ(再レンダーを起こさない)。

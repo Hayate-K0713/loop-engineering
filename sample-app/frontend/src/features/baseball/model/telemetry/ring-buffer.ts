@@ -20,8 +20,9 @@ export function serializeRecords(records: readonly PlaytestRecord[]): string {
 }
 
 // 語彙は `types/batting.ts`・`types/telemetry.ts` と同じ(JSON から来る未検証の文字列と比べるので string[] で持つ)。
-const RECORD_TYPES: readonly string[] = ["session", "stage", "bat", "ignored", "pointercancel", "pitch", "perf"];
+const RECORD_TYPES: readonly string[] = ["session", "stage", "bat", "ignored", "pointercancel", "pitch", "perf", "tier"];
 const IGNORED_REASONS: readonly string[] = ["not-ready", "holding", "tap-too-long", "tap-moved", "cancel", "held-release"];
+const TIER_REASONS: readonly string[] = ["restore", "fixed", "startup", "auto"];
 const SWING_SOURCES: readonly string[] = ["tap", "touch-second", "button", "key", "mouse"];
 
 function isObject(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -56,6 +57,8 @@ function hasValidBody(value: Readonly<Record<string, unknown>>): boolean {
       return typeof value.quality === "string" && typeof value.result === "string";
     case "perf":
       return isFiniteNumber(value.fpsMedian) && isFiniteNumber(value.p95Ms) && isFiniteNumber(value.longFrameRatio);
+    case "tier":
+      return isFiniteNumber(value.fromTier) && isFiniteNumber(value.toTier) && typeof value.reason === "string" && TIER_REASONS.includes(value.reason);
     default:
       return true;
   }

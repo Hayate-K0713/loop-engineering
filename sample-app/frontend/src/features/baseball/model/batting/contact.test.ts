@@ -16,8 +16,9 @@ import {
 } from "./contact";
 import { cursorRadii } from "./cursor";
 import { BATTING_PARAMS } from "./params";
+import { FIXTURE_LOOK } from "../game/test-fixtures";
 
-const BATTER: BatterProfile = { id: "b", name: "テスト打者", meet: 50, power: 50, trajectory: 2 };
+const BATTER: BatterProfile = { id: "b", name: "テスト打者", meet: 50, power: 50, trajectory: 2, look: FIXTURE_LOOK };
 const DURATION_MS = 1300;
 
 function flightWith(overrides: Partial<PitchFlight> = {}): PitchFlight {

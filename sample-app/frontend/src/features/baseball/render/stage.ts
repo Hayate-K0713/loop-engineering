@@ -9,7 +9,7 @@
 import { PerspectiveCamera, Plane, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from "three";
 import type { DataTexture } from "three";
 import type { CameraPose, CharacterLookData, CharacterSlot, QualityTier, SafeArea, SceneFrame, SceneLayout, SceneWipe, Vec3 } from "../types/scene";
-import type { ScreenRect, StageGeometry, StageHandle, StageOptions, StageStats } from "../types/stage";
+import type { ScreenRect, StageGeometry, StageHandle, StageOptions, StageStats, StageStatsDetail } from "../types/stage";
 import {
   applyPoolFrame,
   applyPoolTier,
@@ -242,23 +242,7 @@ export function readStageStats(info: RendererInfoLike): StageStats {
   };
 }
 
-/**
- * `stats()` の実体。`StageStats`(契約。E0 が凍結)に、品質ティアとワイプ・球場の基準値を足したもの。
- * 契約の型に無いフィールドなので、呼び出し側はこの型へ絞り込んで読む(型の追加は契約の変更になるため上申事項)。
- * - `qualityTier`/`pendingTier` = 現在のティアと、飛行中に保留した切替先。
- * - `wipe`/`wipeDrawCalls` = 直近のフレームでワイプの第 2 パスを描いたか・その draw call(`drawCalls` に含まれる)。
- * - `stadiumDrawCalls`/`stadiumShadowCasters` = 球場だけの基準値(描画オブジェクト数 = メインパスの draw call、影を落とすオブジェクト数 = 影のパスの draw call)。
- * - `meshesPerCharacter` = 1 体あたりの描画オブジェクト数(近景・遠景)。
- */
-export type StageStatsDetail = StageStats & {
-  readonly qualityTier: QualityTier;
-  readonly pendingTier: QualityTier | null;
-  readonly wipe: boolean;
-  readonly wipeDrawCalls: number;
-  readonly stadiumDrawCalls: number;
-  readonly stadiumShadowCasters: number;
-  readonly meshesPerCharacter: { readonly near: number; readonly far: number };
-};
+export type { StageStatsDetail } from "../types/stage";
 
 function statsOf(rt: Runtime): StageStatsDetail {
   const { stadium, pool } = rt.world;

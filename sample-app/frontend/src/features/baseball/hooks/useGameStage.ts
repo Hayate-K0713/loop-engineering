@@ -7,9 +7,10 @@ import type { ContactQuality, IgnoredInputReason, SwingInput, SwingKind, SwingMe
 import type { PlaybackSpeed } from "../types/game";
 import type { CourseCell, PitchFlight, PitchInputView, PitchKind, PitchQuality } from "../types/pitch";
 import type { GuideMode, QualityTier, ScenePhase } from "../types/scene";
-import type { ScreenRect, StageStatus } from "../types/stage";
+import type { ScreenRect, StageHandle, StageStatus } from "../types/stage";
 import type { BannerView, FieldMarkerView, GameView, PitchOutcomeView, TutorialStep, WipeView, ZoneFeedbackView } from "../types/view";
 import { useBattingControls, type BattingControls, type CursorView } from "./useBattingControls";
+import { useCharacterLooks } from "./useCharacterLooks";
 import { useCpuTurn } from "./useCpuTurn";
 import type { UseGameResult } from "./useGame";
 import { useGuidance, type Guidance } from "./useGuidance";
@@ -17,12 +18,14 @@ import { useHeldView } from "./useHeldView";
 import { useLatest } from "./useLatest";
 import { usePitchFlight } from "./usePitchFlight";
 import type { PlaytestLogApi } from "./usePlaytestLog";
-import { useInputRecorder, usePlaytestRecorder, type SwingLogEntry } from "./usePlaytestRecorder";
+import { useInputRecorder, usePlaytestRecorder, useTierRecorder, type SwingLogEntry } from "./usePlaytestRecorder";
 import type { PointerHandlers } from "./usePointerInput";
 import type { PreferencesApi } from "./usePreferences";
+import { useQualityTier } from "./useQualityTier";
 import { useSafeArea } from "./useSafeArea";
 import { useSkipInput } from "./useSkipInput";
 import { useStage3d, type UseStage3dResult } from "./useStage3d";
+import { wipeAllowedAt, type StageCutInDetail, type StageExpressions } from "./stage-cast";
 import { layoutOf, useStageDirector, type StageDirector } from "./useStageDirector";
 
 /** 人間守備の投球の選択(球種・コースのセル)。段階 A の守備は旧格子 UI のまま。投げるときにセル中心を狙い(`aim`)にする。 */
@@ -108,6 +111,10 @@ type UseGameStageResult = {
   /** スイングボタンの pointerdown 用(`useBattingControls` の `swingFromButton`)。イベントの時刻と入力種別から判定時刻を求める。 */
   readonly swingNow: PointerEventHandler<HTMLButtonElement>;
   readonly stageProps: GameStageViewProps;
+  /** 投手・打者の今の表情(`StageView` の `expressions` → `data-expr-pitcher`・`data-expr-batter`)。 */
+  readonly expressions: StageExpressions;
+  /** ワイプの帯の補足(背番号・役割ラベル)。`StageView` の `cutInDetail`。ワイプを出していないときは `null`。 */
+  readonly cutInDetail: StageCutInDetail | null;
   /** タイミングのピルの 2 行目(接触の質)。`GameLayout` の `contactQuality` に渡す。 */
   readonly contactQuality: ContactQuality | null;
   /** 説明のカード(`<Tutorial steps>`)。表示中だけ非 `null`。 */
@@ -160,6 +167,11 @@ function useBindCursorSource(sourceRef: RefObject<() => CursorView>, source: () 
   useLayoutEffect(() => {
     sourceRef.current = source;
   }, [sourceRef, source]);
+}
+
+/** 画面の 14 体の見た目(顔・髪・ユニフォーム・背番号)をステージへ渡す。キャラクターの元データは**表示用に保持された** view の `cast`(演出が終わるまで旧打者のまま)。 */
+function useLooksOfCast(stage: StageHandle | null, cast: GameView["cast"], phase: ScenePhase): void {
+  useCharacterLooks({ stage, offense: cast.offense, defense: cast.defense, lineupIndex: cast.lineupIndex, phase: lookPhaseOf(phase) });
 }
 
 type PlaybackOptions = {
@@ -225,10 +237,12 @@ function usePlayback(options: PlaybackOptions): Playback {
     getZoneRect: stage3d.getZoneRect,
     swingRecordRef,
     aimCell,
-    uniforms: heldView.uniforms,
+    heldView,
+    getViewSize: stage3d.getViewSize,
     cursorVisible: heldView.mode === "human-batting",
     speed,
   });
+  useLooksOfCast(stage3d.stage, heldView.cast, director.phase);
   const controls = useBattingControls({
     enabled: humanBatting && !overlayActive,
     holding,
@@ -260,7 +274,18 @@ type StagePropsInput = {
   readonly heldView: GameView;
   readonly holding: boolean;
   readonly guidance: Guidance;
+  /** 現在の描画の品質ティア(`useQualityTier` が実際にステージへ貼ったもの)。 */
+  readonly qualityTier: QualityTier;
 };
+
+/**
+ * 顔(ラスタ)の生成・差し替えをしてよい場面を `useCharacterLooks` の `phase` に直す。投球が飛び始める前の `idle` と `windup` を、どちらも `idle` として渡す。
+ * `idle` は演出の終わった直後の 1〜2 フレームしかなく(CPU 守備の windup はそのフレームから始まる)、`idle` だけでは試合の最初の打席の顔が貼れない・
+ * 打者が替わっても前の打者の顔のまま、になるため。顔の生成は 1 フレーム 1 体までで、貯まれば止まる。飛行中・演出中(`flight`・`play`)は従来どおり生成しない。
+ */
+function lookPhaseOf(phase: ScenePhase): ScenePhase {
+  return phase === "windup" ? "idle" : phase;
+}
 
 /** 投球入力の公開ビュー(`data-input-state`)。段階 A の人間守備は旧格子 UI なので、常に待機(`idle`)。人間守備でなければ `null`。 */
 function inputStateOf(mode: GameView["mode"]): PitchInputView | null {
@@ -268,7 +293,7 @@ function inputStateOf(mode: GameView["mode"]): PitchInputView | null {
 }
 
 /** `StageView` に渡す props。バナー・投球の質は段階 B 以降なので、段階 A では常に `null`。 */
-function stagePropsOf({ playback, view, heldView, holding, guidance }: StagePropsInput): GameStageViewProps {
+function stagePropsOf({ playback, view, heldView, holding, guidance, qualityTier }: StagePropsInput): GameStageViewProps {
   const { stage3d, director, controls } = playback;
   const humanBatting = view.mode === "human-batting";
   return {
@@ -293,6 +318,8 @@ function stagePropsOf({ playback, view, heldView, holding, guidance }: StageProp
     hint: guidance.hint,
     tapHint: guidance.tapHint,
     zoneFeedback: director.zoneFeedback,
+    wipe: wipeAllowedAt(qualityTier) ? director.wipe : null,
+    qualityTier,
   };
 }
 
@@ -342,6 +369,8 @@ export function useGameStage({ game, speed, selection, prefs, log, externalPause
     onPointerCancel: inputRecorder.recordPointerCancel,
   });
   const { stage3d, director, controls, swingLogRef } = playback;
+  const recordTier = useTierRecorder(log);
+  const tierState = useQualityTier({ stage: stage3d.stage, phase: director.phase, prefs, onSwitch: recordTier });
   usePlaytestRecorder({
     log,
     view,
@@ -366,7 +395,9 @@ export function useGameStage({ game, speed, selection, prefs, log, externalPause
     swingKind: controls.swingKind,
     setSwingKind: controls.setSwingKind,
     swingNow: controls.swingFromButton,
-    stageProps: stagePropsOf({ playback, view, heldView, holding, guidance }),
+    stageProps: stagePropsOf({ playback, view, heldView, holding, guidance, qualityTier: tierState.tier }),
+    expressions: director.expressions,
+    cutInDetail: wipeAllowedAt(tierState.tier) ? director.cutInDetail : null,
     contactQuality: director.contactQuality,
     tutorialSteps: guidance.tutorialSteps,
     finishTutorial: guidance.finishTutorial,

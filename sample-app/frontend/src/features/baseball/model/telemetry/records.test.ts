@@ -8,6 +8,7 @@ import {
   buildPointerCancelRecord,
   buildSessionRecord,
   buildStageRecord,
+  buildTierRecord,
   isSuspectedScaledDown,
   resultKindOf,
 } from "./records";
@@ -93,6 +94,14 @@ describe("records", () => {
     expect(buildIgnoredRecord(5, "tap-moved")).toEqual({ type: "ignored", atMs: 5, reason: "tap-moved" });
     expect(buildPointerCancelRecord(6)).toEqual({ type: "pointercancel", atMs: 6 });
     expect(buildStageRecord(7, 120, 50000)).toEqual({ type: "stage", atMs: 7, drawCalls: 120, triangles: 50000 });
+    expect(buildTierRecord(8, { fromTier: 0, toTier: 2, reason: "auto", windowP95Ms: 47.5 })).toEqual({
+      type: "tier",
+      atMs: 8,
+      fromTier: 0,
+      toTier: 2,
+      reason: "auto",
+      windowP95Ms: 47.5,
+    });
     expect(buildSessionRecord(0, "abc", DEVICE)).toEqual({ type: "session", atMs: 0, sessionId: "abc", device: DEVICE });
   });
 

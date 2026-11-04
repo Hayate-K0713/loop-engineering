@@ -69,6 +69,8 @@ export function GameScreen({ config, seed, speed, onRestart, onBackToTitle, pref
         onSwing={stage.swingNow}
         stageProps={stage.stageProps}
         contactQuality={stage.contactQuality}
+        expressions={stage.expressions}
+        cutInDetail={stage.cutInDetail}
         tutorial={stage.tutorialSteps === null ? null : <Tutorial steps={stage.tutorialSteps} onFinish={stage.finishTutorial} />}
       />
       {view.result === null || holding ? null : (
